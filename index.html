@@ -1,44 +1,116 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>手にビールベア — teddybeerbear</title>
-  <meta name="description" content="手にビールベア（teddybeerbear）のシンプルなリンクページ" />
-  <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Name | Links</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .wrapper {
+      display: flex;
+      gap: 32px;
+      background: white;
+      padding: 32px;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      max-width: 900px;
+      width: 100%;
+    }
+
+    /* 左：アイコン */
+    .left {
+      flex-shrink: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .icon {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    /* 右：メイン */
+    .right {
+      flex: 1;
+      text-align: center;
+    }
+
+    .main-image {
+      max-width: 100%;
+      height: auto;
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 12px 0 20px;
+      font-size: 24px;
+    }
+
+    a {
+      display: block;
+      margin: 10px auto;
+      padding: 14px;
+      max-width: 320px;
+      border-radius: 10px;
+      color: white;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .youtube { background: #ff0000; }
+    .twitch  { background: #9146ff; }
+    .x       { background: #000000; }
+
+    /* スマホ対応 */
+    @media (max-width: 768px) {
+      .wrapper {
+        flex-direction: column;
+        align-items: center;
+      }
+    }
+  </style>
 </head>
+
 <body>
-  <div class="page">
-    <aside class="left">
-      <div class="avatar-wrap">
-        <img src="assets/avatar.png" alt="手にビールベア アバター" class="avatar">
-      </div>
-    </aside>
+  <div class="wrapper">
 
-    <main class="card">
-      <div class="card-inner">
-        <div class="card-left">
-          <h1 class="name">手にビールベア</h1>
+    <!-- 左：アイコン -->
+    <div class="left">
+      <img src="icon.png" alt="icon" class="icon">
+    </div>
 
-          <nav class="buttons">
-            <a class="btn youtube" href="https://www.youtube.com/@teddybeerbear" target="_blank" rel="noopener">
-              <span class="icon">▶</span> YouTube
-            </a>
-            <a class="btn twitch" href="https://www.twitch.tv/imteddybeerbear" target="_blank" rel="noopener">
-              <span class="icon">■</span> Twitch
-            </a>
-            <a class="btn x" href="https://x.com/T_BB_official" target="_blank" rel="noopener">
-              <span class="icon">X</span> X
-            </a>
-          </nav>
-        </div>
+    <!-- 右：メイン -->
+    <div class="right">
+      <img src="main.png" alt="main image" class="main-image">
 
-        <div class="card-right">
-          <img src="assets/banner.png" alt="手にビールベア イラスト" class="banner">
-        </div>
-      </div>
-    </main>
+      <h1>Your Name</h1>
+
+      <a class="youtube" href="https://www.youtube.com/@yourname" target="_blank">
+        YouTube
+      </a>
+      <a class="twitch" href="https://www.twitch.tv/yourname" target="_blank">
+        Twitch
+      </a>
+      <a class="x" href="https://x.com/yourname" target="_blank">
+        X
+      </a>
+    </div>
+
   </div>
 </body>
 </html>
+
