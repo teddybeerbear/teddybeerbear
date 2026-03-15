@@ -142,6 +142,214 @@ app.delete("/room/:code", requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── ランクマッチ（3人固定マッチング） ────────────────────────────
+// rankQueue: userId -> { peerId, userName, joinedAt, matchId }
+const rankQueue = new Map();
+// rankMatches: matchId -> { players:[{userId,peerId,userName,myIdx}], settled:false }
+const rankMatches = new Map();
+// ratings: userId -> { rating, name }
+const ratings = new Map();
+const RANK_TTL_MS = 5 * 60 * 1000;
+
+// レーティング取得（初回は1000で初期化）
+function getRating(userId, name) {
+  if (!ratings.has(userId)) ratings.set(userId, { rating: 1000, name: name || "?" });
+  else if (name) ratings.get(userId).name = name;
+  return ratings.get(userId).rating;
+}
+
+// レーティング変動計算
+// score: プレイヤーの最終持ち点（0基準）
+// myRating: 自分のレーティング
+// oppRatings: 対戦相手2人のレーティング配列
+function calcRatingChange(score, myRating, oppRatings) {
+  // 持ち点2000で最大値±50（線形）
+  const scoreRatio = Math.max(-1, Math.min(1, score / 2000));
+  let baseChange = scoreRatio * 50;
+
+  // レート差補正: 相手が強いほど獲得レートが増え、弱いほど減る
+  const avgOpp = oppRatings.reduce((s, r) => s + r, 0) / oppRatings.length;
+  const diff = avgOpp - myRating;
+  // diff: 正 → 強い相手、負 → 弱い相手。±400差で ±20%補正
+  const modifier = 1 + diff / 2000;
+  const clamped = Math.max(0.5, Math.min(1.5, modifier));
+  return Math.round(Math.max(-50, Math.min(50, baseChange * clamped)));
+}
+
+// 古いエントリを定期削除
+setInterval(() => {
+  const now = Date.now();
+  for (const [uid, entry] of rankQueue.entries()) {
+    if (now - entry.joinedAt > RANK_TTL_MS) {
+      rankQueue.delete(uid);
+      console.log(`ランクキュー: ${uid} タイムアウト削除`);
+    }
+  }
+}, 30 * 1000);
+
+// 現在のレートを取得
+app.get("/rank/my-rating", requireAuth, (req, res) => {
+  const userId = req.user.id;
+  const rating = getRating(userId, req.user.name);
+  res.json({ rating });
+});
+
+// キューに参加（3人揃ったらマッチ成立）
+app.post("/rank/join", requireAuth, (req, res) => {
+  const { peerId } = req.body;
+  if (!peerId) return res.status(400).json({ error: "peerId は必須です" });
+
+  const userId = req.user.id;
+  const userName = req.user.name || "プレイヤー";
+
+  // すでにマッチ済みか確認
+  const existing = rankQueue.get(userId);
+  if (existing && existing.matchId) {
+    const match = rankMatches.get(existing.matchId);
+    if (match) {
+      const me = match.players.find(p => p.userId === userId);
+      const others = match.players.filter(p => p.userId !== userId);
+      return res.json({
+        matched: true, matchId: existing.matchId,
+        isHost: me.myIdx === 0, myIdx: me.myIdx,
+        hostPeerId: match.players[0].peerId,
+        opponents: others.map(p => ({ name: p.userName, rating: getRating(p.userId) })),
+        myRating: getRating(userId),
+      });
+    }
+  }
+
+  // レート登録/更新
+  getRating(userId, userName);
+
+  // 自分のエントリを登録
+  rankQueue.set(userId, { peerId, userName, joinedAt: Date.now(), matchId: null });
+
+  // 待機中（未マッチ）のプレイヤーを集める（自分を含む、FIFO順）
+  const waiting = [];
+  for (const [uid, entry] of rankQueue.entries()) {
+    if (!entry.matchId) waiting.push({ uid, ...entry });
+    if (waiting.length >= 3) break;
+  }
+
+  if (waiting.length >= 3) {
+    // 3人揃った: マッチ成立
+    const matchId = "rm-" + Date.now();
+    const players = waiting.slice(0, 3).map((w, i) => ({
+      userId: w.uid, peerId: w.peerId, userName: w.userName, myIdx: i,
+    }));
+
+    rankMatches.set(matchId, { players, settled: false });
+    players.forEach(p => {
+      const entry = rankQueue.get(p.userId);
+      if (entry) entry.matchId = matchId;
+    });
+
+    console.log(`ランクマッチ成立: ${players.map(p => p.userName).join(" vs ")}`);
+
+    // 自分の情報を返す
+    const me = players.find(p => p.userId === userId);
+    const others = players.filter(p => p.userId !== userId);
+    return res.json({
+      matched: true, matchId,
+      isHost: me.myIdx === 0, myIdx: me.myIdx,
+      hostPeerId: players[0].peerId,
+      opponents: others.map(p => ({ name: p.userName, rating: getRating(p.userId) })),
+      myRating: getRating(userId),
+    });
+  }
+
+  console.log(`ランクキュー: ${userName} 待機中 (${rankQueue.size}人目)`);
+  res.json({ matched: false, queueSize: rankQueue.size });
+});
+
+// マッチ状態をポーリング
+app.get("/rank/status", requireAuth, (req, res) => {
+  const userId = req.user.id;
+  const entry = rankQueue.get(userId);
+  if (!entry) return res.json({ inQueue: false, matched: false });
+  if (!entry.matchId) return res.json({ inQueue: true, matched: false, queueSize: rankQueue.size });
+
+  const match = rankMatches.get(entry.matchId);
+  if (!match) return res.json({ inQueue: false, matched: false });
+
+  const me = match.players.find(p => p.userId === userId);
+  const others = match.players.filter(p => p.userId !== userId);
+  res.json({
+    matched: true, matchId: entry.matchId,
+    isHost: me.myIdx === 0, myIdx: me.myIdx,
+    hostPeerId: match.players[0].peerId,
+    opponents: others.map(p => ({ name: p.userName, rating: getRating(p.userId) })),
+    myRating: getRating(userId),
+  });
+});
+
+// キューから離脱
+app.delete("/rank/cancel", requireAuth, (req, res) => {
+  const userId = req.user.id;
+  rankQueue.delete(userId);
+  console.log(`ランクキュー: ${req.user.name} キャンセル`);
+  res.json({ ok: true });
+});
+
+// ランクマッチ完了後にクリーンアップ
+app.delete("/rank/done", requireAuth, (req, res) => {
+  rankQueue.delete(req.user.id);
+  res.json({ ok: true });
+});
+
+// ゲーム結果を提出してレート更新（ホストのみ）
+// scores: [{userId, score}] — playerIdx 0,1,2 の順
+app.post("/rank/result", requireAuth, (req, res) => {
+  const { matchId, scores } = req.body;
+  // scores: [ {userId, score}, ... ] or just [score0, score1, score2]
+  if (!matchId || !Array.isArray(scores)) return res.status(400).json({ error: "matchId と scores は必須" });
+
+  const match = rankMatches.get(matchId);
+  if (!match) return res.status(404).json({ error: "マッチが見つかりません" });
+  if (match.settled) {
+    // 既に確定済み: 保存済みの変動を返す
+    return res.json({ ok: true, changes: match.ratingChanges });
+  }
+
+  // レーティング更新
+  const players = match.players;
+  const ratingBefore = players.map(p => getRating(p.userId));
+  const changes = players.map((p, i) => {
+    const myScore = typeof scores[i] === "object" ? scores[i].score : scores[i];
+    const oppRatings = ratingBefore.filter((_, j) => j !== i);
+    return calcRatingChange(myScore ?? 0, ratingBefore[i], oppRatings);
+  });
+
+  players.forEach((p, i) => {
+    const r = ratings.get(p.userId);
+    if (r) {
+      r.rating = Math.max(1, r.rating + changes[i]);
+    }
+  });
+
+  match.settled = true;
+  match.ratingChanges = players.map((p, i) => ({
+    userId: p.userId, name: p.userName,
+    before: ratingBefore[i],
+    change: changes[i],
+    after: ratings.get(p.userId)?.rating ?? ratingBefore[i],
+  }));
+
+  console.log(`ランク結果確定: ${match.ratingChanges.map(r => `${r.name} ${r.before}→${r.after}`).join(", ")}`);
+  res.json({ ok: true, changes: match.ratingChanges });
+});
+
+// ゲスト用: 確定済みマッチ結果を取得
+app.get("/rank/result-view", requireAuth, (req, res) => {
+  const { matchId } = req.query;
+  if (!matchId) return res.status(400).json({ error: "matchId は必須" });
+  const match = rankMatches.get(matchId);
+  if (!match) return res.status(404).json({ error: "マッチが見つかりません" });
+  if (!match.settled) return res.json({ ok: false, pending: true });
+  res.json({ ok: true, changes: match.ratingChanges });
+});
+
 // ── Login page ───────────────────────────────────────────────────
 app.get("/", (req, res) => {
   if (req.isAuthenticated()) return res.redirect("/game");

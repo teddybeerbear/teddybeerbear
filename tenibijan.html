@@ -950,6 +950,12 @@ body::before{
       <div class="gacha-col-grid" id="abilityCollection"></div>
     </div>
 
+    <!-- 所持アイコンコレクション -->
+    <div class="gacha-collection" id="iconCollectionWrap" style="display:none;">
+      <div class="gacha-col-title">🖼️ 取得アイコン（タップでプロフィールにセット）</div>
+      <div id="gachaIconCollection" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;"></div>
+    </div>
+
     <!-- 統計 -->
     <div style="margin-top:12px;text-align:center;font-size:.55rem;color:#2a4a3a;" id="gachaStat"></div>
   </div>
@@ -992,22 +998,8 @@ body::before{
       </div>
     </div>
 
-    <div class="shop-section-title">🎰 ガチャ</div>
-
-    <!-- 単発ガチャ -->
-    <div class="shop-item">
-      <div class="shop-item-icon">🎰</div>
-      <div class="shop-item-info">
-        <div class="shop-item-name">単発ガチャ</div>
-        <div class="shop-item-desc">1回ガチャを引きます。LEGEND排出で能力が解放！</div>
-      </div>
-      <div class="shop-item-price">
-        <button class="shop-buy-btn paid" onclick="shopPull1()">🪙 1枚</button>
-      </div>
-    </div>
-
-    <div class="shop-section-title">⚡ 能力を直接購入</div>
-    <div style="font-size:.56rem;color:#4a6a5a;margin-bottom:8px;">所持していない能力を🪙30枚で解放できます。</div>
+    <div class="shop-section-title">⚡ 能力を購入</div>
+    <div style="font-size:.56rem;color:#4a6a5a;margin-bottom:8px;">所持していない能力を🪙100枚で解放できます。</div>
     <div class="shop-ability-grid" id="shopAbilityGrid"></div>
   </div>
 </div>
@@ -1022,12 +1014,14 @@ body::before{
     <!-- アイコン選択 -->
     <h3 style="margin-top:8px;">アイコン</h3>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
-      <div id="iconDisplay" onclick="toggleIconPopup()" style="font-size:3rem;width:72px;height:72px;display:flex;align-items:center;justify-content:center;border:2px solid #2a5a3a;border-radius:12px;cursor:pointer;background:#040c12;transition:border-color .15s;" title="クリックで変更">🐻</div>
+      <div id="iconDisplay" onclick="toggleIconPopup()" style="width:72px;height:90px;display:flex;align-items:center;justify-content:center;border:2px solid #2a5a3a;border-radius:12px;cursor:pointer;background:#040c12;transition:border-color .15s;font-size:.55rem;color:#3a5a4a;" title="クリックで変更">未設定</div>
       <span style="font-size:.6rem;color:#3a5a4a;">タップして変更</span>
     </div>
     <div id="iconPopup" style="display:none;background:#030a10;border:1px solid #1a3a2a;border-radius:10px;padding:10px;margin-bottom:10px;">
-      <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;">
-        <div class="popup-icon-opt" data-icon="🐻" onclick="pickIcon('🐻')">🐻</div><div class="popup-icon-opt" data-icon="🐼" onclick="pickIcon('🐼')">🐼</div><div class="popup-icon-opt" data-icon="🦊" onclick="pickIcon('🦊')">🦊</div><div class="popup-icon-opt" data-icon="🐯" onclick="pickIcon('🐯')">🐯</div><div class="popup-icon-opt" data-icon="🦁" onclick="pickIcon('🦁')">🦁</div><div class="popup-icon-opt" data-icon="🐸" onclick="pickIcon('🐸')">🐸</div><div class="popup-icon-opt" data-icon="🐱" onclick="pickIcon('🐱')">🐱</div><div class="popup-icon-opt" data-icon="🐶" onclick="pickIcon('🐶')">🐶</div><div class="popup-icon-opt" data-icon="🐺" onclick="pickIcon('🐺')">🐺</div><div class="popup-icon-opt" data-icon="🦝" onclick="pickIcon('🦝')">🦝</div><div class="popup-icon-opt" data-icon="🐲" onclick="pickIcon('🐲')">🐲</div><div class="popup-icon-opt" data-icon="🦄" onclick="pickIcon('🦄')">🦄</div><div class="popup-icon-opt" data-icon="🐧" onclick="pickIcon('🐧')">🐧</div><div class="popup-icon-opt" data-icon="🦋" onclick="pickIcon('🦋')">🦋</div><div class="popup-icon-opt" data-icon="🐙" onclick="pickIcon('🐙')">🐙</div><div class="popup-icon-opt" data-icon="🦀" onclick="pickIcon('🦀')">🦀</div><div class="popup-icon-opt" data-icon="🌸" onclick="pickIcon('🌸')">🌸</div><div class="popup-icon-opt" data-icon="⭐" onclick="pickIcon('⭐')">⭐</div><div class="popup-icon-opt" data-icon="🔥" onclick="pickIcon('🔥')">🔥</div><div class="popup-icon-opt" data-icon="💎" onclick="pickIcon('💎')">💎</div><div class="popup-icon-opt" data-icon="🎭" onclick="pickIcon('🎭')">🎭</div><div class="popup-icon-opt" data-icon="🎪" onclick="pickIcon('🎪')">🎪</div><div class="popup-icon-opt" data-icon="🎯" onclick="pickIcon('🎯')">🎯</div><div class="popup-icon-opt" data-icon="🚀" onclick="pickIcon('🚀')">🚀</div><div class="popup-icon-opt" data-icon="👑" onclick="pickIcon('👑')">👑</div><div class="popup-icon-opt" data-icon="💀" onclick="pickIcon('💀')">💀</div><div class="popup-icon-opt" data-icon="🌙" onclick="pickIcon('🌙')">🌙</div><div class="popup-icon-opt" data-icon="☀️" onclick="pickIcon('☀️')">☀️</div><div class="popup-icon-opt" data-icon="🍺" onclick="pickIcon('🍺')">🍺</div><div class="popup-icon-opt" data-icon="🀄" onclick="pickIcon('🀄')">🀄</div>
+      <div id="profileGachaIcons">
+        <div style="font-size:.55rem;color:#5a9a6a;margin-bottom:6px;font-weight:700;">🖼️ ガチャアイコン（タップで装備）</div>
+        <div id="profileGachaIconGrid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-height:300px;overflow-y:auto;"></div>
+        <div id="profileGachaNoIcon" style="font-size:.6rem;color:#3a5a4a;text-align:center;padding:16px 0;">ガチャでアイコンを入手しよう！</div>
       </div>
     </div>
 
@@ -1139,7 +1133,7 @@ body::before{
       <div style="display:flex;flex-direction:column;gap:10px;">
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:.65rem;color:#5a7a6a;width:60px;">🎵 SE</span>
-          <input type="range" min="0" max="1" step="0.05" value="0.28" style="flex:1;accent-color:var(--gold);"
+          <input type="range" min="0" max="1" step="0.05" value="0.14" style="flex:1;accent-color:var(--gold);"
             oninput="SFX.setVol(+this.value)">
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
@@ -1236,6 +1230,7 @@ body::before{
     <div class="pcnt">
       <button class="pcnt-btn active" onclick="startTitleBgmOnce();showSolo()">CPU対戦</button>
       <button class="pcnt-btn" onclick="showOnline()">ルームマッチ</button>
+      <button class="pcnt-btn" onclick="showRank()">ランクマッチ</button>
     </div>
   </div>
 
@@ -1310,6 +1305,40 @@ body::before{
         ホストの開始を待っています<span class="thinking-dots"></span>
         <div id="guestMemberList" style="font-size:.6rem;color:#4a8a6a;margin-top:4px;"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- Rank Match card -->
+  <div class="lobby-card" id="lobbyRank" style="display:none">
+    <h3>⚔️ ランクマッチ（3人・時間制限あり）</h3>
+    <div id="rankStatus" style="font-size:.65rem;color:#4a7a5a;text-align:center;margin-bottom:6px;min-height:1.2em;"></div>
+
+    <!-- レート表示 -->
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;background:#030a10;border:1px solid #1a3a2a;border-radius:7px;padding:7px 14px;">
+      <span style="font-size:.6rem;color:#5a7a6a;">現在のレート</span>
+      <span id="myRatingDisplay" style="font-size:1.1rem;font-weight:900;color:var(--gold);">---</span>
+    </div>
+
+    <div id="rankWaitPanel">
+      <div style="font-size:.58rem;color:#5a7a6a;text-align:center;margin-bottom:14px;line-height:1.8;">
+        能力あり・3人対戦・制限時間ありで<br>マッチングします。
+      </div>
+      <button class="start-btn" onclick="joinRankQueue()">🔍 マッチング開始</button>
+    </div>
+
+    <div id="rankSearchPanel" style="display:none;text-align:center;">
+      <div style="font-size:1.5rem;margin:10px 0;animation:float 1.5s ease-in-out infinite;">⚔️</div>
+      <div style="font-size:.7rem;color:#5a9a7a;margin-bottom:4px;">対戦相手を探しています<span class="thinking-dots"></span></div>
+      <div id="rankQueueCount" style="font-size:.6rem;color:#4a8a6a;margin-bottom:4px;"></div>
+      <div id="rankSearchTime" style="font-size:.6rem;color:#3a5a4a;margin-bottom:14px;"></div>
+      <button class="btn btn-danger" onclick="cancelRankQueue()" style="width:100%;padding:10px;">キャンセル</button>
+    </div>
+
+    <div id="rankMatchedPanel" style="display:none;text-align:center;">
+      <div style="font-size:1.5rem;margin:8px 0;">🎉</div>
+      <div style="font-size:.75rem;color:var(--gold);font-weight:700;margin-bottom:6px;">マッチング成功！</div>
+      <div id="rankOpponentNames" style="font-size:.65rem;color:#5a9a7a;margin-bottom:12px;line-height:1.8;"></div>
+      <div style="font-size:.58rem;color:#4a6a5a;">接続中<span class="thinking-dots"></span></div>
     </div>
   </div>
 </div>
@@ -1418,7 +1447,7 @@ body::before{
         <div style="border-top:1px solid #1a2a1a;margin:2px 0;"></div>
         <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
           <span>🎵 SE</span>
-          <input type="range" min="0" max="1" step="0.05" value="0.28" style="flex:1;accent-color:var(--gold);"
+          <input type="range" min="0" max="1" step="0.05" value="0.14" style="flex:1;accent-color:var(--gold);"
             oninput="SFX.setVol(+this.value)">
         </div>
         <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
@@ -1516,6 +1545,10 @@ body::before{
     <div class="modal-sub">最終結果</div>
     <table class="result-table" id="resultTable"></table>
     <div id="resultCoinReward" style="margin:10px 0;font-size:.82rem;text-align:center;color:var(--gold);font-weight:700;"></div>
+    <div id="resultRatingBox" style="display:none;margin:10px 0;padding:10px 14px;background:#030a10;border:1px solid #1a3a2a;border-radius:9px;">
+      <div style="font-size:.6rem;color:#5a8a7a;text-align:center;margin-bottom:8px;font-weight:700;">⚔️ レート変動</div>
+      <div id="resultRatingTable" style="font-size:.65rem;"></div>
+    </div>
     <div class="modal-btns"><button class="btn btn-primary" onclick="backToLobby()">ロビーへ戻る</button></div>
   </div>
 </div>
@@ -1526,7 +1559,7 @@ body::before{
 // ============================================================
 const SFX = (() => {
   let ctx = null;
-  let vol = 0.28; // 控えめ master volume
+  let vol = 0.14; // 控えめ master volume
 
   function ac() {
     if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -2749,6 +2782,7 @@ let NET={
   roomAbilityMode:true, // ルームマッチ能力あり/なし
   online:false,     // playing online?
   roomCode:null,
+  isRankMatch:false, // ランクマッチ中か
   guestNames:[],    // ゲストのプロフィール名 [idx1の名前, idx2の名前, idx3の名前]
   guestAbilities:[], // ゲストの能力 [idx1の能力, idx2の能力, idx3の能力]
 };
@@ -2762,12 +2796,213 @@ function isOnlineGuestIdx(pidx){
 function showSolo(){
   document.getElementById('lobbySolo').style.display='';
   document.getElementById('lobbyOnline').style.display='none';
+  document.getElementById('lobbyRank').style.display='none';
+  cancelRankQueue();
   document.querySelectorAll('#lobbyMode .pcnt-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
 }
 function showOnline(){
   document.getElementById('lobbySolo').style.display='none';
   document.getElementById('lobbyOnline').style.display='';
+  document.getElementById('lobbyRank').style.display='none';
+  cancelRankQueue();
   document.querySelectorAll('#lobbyMode .pcnt-btn').forEach((b,i)=>b.classList.toggle('active',i===1));
+}
+function showRank(){
+  document.getElementById('lobbySolo').style.display='none';
+  document.getElementById('lobbyOnline').style.display='none';
+  document.getElementById('lobbyRank').style.display='';
+  document.querySelectorAll('#lobbyMode .pcnt-btn').forEach((b,i)=>b.classList.toggle('active',i===2));
+  _rankReset();
+  _loadMyRating();
+}
+
+// ── ランクマッチ（3人固定・時間制限あり） ──────────────────────
+const RANK = {
+  polling: null,
+  searchStartAt: null,
+  peerId: null,
+  matchId: null,
+  myRating: null,
+  opponents: [],        // [{name, rating}]
+  connectedGuests: 0,   // ホスト側: 接続済みゲスト数
+};
+
+function _rankReset(){
+  if(RANK.polling){clearInterval(RANK.polling);RANK.polling=null;}
+  RANK.searchStartAt=null;
+  RANK.peerId=null;
+  RANK.matchId=null;
+  RANK.myRating=null;
+  RANK.opponents=[];
+  RANK.connectedGuests=0;
+  const wp=document.getElementById('rankWaitPanel');
+  const sp=document.getElementById('rankSearchPanel');
+  const mp=document.getElementById('rankMatchedPanel');
+  if(wp) wp.style.display='';
+  if(sp) sp.style.display='none';
+  if(mp) mp.style.display='none';
+  const rs=document.getElementById('rankStatus');
+  if(rs) rs.textContent='';
+}
+
+function cancelRankQueue(){
+  if(RANK.polling){clearInterval(RANK.polling);RANK.polling=null;}
+  if(RANK.searchStartAt){
+    fetch('/rank/cancel',{method:'DELETE'}).catch(()=>{});
+  }
+  if(NET.peer&&RANK.peerId){
+    NET.peer.destroy(); NET.peer=null;
+  }
+  RANK.searchStartAt=null;
+  RANK.peerId=null;
+  RANK.matchId=null;
+  const sp=document.getElementById('rankSearchPanel');
+  const wp=document.getElementById('rankWaitPanel');
+  if(sp) sp.style.display='none';
+  if(wp) wp.style.display='';
+}
+
+function setRankStatus(msg){ document.getElementById('rankStatus').textContent=msg; }
+
+async function _loadMyRating(){
+  try{
+    const r=await fetch('/rank/my-rating');
+    if(r.ok){
+      const d=await r.json();
+      RANK.myRating=d.rating;
+      const el=document.getElementById('myRatingDisplay');
+      if(el) el.textContent=d.rating;
+    }
+  }catch(e){}
+}
+
+async function joinRankQueue(){
+  setRankStatus('接続中…');
+  const peerId = 'mj-rank-'+Date.now()+'-'+Math.floor(Math.random()*9999);
+  RANK.peerId = peerId;
+  NET.peer = new Peer(peerId, {debug:0});
+
+  NET.peer.on('open', async ()=>{
+    let res;
+    try {
+      res = await fetch('/rank/join', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({peerId}),
+      });
+    } catch(e){
+      setRankStatus('サーバーへの接続に失敗しました');
+      NET.peer.destroy(); NET.peer=null;
+      return;
+    }
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok){
+      setRankStatus('エラー: '+(data.error||res.status));
+      NET.peer.destroy(); NET.peer=null;
+      return;
+    }
+
+    if(data.matched){
+      _onRankMatched(data);
+    } else {
+      RANK.searchStartAt = Date.now();
+      document.getElementById('rankWaitPanel').style.display='none';
+      document.getElementById('rankSearchPanel').style.display='';
+      setRankStatus('');
+      RANK.polling = setInterval(_pollRankStatus, 2000);
+      _updateSearchTimer();
+    }
+  });
+
+  NET.peer.on('error', e=>{
+    setRankStatus('エラー: '+e.message);
+    _rankReset();
+  });
+}
+
+function _updateSearchTimer(){
+  if(!RANK.searchStartAt) return;
+  const sec = Math.floor((Date.now()-RANK.searchStartAt)/1000);
+  const el = document.getElementById('rankSearchTime');
+  if(el) el.textContent = `待機時間: ${sec}秒`;
+}
+
+async function _pollRankStatus(){
+  _updateSearchTimer();
+  let res;
+  try { res = await fetch('/rank/status'); } catch(e){ return; }
+  if(!res.ok) return;
+  const data = await res.json().catch(()=>({}));
+  // キュー人数を表示
+  if(!data.matched && data.queueSize!=null){
+    const qel=document.getElementById('rankQueueCount');
+    if(qel) qel.textContent=`現在 ${data.queueSize}/3 人待機中`;
+  }
+  if(data.matched){
+    if(RANK.polling){clearInterval(RANK.polling);RANK.polling=null;}
+    _onRankMatched(data);
+  }
+}
+
+function _onRankMatched(data){
+  const sp=document.getElementById('rankSearchPanel');
+  const mp=document.getElementById('rankMatchedPanel');
+  if(sp) sp.style.display='none';
+  if(mp) mp.style.display='';
+  // 対戦相手名を表示
+  const oppEl=document.getElementById('rankOpponentNames');
+  if(oppEl && data.opponents){
+    oppEl.innerHTML=data.opponents.map(o=>`対戦相手: ${o.name} (Rt.${o.rating})`).join('<br>');
+  }
+  setRankStatus('');
+
+  RANK.matchId = data.matchId;
+  RANK.myRating = data.myRating;
+  RANK.opponents = data.opponents || [];
+  RANK.connectedGuests = 0;
+
+  NET.isHost = !!data.isHost;
+  NET.myIdx = data.myIdx ?? (NET.isHost ? 0 : 1);
+  NET.conns = [];
+  NET.isRankMatch = true;
+  G_ABILITY_MODE = true;
+
+  fetch('/rank/done', {method:'DELETE'}).catch(()=>{});
+
+  if(NET.isHost){
+    // ホスト: 2人のゲストからの接続を待つ
+    NET.peer.off('connection');
+    NET.peer.on('connection', conn=>{
+      const guestIdx = NET.conns.length + 1;
+      NET.conns.push(conn);
+      if(guestIdx===1) NET.conn = conn;
+      setupConn(conn, guestIdx);
+      conn.on('open',()=>{
+        conn.send({type:'joined', myIdx:guestIdx, abilityMode:true, members:3});
+        RANK.connectedGuests++;
+        if(RANK.connectedGuests >= 2){
+          // 2人揃ったらゲームスタート
+          setTimeout(()=>{
+            NET.conns.forEach((c,i)=>{
+              c.send({type:'gameStart', totalPlayers:3, abilityMode:true, timeMode:true});
+            });
+            setTimeout(()=>{
+              G_TIME_MODE = true;
+              startOnlineGame();
+            }, 300);
+          }, 800);
+        }
+      });
+    });
+  } else {
+    // ゲスト: ホストのPeerIDに接続
+    const hostPeerId = data.hostPeerId;
+    const conn = NET.peer.connect(hostPeerId, {reliable:true});
+    NET.conn = conn;
+    NET.conns = [];
+    setupConn(conn, null);
+    // gameStartメッセージ受信時にG_TIME_MODE=trueを設定（onNetData内で処理）
+  }
 }
 
 // ── Room creation (Host) ─────────────────────────────────────
@@ -2923,6 +3158,7 @@ function onNetData(msg, senderIdx){
     } else if(msg.type==='gameStart'){
       numPlayers=msg.totalPlayers;
       G_ABILITY_MODE=msg.abilityMode;
+      if(msg.timeMode) G_TIME_MODE=true;
       NET.online=true;
       document.getElementById('lobby').style.display='none';
       document.getElementById('gameScreen').classList.add('active');
@@ -3173,6 +3409,25 @@ function remoteWallPick(pidx,slotIdx){
   if(di>=0)G.deck.splice(di,1);
   const p=G.players[pidx];
   p.hand.push(tile);p.drawnTile=tile;
+
+  // 💣 Mine check (ゲストが地雷スロットを引いた場合)
+  if(G.mineSlots&&G.mineSlots.includes(slotIdx)){
+    G.mineSlots=G.mineSlots.filter(s=>s!==slotIdx);
+    if(G.mineOwners) delete G.mineOwners[slotIdx];
+    const mineTile=p.hand.splice(p.hand.length-1,1)[0];
+    p.discards.push(mineTile);p.drawnTile=null;
+    updateTenpai(p);
+    SFX.mineExplode();
+    addLog(`💥 ${p.name} が地雷を踏んだ！[${emj(mineTile)}] を強制捨て`,'log-win');
+    G._mineHit={pidx,tile:mineTile};
+    renderAll();broadcastState();
+    setTimeout(()=>{
+      if(!checkPon(pidx,mineTile)) nextTurn((pidx+1)%numPlayers);
+      broadcastState();
+    },900);
+    return;
+  }
+
   G.phase='discard';
   updateTenpai(p);
   if(canWin(p.hand)){addLog(`${emj(tile)} ツモ！上がれます`,'log-tsumo');renderAll();broadcastState();return;}
@@ -3250,7 +3505,9 @@ function startOnlineGame(){
   bgmToGame();
   numPlayers=NET.conns.length+1;
   NET.online=true;
-  G_ABILITY_MODE=NET.roomAbilityMode;
+  if(!NET.isRankMatch){
+    G_ABILITY_MODE=NET.roomAbilityMode;
+  }
   document.getElementById('lobby').style.display='none';
   document.getElementById('gameScreen').classList.add('active');
   scaleTable();
@@ -4646,9 +4903,51 @@ function showFinalResult(){
   PROFILE.coins=(PROFILE.coins||0)+earned;
   saveProfileSilent();
   const rewardEl=document.getElementById('resultCoinReward');
-  if(rewardEl) rewardEl.innerHTML=`🪙 +${earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">${myRank===0?'1位ボーナス：+20枚':'���加報酬：+10枚'}</span>`;
+  if(rewardEl) rewardEl.innerHTML=`🪙 +${earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">${myRank===0?'1位ボーナス：+20枚':'参加報酬：+10枚'}</span>`;
+
+  // ランクマッチの場合、ホストがスコアを提出してレートを更新
+  const ratingBox=document.getElementById('resultRatingBox');
+  if(ratingBox) ratingBox.style.display='none';
+  if(NET.isRankMatch && NET.isHost && RANK.matchId){
+    const scores=G.players.map(p=>p.score);
+    fetch('/rank/result',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({matchId:RANK.matchId, scores}),
+    }).then(r=>r.json()).then(d=>{
+      if(d.ok && d.changes) _showRatingChanges(d.changes);
+    }).catch(()=>{});
+  }
+  // ゲスト側: ランクマッチ結果をサーバーから取得
+  if(NET.isRankMatch && !NET.isHost && RANK.matchId){
+    setTimeout(_fetchRankResultForGuest, 3000);
+  }
+
   document.getElementById('resultOverlay').classList.add('show');
   broadcastState({finalResult:sorted.map(p=>({name:p.name,wind:p.wind,score:p.score}))});
+}
+
+async function _fetchRankResultForGuest(){
+  try{
+    const r=await fetch('/rank/result-view?matchId='+encodeURIComponent(RANK.matchId));
+    if(r.ok){const d=await r.json();if(d.changes) _showRatingChanges(d.changes);}
+  }catch(e){}
+}
+
+function _showRatingChanges(changes){
+  const box=document.getElementById('resultRatingBox');
+  const tbl=document.getElementById('resultRatingTable');
+  if(!box||!tbl) return;
+  tbl.innerHTML=changes.map(c=>{
+    const sign=c.change>=0?'+':'';
+    const col=c.change>=0?'#5adb9a':'#ff7a7a';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid #1a3a2a;">
+      <span style="color:#c5e8d5;">${c.name}</span>
+      <span><strong style="color:#c5e8d5;">${c.before}</strong> → <strong style="color:${col};">${c.after}</strong>
+      <span style="color:${col};font-size:.85em;">(${sign}${c.change})</span></span>
+    </div>`;
+  }).join('');
+  box.style.display='';
 }
 function showFinalResultData(sorted){
   document.getElementById('resultTable').innerHTML=sorted.map((p,i)=>
@@ -4681,7 +4980,8 @@ function backToLobby(){
   // ホストが部屋を持っていた場合はサーバーから削除する
   if(NET.isHost && NET.roomCode) fetch('/room/'+NET.roomCode, {method:'DELETE'}).catch(()=>{});
   if(NET.peer){try{NET.peer.destroy();}catch(e){} NET.peer=null;NET.conn=null;NET.conns=[];NET.online=false;}
-  NET.roomCode=null; NET.isHost=false;
+  NET.roomCode=null; NET.isHost=false; NET.isRankMatch=false;
+  RANK.matchId=null; RANK.connectedGuests=0;
   setOnlineStatus('');
   document.getElementById('roomCodeBox').style.display='none';
   document.getElementById('waitingDots').style.display='';
@@ -5687,8 +5987,16 @@ function renderTable(){
     leftPanel.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:108px;flex-shrink:0;margin-right:120px;';
     const windOrb2 = document.createElement('div');
     windOrb2.className='wind-orb'+(p.isDealer?' dealer-orb':'');
-    windOrb2.style.cssText='width:68px;height:68px;font-size:2rem;flex-shrink:0;line-height:68px;text-align:center;border-radius:8px;';
-    windOrb2.textContent=(isHuman&&PROFILE&&PROFILE.icon)?PROFILE.icon:p.wind;
+    if(isHuman&&PROFILE&&PROFILE.iconId){
+      windOrb2.style.cssText='width:80px;height:112px;flex-shrink:0;border-radius:8px;overflow:hidden;background:transparent;display:flex;align-items:center;justify-content:center;';
+      const _orbImg=document.createElement('img');
+      _orbImg.src=gachaIconUrl(PROFILE.iconId);
+      _orbImg.style.cssText='width:80px;height:112px;object-fit:contain;border-radius:8px;';
+      windOrb2.appendChild(_orbImg);
+    } else {
+      windOrb2.style.cssText='width:68px;height:68px;font-size:2rem;flex-shrink:0;line-height:68px;text-align:center;border-radius:8px;';
+      windOrb2.textContent=p.wind;
+    }
     const nameEl2 = document.createElement('span');
     nameEl2.style.cssText='font-size:1.1rem;color:var(--gold);font-weight:700;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;';
     nameEl2.textContent=(p.name||'').slice(0,10);
@@ -5776,8 +6084,10 @@ function renderTable(){
         if(isYamiOpenHide) tileEl.innerHTML=`<span style="font-size:.55em;opacity:.5;">${emj(t)}</span>`;
 
         if(canSel){
-          tileEl.addEventListener('click',()=>humanSelect(i));
-          tileEl.addEventListener('dblclick',()=>{humanSelect(i);humanDiscard();});
+          tileEl.addEventListener('click',()=>{
+            if(selIdx===i) humanDiscard();
+            else humanSelect(i);
+          });
         } else if(canSelYami||isHakuSelectable){
           tileEl.addEventListener('click',()=>humanSelect(i));
         }
@@ -6203,7 +6513,7 @@ function _doSteal(myIdx,fromPidx,discardIdx){
 // ============================================================
 // PROFILE  (localStorage)
 // ============================================================
-let PROFILE = {name:'プレイヤー', ability:'', abilities:[], totalPulls:0, coins:0};
+let PROFILE = {name:'プレイヤー', ability:'', abilities:[], totalPulls:0, coins:10000};
 let G_ABILITY_MODE = true; // 能力あり/なし
 let G_TIME_MODE    = false; // 制限時間モード
 
@@ -6212,7 +6522,7 @@ function loadProfile(){
     const s=localStorage.getItem('mjProfile');
     if(s){
       const p=JSON.parse(s);
-      PROFILE=Object.assign({abilities:[],totalPulls:0,coins:0},p);
+      PROFILE=Object.assign({abilities:[],totalPulls:0,coins:10000},p);
     }
   }catch(e){}
   // ペン能力は最初から所持
@@ -6223,8 +6533,7 @@ function loadProfile(){
   if(ni) ni.value=PROFILE.name||'';
   // アイコン表示更新
   const _id=document.getElementById('iconDisplay');
-  if(_id) _id.textContent=PROFILE.icon||'🐻';
-  document.querySelectorAll('.popup-icon-opt').forEach(e=>e.classList.toggle('selected',e.dataset.icon===(PROFILE.icon||'🐻')));
+  if(_id) updateIconDisplay(_id);
   // 能力表示更新
   if(PROFILE.ability) pickAbility(PROFILE.ability);
   document.querySelectorAll('#abilityList .ability-card').forEach(el=>{
@@ -6233,19 +6542,60 @@ function loadProfile(){
   updateProfileBadge();
 }
 
-function selectIcon(el,icon){ PROFILE.icon=icon; } // legacy
+function selectIcon(el,icon){ } // legacy (emoji icons removed)
+
+function updateIconDisplay(el){
+  if(!el) return;
+  if(PROFILE.iconId){
+    el.innerHTML='';
+    el.style.fontSize='';
+    el.style.color='';
+    const img=document.createElement('img');
+    img.src=gachaIconUrl(PROFILE.iconId);
+    img.style.cssText='width:64px;height:90px;object-fit:contain;border-radius:8px;';
+    el.appendChild(img);
+  } else {
+    el.innerHTML='';
+    el.style.fontSize='.55rem';
+    el.style.color='#3a5a4a';
+    el.textContent='未設定';
+  }
+}
 
 function toggleIconPopup(){
   const p=document.getElementById('iconPopup');
-  p.style.display=p.style.display==='none'?'block':'none';
+  const isNowOpen = p.style.display==='none';
+  p.style.display=isNowOpen?'block':'none';
+  if(isNowOpen) renderProfileGachaIcons();
 }
-function pickIcon(icon){
-  PROFILE.icon=icon;
-  const d=document.getElementById('iconDisplay');
-  if(d) d.textContent=icon;
-  document.querySelectorAll('.popup-icon-opt').forEach(e=>e.classList.toggle('selected',e.dataset.icon===icon));
-  document.getElementById('iconPopup').style.display='none';
+
+function renderProfileGachaIcons(){
+  const grid=document.getElementById('profileGachaIconGrid');
+  const noIcon=document.getElementById('profileGachaNoIcon');
+  if(!grid) return;
+  const owned=PROFILE.gachaIcons||[];
+  if(owned.length===0){
+    grid.innerHTML='';
+    if(noIcon) noIcon.style.display='';
+    return;
+  }
+  if(noIcon) noIcon.style.display='none';
+  const equippedId=PROFILE.iconId||'';
+  let html='';
+  for(const id of owned){
+    const info=GACHA_ICONS.find(i=>i.id===id);
+    const rdKey=id.startsWith('L')?'legend':id.startsWith('E')?'epic':id.startsWith('R')?'rare':'normal';
+    const rd=RARITY_TABLE.find(r=>r.rarity===rdKey)||RARITY_TABLE[3];
+    const isEq=equippedId===id;
+    html+=`<div onclick="pickGachaIcon('${id}');renderProfileGachaIcons();" style="cursor:pointer;text-align:center;border:2px solid ${isEq?'#ffd700':rd.border};border-radius:8px;padding:3px;background:${rd.bg};position:relative;">
+      <img src="${gachaIconUrl(id)}" style="width:80px;height:112px;object-fit:contain;border-radius:6px;display:block;margin:0 auto;" alt="${id}">
+      <div style="font-size:.42rem;color:${rd.color};margin-top:1px;">${info?info.label:id}</div>
+      ${isEq?'<div style="position:absolute;top:2px;right:3px;font-size:.4rem;background:#2a1a00;color:#ffd700;border-radius:3px;padding:1px 3px;">装備</div>':''}
+    </div>`;
+  }
+  grid.innerHTML=html;
 }
+function pickIcon(icon){ } // legacy (emoji icons removed)
 function toggleAbilityPopup(){
   const p=document.getElementById('abilityPopup');
   p.style.display=p.style.display==='none'?'block':'none';
@@ -6285,14 +6635,11 @@ function saveProfile(){
 // GACHA SYSTEM
 // ============================================================
 const GACHA_ABILITIES = [
-  {key:'mine',   icon:'💣', name:'地雷',      tag:'妨害系'},
-  {key:'light',  icon:'☀️', name:'光',        tag:'索敵系'},
   {key:'yami',   icon:'🌑', name:'闇',        tag:'撹乱系'},
-  {key:'haku',   icon:'🀆', name:'白',        tag:'変換系'},
   {key:'sanctuary',icon:'🏛️',name:'聖域',    tag:'防御系'},
-  {key:'pinzu',  icon:'🔵', name:'ピンズー教', tag:'情報系'},
   {key:'steal',  icon:'🃏', name:'スチール',  tag:'奪取系'},
   {key:'pen',    icon:'🖊️', name:'ペン',       tag:'落書き系'},
+  {key:'pinzu',  icon:'🔵', name:'ピンズー教', tag:'情報系'},
 ];
 const RARITY_TABLE = [
   {rarity:'legend', label:'LEGEND', prob:0.001, color:'#ffd700', bg:'#1a0e00', border:'#ffd700'},
@@ -6301,6 +6648,15 @@ const RARITY_TABLE = [
   {rarity:'normal', label:'NORMAL', prob:1.00,  color:'#5a8a7a', bg:'#0a1a14', border:'#2a4a3a'},
 ];
 const NORMAL_LABELS = ['はずれ','はずれ','はずれ','マナ×1','マナ×2','星かけら','石ころ','なにもない'];
+
+const GACHA_ICON_BASE = 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/gacha/';
+const GACHA_ICONS = [
+  ...Array.from({length:9},(_,i)=>{const n=String(i+1).padStart(2,'0');return{id:`C${n}`,rarity:'normal',label:`コモン${n}`};}),
+  ...Array.from({length:15},(_,i)=>{const n=String(i+1).padStart(2,'0');return{id:`R${n}`,rarity:'rare',label:`レア${n}`};}),
+  ...Array.from({length:7},(_,i)=>{const n=String(i+1).padStart(2,'0');return{id:`E${n}`,rarity:'epic',label:`エピック${n}`};}),
+  ...Array.from({length:3},(_,i)=>{const n=String(i+1).padStart(2,'0');return{id:`L${n}`,rarity:'legend',label:`レジェンド${n}`};}),
+];
+function gachaIconUrl(id){ return GACHA_ICON_BASE+id+'.png'; }
 
 function rollRarity(){
   const r = Math.random();
@@ -6324,6 +6680,15 @@ function pullOnce(){
     result.label = NORMAL_LABELS[Math.floor(Math.random()*NORMAL_LABELS.length)];
     result.isNew = false;
   }
+  // アイコン排出（全レアリティ対象：NORMAL→C、RARE→R、EPIC→E、LEGEND→L）
+  const availIcons = GACHA_ICONS.filter(i=>i.rarity===rarity);
+  if(availIcons.length > 0){
+    const icon = availIcons[Math.floor(Math.random()*availIcons.length)];
+    result.icon = icon;
+    if(!PROFILE.gachaIcons) PROFILE.gachaIcons=[];
+    result.iconIsNew = !PROFILE.gachaIcons.includes(icon.id);
+    if(result.iconIsNew) PROFILE.gachaIcons.push(icon.id);
+  }
   PROFILE.totalPulls = (PROFILE.totalPulls||0)+1;
   return result;
 }
@@ -6342,6 +6707,7 @@ function doPull10(){
   saveProfileSilent();
   showGachaAnim10(results);
   renderGachaCollection();
+  renderGachaIconCollection();
   updateGachaStat();
   updateGachaCoinDisplay();
 }
@@ -6351,6 +6717,7 @@ function doPull1(){
   saveProfileSilent();
   showGachaAnim1(res);
   renderGachaCollection();
+  renderGachaIconCollection();
   updateGachaStat();
   updateGachaCoinDisplay();
 }
@@ -6377,14 +6744,19 @@ function showGachaAnim1(res){
           <div class="gacha-card-desc">${res.ability.tag}</div>
           ${res.isNew?'<div class="gacha-card-new">NEW!</div>':'<div style="font-size:.55rem;color:#888;">ダブり</div>'}
         </div>
+        ${res.icon?`<div style="margin-top:8px;display:inline-block;">
+          <img src="${gachaIconUrl(res.icon.id)}" style="width:80px;height:112px;object-fit:contain;border-radius:8px;border:2px solid ${res.rd.color};" alt="${res.icon.id}">
+          <div style="font-size:.55rem;color:${res.rd.color};margin-top:2px;">${res.icon.label} ${res.iconIsNew?'<span style="background:#2a1a00;color:#ffd700;padding:1px 4px;border-radius:3px;font-size:.5rem;">NEW</span>':''}</div>
+        </div>`:''}
       </div>`;
   } else {
     cardHtml = `
       <div class="rarity-${res.rarity}" style="text-align:center;">
         <div class="gacha-result-card">
           <div class="gacha-rarity-label" style="color:${res.rd.color};">${res.rd.label}</div>
-          <div class="gacha-card-icon" style="font-size:1.6rem;opacity:.5;">💨</div>
-          <div class="gacha-card-name" style="font-size:.85rem;">${res.label}</div>
+          ${res.icon?`<img src="${gachaIconUrl(res.icon.id)}" style="width:80px;height:112px;object-fit:contain;border-radius:6px;border:2px solid ${res.rd.border};margin:4px 0;" alt="${res.icon.id}">`:'<div class="gacha-card-icon" style="font-size:1.6rem;opacity:.5;">💨</div>'}
+          <div class="gacha-card-name" style="font-size:.85rem;">${res.icon?res.icon.label:(res.label||'')}</div>
+          ${res.iconIsNew?'<div class="gacha-card-new">NEW!</div>':''}
         </div>
       </div>`;
   }
@@ -6415,12 +6787,14 @@ function showGachaAnim10(results){
         <div class="g-icon">${res.ability.icon}</div>
         <div class="g-name">${res.ability.name}</div>
         ${res.isNew?'<div class="g-new">NEW</div>':''}
+        ${res.icon?`<img src="${gachaIconUrl(res.icon.id)}" style="width:40px;height:56px;object-fit:contain;border-radius:4px;margin-top:4px;" alt="${res.icon.id}">`:''}
+        ${res.iconIsNew?'<div class="g-new" style="font-size:.42rem;">🖼NEW</div>':''}
       </div>`;
     }
-    const icons = {rare:'⬡',epic:'◈',normal:'·'};
     return `<div class="gacha-mini-card rarity-${res.rarity}">
-      <div class="g-icon" style="font-size:1rem;opacity:.5;">${icons[res.rarity]||'·'}</div>
-      <div class="g-name">${res.label||res.rd.label}</div>
+      ${res.icon?`<img src="${gachaIconUrl(res.icon.id)}" style="width:40px;height:56px;object-fit:contain;border-radius:4px;" alt="${res.icon.id}">`:'<div class="g-icon" style="font-size:1rem;opacity:.5;">·</div>'}
+      <div class="g-name">${res.icon?res.icon.label:(res.label||res.rd.label)}</div>
+      ${res.iconIsNew?'<div class="g-new">NEW</div>':''}
     </div>`;
   }).join('');
 
@@ -6468,6 +6842,38 @@ function equipAbility(key){
   PROFILE.ability = PROFILE.ability===key ? '' : key; // トグル
   saveProfileSilent();
   renderGachaCollection();
+  updateProfileBadge();
+}
+
+function renderGachaIconCollection(){
+  const wrap = document.getElementById('iconCollectionWrap');
+  const el = document.getElementById('gachaIconCollection');
+  if(!el||!wrap) return;
+  const owned = PROFILE.gachaIcons||[];
+  if(owned.length===0){ wrap.style.display='none'; return; }
+  wrap.style.display='';
+  const equippedId = PROFILE.iconId||'';
+  let html = '';
+  for(const id of owned){
+    const info = GACHA_ICONS.find(i=>i.id===id);
+    const rdKey = id.startsWith('L')?'legend':id.startsWith('E')?'epic':id.startsWith('R')?'rare':'normal';
+    const rd = RARITY_TABLE.find(r=>r.rarity===rdKey)||RARITY_TABLE[3];
+    const isEq = equippedId===id;
+    html += `<div onclick="pickGachaIcon('${id}')" style="cursor:pointer;text-align:center;border:2px solid ${isEq?'#ffd700':rd.border};border-radius:8px;padding:4px;background:${rd.bg};position:relative;">
+      <img src="${gachaIconUrl(id)}" style="width:80px;height:112px;object-fit:contain;border-radius:6px;display:block;margin:0 auto;" alt="${id}">
+      <div style="font-size:.48rem;color:${rd.color};margin-top:2px;">${info?info.label:id}</div>
+      ${isEq?'<div style="position:absolute;top:2px;right:4px;font-size:.45rem;background:#2a1a00;color:#ffd700;border-radius:3px;padding:1px 3px;">装備中</div>':''}
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+function pickGachaIcon(id){
+  PROFILE.iconId = (PROFILE.iconId===id) ? null : id;
+  PROFILE.icon = '';
+  saveProfileSilent();
+  renderGachaIconCollection();
+  updateIconDisplay(document.getElementById('iconDisplay'));
   updateProfileBadge();
 }
 
@@ -6528,11 +6934,11 @@ function openProfile(){
   if(ni) ni.value=PROFILE.name||'';
   // アイコン表示更新
   const _id=document.getElementById('iconDisplay');
-  if(_id) _id.textContent=PROFILE.icon||'🐻';
-  document.querySelectorAll('.popup-icon-opt').forEach(e=>e.classList.toggle('selected',e.dataset.icon===(PROFILE.icon||'🐻')));
+  if(_id) updateIconDisplay(_id);
   // 能力表示更新
   if(PROFILE.ability) pickAbility(PROFILE.ability);
   renderProfileAbilityList();
+  renderGachaIconCollection();
 }
 function renderProfileAbilityList(){
   const counts={};
@@ -6566,14 +6972,9 @@ function closeProfile(){
 const SHOP_ABILITIES=[
   {key:'mine',  icon:'💣', name:'地雷'},
   {key:'light', icon:'☀️', name:'光'},
-  {key:'yami',  icon:'🌑', name:'闇'},
   {key:'haku',  icon:'🀆', name:'白'},
-  {key:'sanctuary',icon:'🏛️',name:'聖域'},
-  {key:'pinzu', icon:'🔵', name:'ピンズー教'},
-  {key:'steal', icon:'🃏', name:'スチール'},
-  {key:'pen',   icon:'🖊️', name:'ペン'},
 ];
-const SHOP_AB_COST=30;
+const SHOP_AB_COST=100;
 
 function openShop(){
   document.getElementById('lobby').style.display='none';
