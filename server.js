@@ -28,6 +28,9 @@ if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
 // ── Render.com のプロキシを信頼 ─────────────────────────────────
 app.set("trust proxy", 1);
 
+// ── Body parser ──────────────────────────────────────────────────
+app.use(express.json());
+
 // ── Passport setup ──────────────────────────────────────────────
 passport.use(new GoogleStrategy({
   clientID: GOOGLE_CLIENT_ID || "missing",
@@ -71,6 +74,72 @@ app.get("/auth/google/callback",
 
 app.get("/logout", (req, res) => {
   req.logout(() => res.redirect("/"));
+});
+
+// ── ルームマッチ（サーバー側マッチング） ────────────────────────
+// rooms: { code -> { peerId, hostName, abilityMode, createdAt } }
+const rooms = new Map();
+const ROOM_TTL_MS = 30 * 60 * 1000; // 30分で自動削除
+
+// 古い部屋を定期的に掃除
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, room] of rooms.entries()) {
+    if (now - room.createdAt > ROOM_TTL_MS) {
+      rooms.delete(code);
+      console.log(`部屋 ${code} を期限切れで削除`);
+    }
+  }
+}, 60 * 1000);
+
+// 認証ミドルウェア（APIにもログイン必須）
+function requireAuth(req, res, next) {
+  if (req.isAuthenticated()) return next();
+  res.status(401).json({ error: "ログインが必要です" });
+}
+
+// 部屋を作成（ホスト）
+app.post("/room/create", requireAuth, (req, res) => {
+  const { code, peerId, abilityMode } = req.body;
+  if (!code || !peerId) {
+    return res.status(400).json({ error: "code と peerId は必須です" });
+  }
+  if (!/^\d{6}$/.test(code)) {
+    return res.status(400).json({ error: "部屋番号は6桁の数字にしてください" });
+  }
+  if (rooms.has(code)) {
+    return res.status(409).json({ error: "その部屋番号はすでに使われています" });
+  }
+  rooms.set(code, {
+    peerId,
+    hostName: req.user.name || "ホスト",
+    abilityMode: abilityMode !== false,
+    createdAt: Date.now(),
+  });
+  console.log(`部屋作成: ${code} (host: ${req.user.name}, peer: ${peerId})`);
+  res.json({ ok: true });
+});
+
+// 部屋情報を取得（ゲスト）
+app.get("/room/:code", requireAuth, (req, res) => {
+  const code = req.params.code;
+  const room = rooms.get(code);
+  if (!room) {
+    return res.status(404).json({ error: "部屋が見つかりません" });
+  }
+  res.json({
+    peerId: room.peerId,
+    hostName: room.hostName,
+    abilityMode: room.abilityMode,
+  });
+});
+
+// 部屋を削除（ホストがゲーム開始または退室時）
+app.delete("/room/:code", requireAuth, (req, res) => {
+  const code = req.params.code;
+  rooms.delete(code);
+  console.log(`部屋削除: ${code}`);
+  res.json({ ok: true });
 });
 
 // ── Login page ───────────────────────────────────────────────────

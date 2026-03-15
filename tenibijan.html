@@ -1216,7 +1216,7 @@ body::before{
           <tr><td style="padding:2px 6px;">チンロウトウ</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">1・9のみ</td></tr>
           <tr><td style="padding:2px 6px;">緑一色</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">索子2346・発のみ</td></tr>
           <tr><td style="padding:2px 6px;">国士無双</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">東南西北中の5種+1</td></tr>
-          <tr><td style="padding:2px 6px;">一槓子</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">カン4回</td></tr>
+          <tr><td style="padding:2px 6px;">一槓子</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">カン1回以上</td></tr>
           <tr><td style="padding:2px 6px;">一暗刻</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">暗刻のみ（ツモか単騎）</td></tr>
           <tr><td style="padding:2px 6px;">地和</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">子の第一ツモ上がり</td></tr>
           <tr><td style="padding:2px 6px;">人和</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">第一ツモ前ロン</td></tr>
@@ -1676,12 +1676,21 @@ const SFX = (() => {
       beep(880, 0.05, 0.28, t + 0.10);
     },
 
-    // ── 地雷爆発: ドカン ─────────────────────────────────
+    // ── 地雷爆発: ドカーン！ ─────────────────────────────
     mineExplode() {
       const c = ac(), t = c.currentTime;
-      noise(0.4, 0.9, 3000, t);
-      sweep(300, 40, 0.35, 0.6, t);
-      beep(80, 0.3, 0.4, t + 0.03);
+      // 爆発初動: 高周波バースト
+      noise(0.6, 0.06, 4000, t);
+      // 重低音の衝撃波
+      sweep(180, 25, 0.55, 0.9, t + 0.02);
+      beep(55, 0.45, 0.7, t + 0.02);
+      beep(80, 0.35, 0.5, t + 0.04);
+      // 中音の破裂音
+      noise(0.5, 0.4, 1200, t + 0.03);
+      noise(0.3, 0.3, 500, t + 0.1);
+      // 余韻のゴロゴロ
+      sweep(120, 30, 0.2, 0.6, t + 0.35);
+      noise(0.15, 0.5, 200, t + 0.4);
     },
 
     // ── スチール: シュッ ─────────────────────────────────
@@ -2550,7 +2559,7 @@ function evalYaku(hand5,winTile,isTsumo,player,roundWind){
   if(isKokushi(hand5))ymList.push({name:'国士無双（東南西北中）',han:13});
   const meldTypes=melds.map(m=>m.type);
   const kanCount=meldTypes.filter(t=>['ankan','minkan','kakan'].includes(t)).length;
-  if(kanCount>=4)ymList.push({name:'四槓子',han:13});
+  if(kanCount>=1)ymList.push({name:'一槓子',han:13});
   // 一暗刻: 門前トイトイ形。ツモなら一暗刻/一暗刻単騎。ロンは単騎のみ
   if(isToitoiHand(hand5)&&isMenzen){
     const isTanki=isTankiWait(hand5,winTile);
@@ -2740,6 +2749,8 @@ let NET={
   roomAbilityMode:true, // ルームマッチ能力あり/なし
   online:false,     // playing online?
   roomCode:null,
+  guestNames:[],    // ゲストのプロフィール名 [idx1の名前, idx2の名前, idx3の名前]
+  guestAbilities:[], // ゲストの能力 [idx1の能力, idx2の能力, idx3の能力]
 };
 
 // ヘルパー: 指定インデックスがオンラインゲストかどうか（ホスト視点で使用）
@@ -2765,7 +2776,7 @@ function setRoomAbilityMode(on){
   document.getElementById('roomModeAbilityOn').classList.toggle('active',on);
   document.getElementById('roomModeAbilityOff').classList.toggle('active',!on);
 }
-function createRoom(){
+async function createRoom(){
   setOnlineStatus('接続中…');
   const code = String(Math.floor(100000+Math.random()*900000));
   NET.roomCode = code;
@@ -2773,8 +2784,27 @@ function createRoom(){
   NET.myIdx = 0;
   NET.conns = [];
 
-  NET.peer = new Peer('mj-'+code, {debug:0});
-  NET.peer.on('open', ()=>{
+  const peerId = 'mj-'+code;
+  NET.peer = new Peer(peerId, {debug:0});
+  NET.peer.on('open', async ()=>{
+    // サーバーに部屋を登録する
+    try {
+      const res = await fetch('/room/create', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({code, peerId, abilityMode: NET.roomAbilityMode}),
+      });
+      if(!res.ok){
+        const err = await res.json().catch(()=>({}));
+        setOnlineStatus('部屋の作成に失敗しました: '+(err.error||res.status));
+        NET.peer.destroy(); NET.peer=null;
+        return;
+      }
+    } catch(e){
+      setOnlineStatus('サーバーへの接続に失敗しました');
+      NET.peer.destroy(); NET.peer=null;
+      return;
+    }
     document.getElementById('roomCodeBox').style.display='';
     document.getElementById('roomCodeDisplay').textContent=code;
     setOnlineStatus('');
@@ -2785,7 +2815,7 @@ function createRoom(){
     const guestIdx = NET.conns.length+1;
     conn.metadata = {idx:guestIdx};
     NET.conns.push(conn);
-    NET.conn = conn; // 後方��換
+    NET.conn = conn;
     setupConn(conn, guestIdx);
     updateRoomMemberList();
     // 参加者に自分のidxと現在のメンバー情報を送る
@@ -2801,13 +2831,19 @@ function createRoom(){
 function updateRoomMemberList(){
   const count = NET.conns.length+1;
   const el = document.getElementById('roomMemberList');
-  if(el) el.textContent=`現在${count}人 / 最大4人`;
+  if(el){
+    const names=[PROFILE.name||'あなた（ホスト）'];
+    for(let i=0;i<NET.conns.length;i++) names.push(NET.guestNames[i]||`ゲスト${i+1}`);
+    el.textContent=`現在${count}人 / 最大4人　[${names.join(', ')}]`;
+  }
   const sb = document.getElementById('roomStartBtn');
   if(sb) sb.style.display = count>=2?'':'none';
 }
 function hostStartGame(){
   if(NET.conns.length===0)return;
   NET.conns.forEach((c,i)=>{if(c.open)c.send({type:'gameStart',totalPlayers:NET.conns.length+1,abilityMode:NET.roomAbilityMode});});
+  // ゲーム開始後はサーバーから部屋を削除する（新規参加を防ぐ）
+  if(NET.roomCode) fetch('/room/'+NET.roomCode, {method:'DELETE'}).catch(()=>{});
   setTimeout(()=>startOnlineGame(),300);
 }
 
@@ -2817,22 +2853,38 @@ function copyRoomCode(){
 }
 
 // ── Room join (Guest) ─────────────────────────────────────────
-function joinRoom(){
+async function joinRoom(){
   const code = document.getElementById('roomInput').value.trim();
   if(code.length!==6){setOnlineStatus('6桁の部屋番号を入力してください');return;}
-  setOnlineStatus('接続中…');
+  setOnlineStatus('サーバーで部屋を検索中…');
   NET.isHost = false;
   NET.myIdx = 1; // ホストから上書きされる
   NET.roomCode = code;
   NET.conns = [];
 
+  // サーバーからホストのPeerIDを取得する
+  let hostPeerId;
+  try {
+    const res = await fetch('/room/'+code);
+    if(!res.ok){
+      setOnlineStatus('部屋が見つかりません。番号を確認してください。');
+      return;
+    }
+    const data = await res.json();
+    hostPeerId = data.peerId;
+  } catch(e){
+    setOnlineStatus('サーバーへの接続に失敗しました');
+    return;
+  }
+
+  setOnlineStatus('接続中…');
   NET.peer = new Peer('mj-guest-'+Date.now(), {debug:0});
   NET.peer.on('open', ()=>{
-    const conn = NET.peer.connect('mj-'+code, {reliable:true});
+    const conn = NET.peer.connect(hostPeerId, {reliable:true});
     NET.conn = conn;
     setupConn(conn, null);
   });
-  NET.peer.on('error', e=>{setOnlineStatus('エラー: 部屋が見つかりません。番号を確認してください。');});
+  NET.peer.on('error', e=>{setOnlineStatus('エラー: 接続に失敗しました。');});
 }
 
 // ── Shared connection setup ───────────────────────────────────
@@ -2864,6 +2916,8 @@ function onNetData(msg, senderIdx){
       setOnlineStatus('接続しました！ホストの開始を待っています…');
       document.getElementById('guestWaitMsg').style.display='';
       updateGuestMemberList(msg.members);
+      // 自分のプロフィール名をホストに送信
+      if(NET.conn&&NET.conn.open) NET.conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||''});
     } else if(msg.type==='memberUpdate'){
       updateGuestMemberList(msg.members);
     } else if(msg.type==='gameStart'){
@@ -2896,11 +2950,136 @@ function handleGuestAction(msg, senderIdx){
     case 'skipPon':   remoteSkipPon(msg.from); break;
     case 'kakan':     if(NET.isHost){handleKakan(msg.pidx,msg.handIdx);broadcastState();} break;
     case 'ankan':     if(NET.isHost){handleAnkan(msg.pidx,msg.tileKey);broadcastState();} break;
-    case 'steal':     if(NET.isHost){_doSteal(msg.myIdx,msg.fromPidx,msg.discardIdx);broadcastState();} break;
+    case 'steal':     if(NET.isHost){_doSteal(msg.myIdx,msg.fromPidx,msg.discardIdx);} break;
     case 'haku':      if(NET.isHost){remoteHaku(msg.pidx,msg.tidx);} break;
+    case 'lightRevealWall':
+      if(NET.isHost){
+        const si=msg.slotIdx;
+        if(G.deckSlots&&G.deckSlots[si]!==null){
+          if(!G.lightRevealedSlots) G.lightRevealedSlots={};
+          G.lightRevealedSlots[si]=true;
+          const tile=G.deckSlots[si];
+          if(!G.lightExtraDora) G.lightExtraDora=[];
+          G.lightExtraDora.push({suit:tile.suit,num:tile.num});
+          const ui=msg.userIdx??senderIdx;
+          if(ui!=null&&G.players[ui]) G.players[ui].abilityUsed=true;
+          G.lightMode=false;
+          addLog(`☀️ 光！山牌を表にした: ${emj(tile)}（ドラ追加）`,'log-dora');
+          SFX.light();
+          broadcastState();
+        }
+      }
+      break;
+    case 'lightRevealHand':
+      if(NET.isHost){
+        const p=G.players[msg.pidx];
+        if(p&&msg.handIdx>=0&&msg.handIdx<p.hand.length){
+          if(!G.lightRevealedHand) G.lightRevealedHand={};
+          const tile=p.hand[msg.handIdx];
+          G.lightRevealedHand[tile._id]=tile;
+          if(!G.lightExtraDora) G.lightExtraDora=[];
+          G.lightExtraDora.push({suit:tile.suit,num:tile.num});
+          const ui=msg.userIdx??senderIdx;
+          if(ui!=null&&G.players[ui]) G.players[ui].abilityUsed=true;
+          G.lightMode=false;
+          addLog(`☀️ 光！${p.name}の手牌を表にした: ${emj(tile)}（ドラ追加）`,'log-dora');
+          SFX.light();
+          broadcastState();
+        }
+      }
+      break;
+    case 'lightRevealDoraCanvas':
+      if(NET.isHost){
+        const di=msg.di;
+        let tile=null,label='';
+        if(di<7){const usedR=G.rinshanIdx;if(di>=usedR){tile=G.doraPile[8+di];label='嶺上牌';}}
+        else if(di>=7&&di<=10){tile=G.doraPile[di-7];label='ドラ表示牌';}
+        if(tile&&tile.suit){
+          if(!G.lightRevealedSlots) G.lightRevealedSlots={};
+          G.lightRevealedSlots['dc_'+di]=true;
+          if(!G.lightExtraDora) G.lightExtraDora=[];
+          G.lightExtraDora.push({suit:tile.suit,num:tile.num});
+          const ui=msg.userIdx??senderIdx;
+          if(ui!=null&&G.players[ui]) G.players[ui].abilityUsed=true;
+          G.lightMode=false;
+          addLog(`☀️ 光！${label}を表にした: ${emj(tile)}（ドラ追加）`,'log-dora');
+          SFX.light();
+          broadcastState();
+        }
+      }
+      break;
+    case 'lightDispelDiscardYami':
+      if(NET.isHost){
+        const p=G.players[msg.pidx];
+        const t=p&&p.discards[msg.discardIdx];
+        if(t&&t._yami){
+          delete t._yami;
+          const ui=msg.userIdx??senderIdx;
+          if(ui!=null&&G.players[ui]) G.players[ui].abilityUsed=true;
+          G.lightMode=false;
+          addLog(`☀️ 光！${p.name}の捨て牌の闇を解いた`,'log-dora');
+          SFX.light();
+          broadcastState();
+        }
+      }
+      break;
+    case 'lightDispelHandYami':
+      if(NET.isHost){
+        const p=G.players[msg.pidx];
+        if(p&&p.yamiTileIdx>=0){
+          p.yamiTileIdx=-1;
+          const ui=msg.userIdx??senderIdx;
+          if(ui!=null&&G.players[ui]) G.players[ui].abilityUsed=true;
+          G.lightMode=false;
+          addLog(`☀️ 光！${p.name}の手牌の闇を解いた`,'log-dora');
+          SFX.light();
+          broadcastState();
+        }
+      }
+      break;
+    case 'lightRevealMine':
+      if(NET.isHost){
+        const ui=msg.userIdx??senderIdx;
+        if(ui!=null&&G.players[ui]) G.players[ui].abilityUsed=true;
+        G.lightMode=false;
+        addLog(`☀️ 光！地雷の位置を確認した`,'log-dora');
+        broadcastState();
+      }
+      break;
+    case 'plantMine':
+      if(NET.isHost){
+        const si=msg.slotIdx;
+        if(G.deckSlots&&G.deckSlots[si]!==null&&!G.mineSlots.includes(si)){
+          G.mineSlots.push(si);
+          if(!G.mineOwners) G.mineOwners={};
+          G.mineOwners[si]=senderIdx;
+          G.mineCount++;
+          if(G.mineCount>=3) G.minePlantMode=false;
+          SFX.minePlant();
+          addLog(`💣 地雷を仕掛けた！（${G.mineCount}/3カ所）`,'log-dora');
+          broadcastState();
+        }
+      }
+      break;
+    case 'plantMineRinshan':
+      if(NET.isHost){
+        const ri=msg.ri;
+        if(ri>=0&&ri<G.rinshan.length&&!G.mineRinshanIdxs.includes(ri)){
+          G.mineRinshanIdxs.push(ri);
+          if(!G.mineRinshanOwners) G.mineRinshanOwners={};
+          G.mineRinshanOwners[ri]=senderIdx;
+          G.mineCount++;
+          if(G.mineCount>=3) G.minePlantMode=false;
+          SFX.minePlant();
+          addLog(`💣 嶺上牌に地雷を仕掛けた！（${G.mineCount}/3カ所）`,'log-dora');
+          broadcastState();
+        }
+      }
+      break;
     case 'kita':      remoteKita(msg.pidx); break;
     case 'riichi':    remoteRiichi(msg.pidx, msg.mode, msg.tidx); break;
     case 'nextRound': nextRound(); break;
+    case 'myName': NET.guestNames[senderIdx-1]=msg.name||'プレイヤー'; NET.guestAbilities[senderIdx-1]=msg.ability??''; updateRoomMemberList(); break;
     case 'penSync':
       if(NET.isHost && msg.changedKeys){
         if(!G.penDrawings) G.penDrawings={};
@@ -2935,7 +3114,7 @@ function applyHostState(msg){
     G.phase=s.phase;G.firstRound=s.firstRound;G.log=s.log;
     G.savedScores=s.savedScores;G._dealerWon=s._dealerWon;
     G.pendingRiichi=s.pendingRiichi;G.riichiValidIdx=s.riichiValidIdx;
-    G.mineSlots=s.mineSlots??[];G.mineRinshanIdxs=s.mineRinshanIdxs??[];G.mineCount=s.mineCount??0;G.yamiSelectMode=s.yamiSelectMode??false;G.hakuSelectMode=s.hakuSelectMode??false;G.stealMode=s.stealMode??false;G.lightMode=s.lightMode??false;G.lightUserIdx=s.lightUserIdx??null;G.lightRevealedSlots=s.lightRevealedSlots??{};G.lightRevealedHand=s.lightRevealedHand??{};G.penDrawings=s.penDrawings??{};
+    G.mineSlots=s.mineSlots??[];G.mineRinshanIdxs=s.mineRinshanIdxs??[];G.mineOwners=s.mineOwners??{};G.mineRinshanOwners=s.mineRinshanOwners??{};G.mineCount=s.mineCount??0;G.yamiSelectMode=s.yamiSelectMode??false;G.hakuSelectMode=s.hakuSelectMode??false;G.stealMode=s.stealMode??false;G.lightMode=s.lightMode??false;G.lightUserIdx=s.lightUserIdx??null;G.lightRevealedSlots=s.lightRevealedSlots??{};G.lightRevealedHand=s.lightRevealedHand??{};G.lightExtraDora=s.lightExtraDora??[];G.penDrawings=s.penDrawings??{};
     G.players=s.players;
     numPlayers=s.numPlayers;
     pendingAction=s.pendingAction;
@@ -2968,7 +3147,7 @@ function broadcastState(extra={}){
     phase:G.phase,firstRound:G.firstRound,log:G.log,
     savedScores:G.savedScores,_dealerWon:G._dealerWon,
     pendingRiichi:G.pendingRiichi,riichiValidIdx:G.riichiValidIdx,
-    mineSlots:G.mineSlots,mineRinshanIdxs:G.mineRinshanIdxs,mineCount:G.mineCount,yamiSelectMode:G.yamiSelectMode,hakuSelectMode:G.hakuSelectMode,stealMode:G.stealMode,lightMode:G.lightMode,lightUserIdx:G.lightUserIdx??null,lightRevealedSlots:G.lightRevealedSlots,lightRevealedHand:G.lightRevealedHand,penDrawings:G.penDrawings??{},
+    mineSlots:G.mineSlots,mineRinshanIdxs:G.mineRinshanIdxs,mineOwners:G.mineOwners??{},mineRinshanOwners:G.mineRinshanOwners??{},mineCount:G.mineCount,yamiSelectMode:G.yamiSelectMode,hakuSelectMode:G.hakuSelectMode,stealMode:G.stealMode,lightMode:G.lightMode,lightUserIdx:G.lightUserIdx??null,lightRevealedSlots:G.lightRevealedSlots,lightRevealedHand:G.lightRevealedHand,lightExtraDora:G.lightExtraDora??[],penDrawings:G.penDrawings??{},
     players:G.players,numPlayers,pendingAction,...extra
   };
   netSend({type:'state',state:s});
@@ -3075,7 +3254,7 @@ function startOnlineGame(){
   document.getElementById('lobby').style.display='none';
   document.getElementById('gameScreen').classList.add('active');
   scaleTable();
-  G={players:[],deck:[],deckSlots:[],doraInds:[],uraInds:[],doraPile:[],rinshan:[],rinshanIdx:6,kanDoraCount:0,lightMode:false,lightUserIdx:null,lightRevealedSlots:{},lightRevealedHand:{},stealMode:false,mineSlots:[],mineRinshanIdxs:[],mineCount:0,penDrawings:{},
+  G={players:[],deck:[],deckSlots:[],doraInds:[],uraInds:[],doraPile:[],rinshan:[],rinshanIdx:6,kanDoraCount:0,lightMode:false,lightUserIdx:null,lightRevealedSlots:{},lightRevealedHand:{},stealMode:false,mineSlots:[],mineRinshanIdxs:[],mineOwners:{},mineRinshanOwners:{},mineCount:0,penDrawings:{},
      dealer:Math.floor(Math.random()*numPlayers),current:0,roundNum:1,roundWind:'東',honba:0,riichiPot:0,
      pendingRiichi:null,riichiValidIdx:null,
      phase:'idle',firstRound:true,log:[],savedScores:null,_dealerWon:false};
@@ -3094,7 +3273,7 @@ function initGame(){
   document.getElementById('lobby').style.display='none';
   document.getElementById('gameScreen').classList.add('active');
   scaleTable();
-  G={players:[],deck:[],deckSlots:[],doraInds:[],uraInds:[],doraPile:[],rinshan:[],rinshanIdx:6,kanDoraCount:0,lightMode:false,lightUserIdx:null,lightRevealedSlots:{},lightRevealedHand:{},stealMode:false,mineSlots:[],mineRinshanIdxs:[],mineCount:0,penDrawings:{},
+  G={players:[],deck:[],deckSlots:[],doraInds:[],uraInds:[],doraPile:[],rinshan:[],rinshanIdx:6,kanDoraCount:0,lightMode:false,lightUserIdx:null,lightRevealedSlots:{},lightRevealedHand:{},stealMode:false,mineSlots:[],mineRinshanIdxs:[],mineOwners:{},mineRinshanOwners:{},mineCount:0,penDrawings:{},
      dealer:Math.floor(Math.random()*numPlayers),current:0,roundNum:1,roundWind:'東',honba:0,riichiPot:0,
      pendingRiichi:null,riichiValidIdx:null,
      phase:'idle',firstRound:true,log:[],savedScores:null,_dealerWon:false};
@@ -3102,11 +3281,11 @@ function initGame(){
 }
 
 function makePlayer(id,dealer){
-  const onlineNames=[PROFILE.name||'あなた','フレンド','CPU西','CPU北'];
+  const onlineNames=[PROFILE.name||'あなた', NET.guestNames[0]||'フレンド', NET.guestNames[1]||'CPU西', NET.guestNames[2]||'CPU北'];
   const soloNames=[PROFILE.name||'あなた','CPU南','CPU西','CPU北'];
   const pname=NET.online?onlineNames[id]:soloNames[id];
   const cpuAbilities=['mine','light','yami','haku','sanctuary','pinzu','steal'];
-  const pAbility = !G_ABILITY_MODE ? '' : (id===NET.myIdx) ? (PROFILE.ability||'') : cpuAbilities[Math.floor(Math.random()*cpuAbilities.length)];
+  const pAbility = !G_ABILITY_MODE ? '' : (id===NET.myIdx) ? (PROFILE.ability||'') : (NET.isHost && NET.guestAbilities[id-1]!==undefined) ? NET.guestAbilities[id-1] : cpuAbilities[Math.floor(Math.random()*cpuAbilities.length)];
   return{id,name:pname,
     wind:WINDS[id],hand:[],melds:[],discards:[],kitaTiles:[],kitaCount:0,
     score:0,isDealer:dealer,riichi:false,doubleRiichi:false,openRiichi:false,
@@ -3175,6 +3354,8 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; timerSt
 
   G.mineSlots=[];
   G.mineRinshanIdxs=[];
+  G.mineOwners={};
+  G.mineRinshanOwners={};
   G.mineCount=0;
   G.minePlantMode=false;
   G._mineHit=null;
@@ -3254,6 +3435,7 @@ function drawTile(pidx){
       if(s&&s._pkey&&s._pkey===t._pkey){
         if(G.mineSlots&&G.mineSlots.includes(i)){
           G.mineSlots=G.mineSlots.filter(x=>x!==i);
+          if(G.mineOwners) delete G.mineOwners[i];
           G.deckSlots[i]=null;found=true;
           const p=G.players[pidx];
           p.drawnTile=null;
@@ -3271,6 +3453,7 @@ function drawTile(pidx){
       if(s&&!s._pkey&&s.suit===t.suit&&s.num===t.num){
         if(G.mineSlots&&G.mineSlots.includes(i)){
           G.mineSlots=G.mineSlots.filter(x=>x!==i);
+          if(G.mineOwners) delete G.mineOwners[i];
           G.deckSlots[i]=null;found=true;
           const p=G.players[pidx];
           p.drawnTile=null;
@@ -3297,7 +3480,9 @@ function drawRinshanTile(pidx){
   // 💣 嶺上地雷チェック
   if(G.mineRinshanIdxs&&G.mineRinshanIdxs.includes(ri)){
     G.mineRinshanIdxs=G.mineRinshanIdxs.filter(x=>x!==ri);
+    if(G.mineRinshanOwners) delete G.mineRinshanOwners[ri];
     p.drawnTile=null;
+    SFX.mineExplode();
     addLog(`💥 ${p.name} が嶺上地雷を踏んだ！[${emj(t)}] を強制捨て`,'log-win');
     G._mineHit={pidx,tile:t};
     return t;
@@ -3909,9 +4094,11 @@ function humanPickWall(slotIdx){
   // 💣 Mine check
   if(G.mineSlots&&G.mineSlots.includes(slotIdx)){
     G.mineSlots=G.mineSlots.filter(s=>s!==slotIdx);
+    if(G.mineOwners) delete G.mineOwners[slotIdx];
     const mineTile=p.hand.splice(p.hand.length-1,1)[0];
     p.discards.push(mineTile);p.drawnTile=null;
     updateTenpai(p);
+    SFX.mineExplode();
     addLog(`💥 ${p.name} が地雷を踏んだ！[${emj(mineTile)}] を強制捨て`,'log-win');
     renderAll();broadcastState();
     setTimeout(()=>{
@@ -3997,13 +4184,13 @@ function handleWin(widx,winTile,isTsumo,losidx){
     let totalPaid=0;
     G.players.forEach((p,i)=>{
       if(i===widx)return;
-      const isSanctuary = G_ABILITY_MODE && PROFILE.ability==='sanctuary' && i===NET.myIdx && p.isDealer;
+      const isSanctuary = G_ABILITY_MODE && p.ability==='sanctuary' && p.isDealer;
       if(!isSanctuary){p.score-=ea;totalPaid+=ea;}
     });
     w.score+=totalPaid+rb;
   }else{
     const loser=G.players[losidx];
-    const isSanctuary = G_ABILITY_MODE && PROFILE.ability==='sanctuary' && losidx===NET.myIdx && loser.isDealer;
+    const isSanctuary = G_ABILITY_MODE && loser.ability==='sanctuary' && loser.isDealer;
     if(!isSanctuary){loser.score-=score;w.score+=score+rb;}
     else{w.score+=rb;addLog(`🏛️ 聖域！${loser.name}の支払いが免除された`,'log-dora');}
   }
@@ -4037,6 +4224,16 @@ function cpuAction(){
   if(['end','win','idle'].includes(G.phase))return;
   if(G.phase==='draw'){
     G._mineHit=null;
+    // スチール: 山から引く前にチェック（引く代わりに捨て牌から盗む）
+    if(p.ability==='steal'&&!p.abilityUsed&&!p.tenpai&&Math.random()<0.3){
+      const targets=[];
+      G.players.forEach((op,oi)=>{if(oi!==idx&&op.discards.length>0)targets.push({oi,di:op.discards.length-1});});
+      if(targets.length>0){
+        const t=targets[Math.floor(Math.random()*targets.length)];
+        _doSteal(idx,t.oi,t.di);
+        return;
+      }
+    }
     const tile=drawTile(idx);if(!tile){handleExhausted();return;}
     // 💣 CPU mine hit?
     if(G._mineHit){
@@ -4081,17 +4278,7 @@ function cpuTryAbility(idx){
   // 💣 地雷: startRoundで一括設置するのでここではスキップ
   // (cpuPlantMines()がstartRound後に呼ばれる)
 
-  // 🃏 スチール: テンパイでなく、捨て牌がある時に30%
-  if(ab==='steal' && G.phase==='discard' && !p.abilityUsed && !p.tenpai && Math.random()<0.3){
-    const targets=[];
-    G.players.forEach((op,oi)=>{if(oi!==idx&&op.discards.length>0)targets.push({oi,di:op.discards.length-1});});
-    if(targets.length>0){
-      const t=targets[Math.floor(Math.random()*targets.length)];
-      _doSteal(idx,t.oi,t.di);
-      p.abilityUsed=true;
-      return true;
-    }
-  }
+  // 🃏 スチール: cpuActionのdrawフェーズ前に移動済み（drawTileの前にチェック）
 
   // 🌑 闇: リーチ後の捨て牌を30%で闇に（discardActionの後から難しいので、捨て時に適用）
   // → cpuDiscard側で処理するためここではスキップ
@@ -4491,7 +4678,10 @@ function backToLobby(){
   document.getElementById('gameScreen').classList.remove('active');
   document.getElementById('lobby').style.display='flex';
   bgmToTitle();
+  // ホストが部屋を持っていた場合はサーバーから削除する
+  if(NET.isHost && NET.roomCode) fetch('/room/'+NET.roomCode, {method:'DELETE'}).catch(()=>{});
   if(NET.peer){try{NET.peer.destroy();}catch(e){} NET.peer=null;NET.conn=null;NET.conns=[];NET.online=false;}
+  NET.roomCode=null; NET.isHost=false;
   setOnlineStatus('');
   document.getElementById('roomCodeBox').style.display='none';
   document.getElementById('waitingDots').style.display='';
@@ -4608,7 +4798,8 @@ function renderCornerAbilityBtns(){
   }
 
   // ── スチール 🃏 ──────────────────────────────────────────
-  if(ab==='steal'&&!p.abilityUsed&&!p.tenpai&&!G.stealMode){
+  // 山から引く前（draw_wait）のみ使用可能
+  if(ab==='steal'&&!p.abilityUsed&&!p.tenpai&&!G.stealMode&&phase==='draw_wait'){
     // 捨て牌がある相手がいるか確認
     const hasTarget=G.players.some((op,i)=>i!==myIdx&&op.discards.length>0);
     if(hasTarget)
@@ -4714,7 +4905,7 @@ function renderWall(){
       continue;
     }
 
-    const isMine    = amMineOwner && G.mineSlots?.includes(i);
+    const isMine    = amMineOwner && G.mineOwners?.[i] === NET.myIdx;
     const isRevealed= !!(G.lightRevealedSlots?.[i]);
     const isPinzu   = isPinzuMode && slot.suit==='pin';
     const penImg    = slot?._pkey ? G.penDrawings?.[slot._pkey] : null; // _pkeyベース
@@ -5067,7 +5258,7 @@ function renderDoraCanvas(){
         isBack=false; isDora=true; isDoraMark=true;
         label=emj(G.doraPile[8+di]);
       } else {
-        isMine=!!(amMineOwnerDP&&G.mineRinshanIdxs?.includes(di));
+        isMine=!!(amMineOwnerDP&&G.mineRinshanOwners?.[di]===NET.myIdx);
         if(isMine) label='💣';
       }
     } else if(di===7){
@@ -5693,7 +5884,7 @@ function renderTable(){
       if(isYamiDiscard && pidx===NET.myIdx){
         return`<div class="tile ${tc(t)}${isLast?' last-discard':''}${isRiichiTile?' riichi-discard':''}" style="opacity:.55;border-color:#553377;"><span style="font-size:.5em;position:absolute;top:1px;left:1px;">🌑</span>${emj(t)}</div>`;
       }
-      const isStealTarget = G.stealMode && G.current===NET.myIdx && pidx!==NET.myIdx && !t._yami;
+      const isStealTarget = G.stealMode && pidx!==NET.myIdx && !t._yami;
       const isDoraDiscard = getDoras().some(d=>teq(d,t));
       return`<div class="tile ${tc(t)}${isLast?' last-discard':''}${isRiichiTile?' riichi-discard':''}${isStealTarget?' steal-target':''}" ${isStealTarget?`onclick="humanSteal(${pidx},${di})"`:''} style="position:relative;">${emj(t)}${isDoraDiscard?'<div class="tile-dora"></div>':''}</div>`;
     }).join('');
@@ -6504,6 +6695,12 @@ function _shopToast(msg){
 function lightRevealWall(slotIdx){
   if(G.lightMode!=='pick') return;
   if(!G.deckSlots||G.deckSlots[slotIdx]===null) return;
+  if(NET.online&&!NET.isHost){
+    netSend({type:'lightRevealWall',slotIdx,userIdx:NET.myIdx});
+    G.lightMode=false;
+    renderAll();
+    return;
+  }
   if(!G.lightRevealedSlots) G.lightRevealedSlots={};
   G.lightRevealedSlots[slotIdx]=true;
   const tile=G.deckSlots[slotIdx];
@@ -6523,9 +6720,14 @@ function lightRevealHand(pidx, handIdx){
   if(pidx===NET.myIdx) return;
   const p=G.players[pidx];
   if(!p||handIdx<0||handIdx>=p.hand.length) return;
+  if(NET.online&&!NET.isHost){
+    netSend({type:'lightRevealHand',pidx,handIdx,userIdx:NET.myIdx});
+    G.lightMode=false;
+    renderAll();
+    return;
+  }
   if(!G.lightRevealedHand) G.lightRevealedHand={};
   const tile=p.hand[handIdx];
-  // IDで記録（位置ではなく牌そのものを追跡）
   G.lightRevealedHand[tile._id]=tile;
   if(G.lightUserIdx!=null&&G.players[G.lightUserIdx])G.players[G.lightUserIdx].abilityUsed=true;
   G.lightMode=false;
@@ -6545,6 +6747,12 @@ function lightDispelDiscardYami(pidx, discardIdx){
   if(!p) return;
   const t=p.discards[discardIdx];
   if(!t||!t._yami) return;
+  if(NET.online&&!NET.isHost){
+    netSend({type:'lightDispelDiscardYami',pidx,discardIdx,userIdx:NET.myIdx});
+    G.lightMode=false;
+    renderAll();
+    return;
+  }
   delete t._yami;
   if(G.lightUserIdx!=null&&G.players[G.lightUserIdx])G.players[G.lightUserIdx].abilityUsed=true;
   G.lightMode=false;
@@ -6558,6 +6766,12 @@ function lightDispelHandYami(pidx){
   if(G.lightMode!=='yami') return;
   const p=G.players[pidx];
   if(!p||p.yamiTileIdx<0) return;
+  if(NET.online&&!NET.isHost){
+    netSend({type:'lightDispelHandYami',pidx,userIdx:NET.myIdx});
+    G.lightMode=false;
+    renderAll();
+    return;
+  }
   p.yamiTileIdx=-1;
   if(G.lightUserIdx!=null&&G.players[G.lightUserIdx])G.players[G.lightUserIdx].abilityUsed=true;
   G.lightMode=false;
@@ -6569,6 +6783,12 @@ function lightDispelHandYami(pidx){
 
 function lightRevealDoraCanvas(di){
   if(G.lightMode!=='pick') return;
+  if(NET.online&&!NET.isHost){
+    netSend({type:'lightRevealDoraCanvas',di,userIdx:NET.myIdx});
+    G.lightMode=false;
+    renderAll();
+    return;
+  }
   let tile=null, label='';
   if(di<7){
     const usedR=G.rinshanIdx;
@@ -6580,7 +6800,6 @@ function lightRevealDoraCanvas(di){
     label='ドラ表示牌';
   }
   if(!tile||!tile.suit) return;
-  // lightRevealedSlots に記録（renderDoraCanvasで表示に使う）
   if(!G.lightRevealedSlots) G.lightRevealedSlots={};
   G.lightRevealedSlots['dc_'+di]=true;
   if(!G.lightExtraDora) G.lightExtraDora=[];
@@ -6608,12 +6827,19 @@ function lightRevealMine(){
   if(!G_ABILITY_MODE||PROFILE.ability!=='light'||(_lmP&&_lmP.abilityUsed)) return;
   if(!G.mineSlots||G.mineSlots.length===0) return;
   const tile=G.deckSlots[G.mineSlots[0]]; // 最初の地雷を見る
+  // ローカルにポップアップ表示（使用者のみ）
+  showLightPeek(tile, '地雷（山牌位置）', true);
+  SFX.light();
+  if(NET.online&&!NET.isHost){
+    netSend({type:'lightRevealMine',userIdx:NET.myIdx});
+    G.lightMode=false;
+    renderAll();
+    return;
+  }
   if(_lmP)_lmP.abilityUsed=true;
   G.lightUserIdx=NET.myIdx;
   G.lightMode=false;
-  SFX.light();
   addLog(`☀️ 光！地雷の位置を確認した`,'log-dora');
-  showLightPeek(tile, '地雷（山牌位置）', true);
   broadcastState();
   renderAll();
 }
@@ -6655,8 +6881,12 @@ function cpuPlantMines(){
     picks.forEach(pick=>{
       if(pick.type==='wall'){
         G.mineSlots.push(pick.idx);
+        if(!G.mineOwners) G.mineOwners={};
+        G.mineOwners[pick.idx]=idx;
       } else {
         G.mineRinshanIdxs.push(pick.idx);
+        if(!G.mineRinshanOwners) G.mineRinshanOwners={};
+        G.mineRinshanOwners[pick.idx]=idx;
       }
       G.mineCount++;
     });
@@ -6670,7 +6900,15 @@ function plantMine(slotIdx){
   if(!G.minePlantMode) return;
   if(!G.deckSlots||G.deckSlots[slotIdx]===null) return;
   if(G.mineSlots.includes(slotIdx)) return;
+  if(NET.online&&!NET.isHost){
+    netSend({type:'plantMine',slotIdx});
+    G.minePlantMode=false;
+    renderAll();
+    return;
+  }
   G.mineSlots.push(slotIdx);
+  if(!G.mineOwners) G.mineOwners={};
+  G.mineOwners[slotIdx]=NET.myIdx;
   G.mineCount++;
   if(G.mineCount>=3) G.minePlantMode=false;
   SFX.minePlant();
@@ -6682,7 +6920,15 @@ function plantMineRinshan(ri){
   if(!G.minePlantMode) return;
   if(ri<0||ri>=G.rinshan.length) return;
   if(G.mineRinshanIdxs.includes(ri)) return;
+  if(NET.online&&!NET.isHost){
+    netSend({type:'plantMineRinshan',ri});
+    G.minePlantMode=false;
+    renderAll();
+    return;
+  }
   G.mineRinshanIdxs.push(ri);
+  if(!G.mineRinshanOwners) G.mineRinshanOwners={};
+  G.mineRinshanOwners[ri]=NET.myIdx;
   G.mineCount++;
   if(G.mineCount>=3) G.minePlantMode=false;
   SFX.minePlant();
