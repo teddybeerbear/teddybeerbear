@@ -11,11 +11,28 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const SESSION_SECRET = process.env.SESSION_SECRET || "change-this-secret";
 
+// Render.com が自動で設定するURL、なければ手動でセット
+const BASE_URL = process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || `http://localhost:${PORT}`;
+const CALLBACK_URL = `${BASE_URL}/auth/google/callback`;
+
+console.log("=== 起動情報 ===");
+console.log("BASE_URL:", BASE_URL);
+console.log("CALLBACK_URL:", CALLBACK_URL);
+console.log("GOOGLE_CLIENT_ID:", GOOGLE_CLIENT_ID ? "✓ 設定済み" : "✗ 未設定！");
+console.log("GOOGLE_CLIENT_SECRET:", GOOGLE_CLIENT_SECRET ? "✓ 設定済み" : "✗ 未設定！");
+
+if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+  console.error("ERROR: GOOGLE_CLIENT_ID または GOOGLE_CLIENT_SECRET が設定されていません");
+}
+
+// ── Render.com のプロキシを信頼 ─────────────────────────────────
+app.set("trust proxy", 1);
+
 // ── Passport setup ──────────────────────────────────────────────
 passport.use(new GoogleStrategy({
-  clientID: GOOGLE_CLIENT_ID,
-  clientSecret: GOOGLE_CLIENT_SECRET,
-  callbackURL: "/auth/google/callback",
+  clientID: GOOGLE_CLIENT_ID || "missing",
+  clientSecret: GOOGLE_CLIENT_SECRET || "missing",
+  callbackURL: CALLBACK_URL,
 }, (_accessToken, _refreshToken, profile, done) => {
   return done(null, {
     id: profile.id,
@@ -33,7 +50,11 @@ app.use(session({
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, maxAge: 7 * 24 * 60 * 60 * 1000 },
+  cookie: {
+    secure: BASE_URL.startsWith("https"),
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  },
 }));
 app.use(passport.initialize());
 app.use(passport.session());
@@ -131,5 +152,5 @@ app.get("/game", (req, res) => {
 
 // ── Start ────────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`サーバー起動 ポート: ${PORT}`);
 });
