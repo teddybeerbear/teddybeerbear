@@ -67,6 +67,10 @@ body::before{
   position:relative;z-index:10;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   height:100%;gap:20px;padding:20px;overflow-y:auto;
+  max-width:1000px;width:100%;margin:0 auto;
+}
+#lobbyCards{
+  display:flex;flex-wrap:wrap;gap:16px;justify-content:center;width:100%;
 }
 .lobby-title h1{
   font-size:clamp(1.8rem,5vw,3rem);font-weight:900;
@@ -79,7 +83,7 @@ body::before{
 .lobby-card{
   background:linear-gradient(135deg,var(--panel2),var(--panel));
   border:1px solid #1a3a2a;border-radius:14px;padding:20px 26px;
-  width:100%;max-width:400px;
+  flex:1;min-width:260px;max-width:480px;
 }
 .lobby-card h3{font-size:.75rem;color:var(--gold);letter-spacing:.2em;margin-bottom:12px;text-align:center;border-bottom:1px solid #1a3a2a;padding-bottom:8px;}
 .pcnt{display:flex;gap:8px;justify-content:center;margin-bottom:14px;}
@@ -1162,7 +1166,7 @@ body::before{
   </div>
 
   <!-- タイトル設定パネル -->
-  <div id="titleSettingsPanel" style="display:none;background:#030a10;border:1px solid #1a3a2a;border-radius:10px;padding:14px 18px;margin:6px auto 0;max-width:480px;width:100%;">
+  <div id="titleSettingsPanel" style="display:none;background:#030a10;border:1px solid #1a3a2a;border-radius:10px;padding:14px 18px;margin:6px auto 0;max-width:900px;width:100%;">
     <!-- タブ -->
     <div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid #1a3a2a;padding-bottom:8px;">
       <button onclick="showTitleTab('audio')" id="titleTabAudio" style="background:#081a10;border:1px solid #2a5a3a;border-radius:5px;color:var(--gold);font-size:.65rem;padding:4px 10px;cursor:pointer;">🔊 サウンド</button>
@@ -1265,6 +1269,8 @@ body::before{
 
 
 
+  <!-- Cards row -->
+  <div id="lobbyCards">
   <!-- Mode select -->
   <div class="lobby-card" id="lobbyMode">
     <h3>モード選択</h3>
@@ -1351,7 +1357,7 @@ body::before{
 
   <!-- Rank Match card -->
   <div class="lobby-card" id="lobbyRank" style="display:none">
-    <h3>⚔️ ランクマッチ（3人・時間制限あり）</h3>
+    <h3>⚔️ ランクマッチ（3人・能力あり）</h3>
     <div id="rankStatus" style="font-size:.65rem;color:#4a7a5a;text-align:center;margin-bottom:6px;min-height:1.2em;"></div>
 
     <!-- レート表示 -->
@@ -1362,7 +1368,7 @@ body::before{
 
     <div id="rankWaitPanel">
       <div style="font-size:.58rem;color:#5a7a6a;text-align:center;margin-bottom:14px;line-height:1.8;">
-        能力あり・3人対戦・制限時間ありで<br>マッチングします。
+        能力あり・3人対戦でマッチングします。
       </div>
       <button class="start-btn" onclick="joinRankQueue()">🔍 マッチング開始</button>
     </div>
@@ -1381,6 +1387,7 @@ body::before{
       <div id="rankOpponentNames" style="font-size:.65rem;color:#5a9a7a;margin-bottom:12px;line-height:1.8;"></div>
       <div style="font-size:.58rem;color:#4a6a5a;">接続中<span class="thinking-dots"></span></div>
     </div>
+  </div>
   </div>
 </div>
 
@@ -3037,8 +3044,10 @@ async function _pollRankStatus(){
 }
 
 function _onRankMatched(data){
+  const wp=document.getElementById('rankWaitPanel');
   const sp=document.getElementById('rankSearchPanel');
   const mp=document.getElementById('rankMatchedPanel');
+  if(wp) wp.style.display='none';
   if(sp) sp.style.display='none';
   if(mp) mp.style.display='';
   // 対戦相手名を表示
@@ -3082,10 +3091,9 @@ function _onRankMatched(data){
           // 2人揃ったらゲームスタート（名前受信のため少し待つ）
           setTimeout(()=>{
             NET.conns.forEach((c)=>{
-              if(c&&c.open) c.send({type:'gameStart', totalPlayers:3, abilityMode:true, timeMode:true});
+              if(c&&c.open) c.send({type:'gameStart', totalPlayers:3, abilityMode:true});
             });
             setTimeout(()=>{
-              G_TIME_MODE = true;
               startOnlineGame();
             }, 300);
           }, 1200);
