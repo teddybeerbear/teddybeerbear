@@ -2915,6 +2915,7 @@ const RANK = {
   myRating: null,
   opponents: [],        // [{name, rating}]
   connectedGuests: 0,   // ホスト側: 接続済みゲスト数
+  _gameStartFired: false, // ゲームスタート二重発火防止
 };
 
 function _rankReset(){
@@ -2925,6 +2926,7 @@ function _rankReset(){
   RANK.myRating=null;
   RANK.opponents=[];
   RANK.connectedGuests=0;
+  RANK._gameStartFired=false;
   const wp=document.getElementById('rankWaitPanel');
   const sp=document.getElementById('rankSearchPanel');
   const mp=document.getElementById('rankMatchedPanel');
@@ -3050,6 +3052,7 @@ function _onRankMatched(data){
   RANK.myRating = data.myRating;
   RANK.opponents = data.opponents || [];
   RANK.connectedGuests = 0;
+  RANK._gameStartFired = false;
 
   NET.isHost = !!data.isHost;
   NET.myIdx = data.myIdx ?? (NET.isHost ? 0 : 1);
@@ -3060,9 +3063,10 @@ function _onRankMatched(data){
   fetch('/rank/done', {method:'DELETE'}).catch(()=>{});
 
   if(NET.isHost){
-    // ホスト: 2人のゲストからの接続を待つ
+    // ホスト: 2人のゲストからの接続を待つ（先にリスナーを登録してからキューを削除）
     NET.peer.off('connection');
     NET.peer.on('connection', conn=>{
+      if(NET.conns.length >= 2){ conn.close(); return; }
       const guestIdx = NET.conns.length + 1;
       NET.conns.push(conn);
       if(guestIdx===1) NET.conn = conn;
@@ -3072,30 +3076,63 @@ function _onRankMatched(data){
       const onOpen = ()=>{
         conn.send({type:'joined', myIdx:guestIdx, abilityMode:true, members:3});
         RANK.connectedGuests++;
-        if(RANK.connectedGuests >= 2){
-          // 2人揃ったらゲームスタート
+        setRankStatus(`対戦相手を待っています… (${RANK.connectedGuests}/2)`);
+        if(RANK.connectedGuests >= 2 && !RANK._gameStartFired){
+          RANK._gameStartFired = true;
+          // 2人揃ったらゲームスタート（名前受信のため少し待つ）
           setTimeout(()=>{
-            NET.conns.forEach((c,i)=>{
-              c.send({type:'gameStart', totalPlayers:3, abilityMode:true, timeMode:true});
+            NET.conns.forEach((c)=>{
+              if(c&&c.open) c.send({type:'gameStart', totalPlayers:3, abilityMode:true, timeMode:true});
             });
             setTimeout(()=>{
               G_TIME_MODE = true;
               startOnlineGame();
             }, 300);
-          }, 800);
+          }, 1200);
         }
       };
       if(conn.open){ onOpen(); } else { conn.on('open', onOpen); }
     });
   } else {
-    // ゲスト: ホストのPeerIDに接続
+    // ゲスト: ホストのPeerIDに接続（ホストがリスナー登録するまで時間がかかる場合があるのでリトライ）
     const hostPeerId = data.hostPeerId;
+    setRankStatus('ホストに接続中…');
+    _rankGuestConnect(hostPeerId, 0);
+  }
+}
+
+function _rankGuestConnect(hostPeerId, attempt){
+  if(attempt > 8){ setRankStatus('接続に失敗しました。再試行してください。'); return; }
+  // 既に接続済みか gameStart 受信済みなら中止
+  if(NET.online) return;
+
+  const delay = attempt === 0 ? 300 : Math.min(2000, 500 * attempt);
+  setTimeout(()=>{
+    // 接続が既に成立していれば中止
+    if(NET.online || (NET.conn && NET.conn.open)) return;
+    // 前の接続試行をクリーンアップ
+    if(NET.conn){ try{ NET.conn.close(); }catch(e){} NET.conn=null; }
+
     const conn = NET.peer.connect(hostPeerId, {reliable:true});
     NET.conn = conn;
     NET.conns = [];
-    setupConn(conn, null);
-    // gameStartメッセージ受信時にG_TIME_MODE=trueを設定（onNetData内で処理）
-  }
+
+    let opened = false;
+    conn.on('open', ()=>{
+      opened = true;
+      setRankStatus('ホストに接続しました！ゲーム開始を待っています…');
+    });
+    conn.on('data', msg=>onNetData(msg, null));
+    conn.on('close', ()=>{ if(NET.online){ setOnlineStatus('接続が切れました'); NET.online=false; } });
+    conn.on('error', ()=>{
+      if(!opened && !NET.online) _rankGuestConnect(hostPeerId, attempt+1);
+    });
+
+    // 接続タイムアウト: openされない場合はリトライ
+    setTimeout(()=>{
+      if(!opened && !NET.online) _rankGuestConnect(hostPeerId, attempt+1);
+    }, 4000);
+  }, delay);
 }
 
 // ── Room creation (Host) ─────────────────────────────────────
@@ -3363,15 +3400,21 @@ function onNetData(msg, senderIdx){
     if(msg.type==='joined'){
       NET.myIdx=msg.myIdx;
       G_ABILITY_MODE=msg.abilityMode;
-      setOnlineStatus('接続しました！ホストの開始を待っています…');
-      document.getElementById('guestWaitMsg').style.display='';
-      updateGuestMemberList(msg.members);
-      if(msg.memberData){
-        NET._memberDataCache=msg.memberData;
-      }
       // 自分のプロフィール名・アイコンをホストに送信
       if(NET.conn&&NET.conn.open) NET.conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||''});
-      showRoomLobby();
+      if(NET.isRankMatch){
+        // ランクマッチ: ルームロビーは表示しない
+        setRankStatus('ゲーム開始を待っています…');
+      } else {
+        setOnlineStatus('接続しました！ホストの開始を待っています…');
+        const gwm = document.getElementById('guestWaitMsg');
+        if(gwm) gwm.style.display='';
+        updateGuestMemberList(msg.members);
+        if(msg.memberData){
+          NET._memberDataCache=msg.memberData;
+        }
+        showRoomLobby();
+      }
     } else if(msg.type==='memberUpdate'){
       updateGuestMemberList(msg.members);
       if(msg.memberData){
@@ -3389,6 +3432,7 @@ function onNetData(msg, senderIdx){
       G_ABILITY_MODE=msg.abilityMode;
       if(msg.timeMode) G_TIME_MODE=true;
       NET.online=true;
+      bgmToGame();
       hideRoomLobby();
       document.getElementById('lobby').style.display='none';
       document.getElementById('gameScreen').classList.add('active');
