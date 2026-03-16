@@ -960,7 +960,36 @@ body::before{
   width:36px;height:48px;font-size:2.8rem;
   border-radius:3px;border-width:1px;box-shadow:none;overflow:visible;
 }
-</style>
+
+  /* ===== TILE IMAGES ===== */
+  .tile{position:relative;}
+  .tile-img{
+    width:calc(100% - 4px);
+    height:calc(100% - 4px);
+    object-fit:contain;
+    display:block;
+    pointer-events:none;
+    position:absolute;
+    top:2px;left:2px;
+  }
+  .tile:has(.tile-img){font-size:0;overflow:hidden;}
+  .tile:has(.tile-img) .tile-dora{font-size:6px;z-index:2;}
+  /* dora pile cells with images */
+  .dp-cell.face{position:relative;overflow:hidden;}
+  .dp-cell.face .tile-img{
+    width:calc(100% - 4px);
+    height:calc(100% - 4px);
+    object-fit:contain;
+    display:block;
+    pointer-events:none;
+    position:absolute;
+    top:2px;left:2px;
+  }
+  .dp-cell.face:has(.tile-img){font-size:0;}
+  /* light-peek tile with image */
+  .light-peek-tile{display:flex;align-items:center;justify-content:center;min-height:60px;}
+  .light-peek-tile .tile-img{position:static;width:48px;height:64px;}
+  </style>
 </head>
 <body>
 
@@ -2467,7 +2496,24 @@ const EMJ={
   sou:{1:'🀐',2:'🀑',3:'🀒',4:'🀓',5:'🀔',6:'🀕',7:'🀖',8:'🀗',9:'🀘'},
   honor:{'東':'🀀','南':'🀁','西':'🀂','北':'🀃','白':'🀆','発':'🀅','中':'🀄'},
 };
-function emj(t){if(!t)return'?';if(t.suit==='honor')return EMJ.honor[t.num]||t.num;return EMJ[t.suit]&&EMJ[t.suit][t.num]||`${t.num}`;}
+const TILE_IMG={
+    man:{1:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/manzu1.png',9:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/manzu9.png'},
+    pin:{1:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu1.png',2:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu2.png',3:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu3.png',4:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu4.png',5:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu5.png',6:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu6.png',7:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu7.png',8:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu8.png',9:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu9.png'},
+    sou:{1:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu1.png',2:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu2.png',3:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu3.png',4:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu4.png',5:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu5.png',6:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu6.png',7:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu7.png',8:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu8.png',9:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu9.png'},
+    honor:{'東':'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/zihai1.png','南':'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/zihai2.png','西':'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/zihai3.png','北':'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/zihai4.png','発':'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/zihai5.png','中':'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/zihai6.png'},
+  };
+  function emj(t){
+    if(!t)return'?';
+    if(t.suit==='honor'&&t.num==='白')return '';
+    if(t.suit==='honor'){
+      const url=TILE_IMG.honor[t.num];
+      if(url)return `<img src="${url}" class="tile-img" alt="${t.num}">`;
+      return EMJ.honor[t.num]||t.num;
+    }
+    const url=TILE_IMG[t.suit]&&TILE_IMG[t.suit][t.num];
+    if(url)return `<img src="${url}" class="tile-img" alt="${t.suit}${t.num}">`;
+    return EMJ[t.suit]&&EMJ[t.suit][t.num]||`${t.num}`;
+  }
 function tc(t){if(!t)return'';return t.suit==='honor'?'honor':t.suit;}
 function tk(t){return`${t.suit}_${t.num}`;}
 function teq(a,b){return a.suit===b.suit&&a.num===b.num;}
@@ -5541,7 +5587,14 @@ function _wallTileRect(idx){
   };
 }
 
-function renderWall(){
+const _wallImgCache={};
+  function tileImgUrl(t){
+    if(!t)return null;
+    if(t.suit==='honor'&&t.num==='白')return null;
+    if(t.suit==='honor'){return TILE_IMG.honor[t.num]||null;}
+    return (TILE_IMG[t.suit]&&TILE_IMG[t.suit][t.num])||null;
+  }
+  function renderWall(){
   const lbl=document.getElementById('wallLabel');
   if(lbl&&G.deck) lbl.textContent=`山牌 ${G.deck.length}/${G.deckSlots?.length||0}枚`;
 
@@ -5632,8 +5685,21 @@ function renderWall(){
     ctx.font=`${isRevealed?44:28}px serif`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
     if(isRevealed){
-      ctx.fillStyle='#111';
-      ctx.fillText(emj(slot), r.x+r.w/2, r.y+r.h/2);
+      // 光で表にした牌: 画像があれば描画
+      const imgUrl=tileImgUrl(slot);
+      if(imgUrl){
+        const cached=_wallImgCache[imgUrl];
+        if(cached&&cached.complete){
+          ctx.drawImage(cached,r.x+2,r.y+2,r.w-4,r.h-4);
+        } else if(!cached){
+          const img=new Image();
+          _wallImgCache[imgUrl]=img;
+          img.onload=()=>renderWall();
+          img.src=imgUrl;
+        }
+      } else {
+        // 白(haku)など画像なし: 空白
+      }
     } else if(isMine){
       ctx.font='34px serif'; ctx.fillText('💣',r.x+r.w/2,r.y+r.h/2);
     } else if(isPinzu){
@@ -6503,7 +6569,7 @@ function renderTable(){
         if(isRevealedByLight){
           const t=p.hand[i];
           bt.className=`tile ${tc(t)} light-revealed`;
-          bt.textContent=emj(t);
+          bt.innerHTML=emj(t);
         } else if(isOpenRiichi && yamiIdx===i){
           // 闇指定牌: 光の「闇を解く」モード時はクリック可能
           bt.className=`tile back yami-hidden${G.lightMode==='yami'?' steal-target':''}`;
@@ -6513,7 +6579,7 @@ function renderTable(){
           // オープンリーチ: 全牌を表向きに公開
           const t=p.hand[i];
           bt.className=`tile ${tc(t)}`;
-          bt.textContent=emj(t);
+          bt.innerHTML=emj(t);
         } else if(isLightHandMode&&pidx!==NET.myIdx){
           bt.className='tile back light-target-tile';
           bt.textContent='🀫';
