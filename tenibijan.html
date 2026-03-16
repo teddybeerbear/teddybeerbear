@@ -3067,40 +3067,40 @@ function _onRankMatched(data){
   NET.myIdx = data.myIdx ?? (NET.isHost ? 0 : 1);
   NET.conns = [];
   NET.isRankMatch = true;
+  NET.roomAbilityMode = true;
   G_ABILITY_MODE = true;
 
   fetch('/rank/done', {method:'DELETE'}).catch(()=>{});
 
   if(NET.isHost){
-    // ホスト: 2人のゲストからの接続を待つ（先にリスナーを登録してからキューを削除）
+    // ホスト: ルームマッチと同じ接続処理（3人固定: ホスト+ゲスト2人）
     NET.peer.off('connection');
     NET.peer.on('connection', conn=>{
-      if(NET.conns.length >= 2){ conn.close(); return; }
+      if(NET.conns.length >= 2){ conn.close(); return; } // 最大3人(ホスト+2)
       const guestIdx = NET.conns.length + 1;
+      conn.metadata = {idx:guestIdx};
       NET.conns.push(conn);
-      if(guestIdx===1) NET.conn = conn;
-      conn.on('data', msg=>onNetData(msg, guestIdx));
-      conn.on('close', ()=>{ setOnlineStatus('接続が切れました'); NET.online=false; });
-      conn.on('error', e=>{ setOnlineStatus('通信エラー: '+e.message); });
-      const onOpen = ()=>{
-        conn.send({type:'joined', myIdx:guestIdx, abilityMode:true, members:3});
+      NET.conn = conn;
+      setupConn(conn, guestIdx);
+      updateRoomMemberList();
+      conn.on('open', ()=>{
+        const md = _buildMemberData();
+        conn.send({type:'joined', myIdx:guestIdx, abilityMode:NET.roomAbilityMode,
+          members:NET.conns.length+1, memberData:md});
+        _broadcastMemberUpdate();
+        // ランクマッチ固有: 2人揃ったら自動スタート
         RANK.connectedGuests++;
         setRankStatus(`対戦相手を待っています… (${RANK.connectedGuests}/2)`);
         if(RANK.connectedGuests >= 2 && !RANK._gameStartFired){
           RANK._gameStartFired = true;
-          // 2人揃ったらゲームスタート（名前受信のため少し待つ）
           setTimeout(()=>{
-            NET.conns.forEach((c)=>{
-              if(c&&c.open) c.send({type:'gameStart', totalPlayers:3, abilityMode:true});
-            });
-            setTimeout(()=>{
-              startOnlineGame();
-            }, 300);
+            NET.conns.forEach((c,i)=>{ if(c.open) c.send({type:'gameStart', totalPlayers:NET.conns.length+1, abilityMode:NET.roomAbilityMode}); });
+            setTimeout(()=>startOnlineGame(), 300);
           }, 1200);
         }
-      };
-      if(conn.open){ onOpen(); } else { conn.on('open', onOpen); }
+      });
     });
+    NET.peer.on('error', e=>{ setRankStatus('エラー: '+e.message); });
   } else {
     // ゲスト: ホストのPeerIDに接続（ホストがリスナー登録するまで時間がかかる場合があるのでリトライ）
     const hostPeerId = data.hostPeerId;
@@ -3807,9 +3807,7 @@ function startOnlineGame(){
   bgmToGame();
   numPlayers=NET.conns.length+1;
   NET.online=true;
-  if(!NET.isRankMatch){
-    G_ABILITY_MODE=NET.roomAbilityMode;
-  }
+  G_ABILITY_MODE=NET.roomAbilityMode;
   hideRoomLobby();
   document.getElementById('lobby').style.display='none';
   document.getElementById('gameScreen').classList.add('active');
