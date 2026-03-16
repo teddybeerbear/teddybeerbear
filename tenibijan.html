@@ -301,7 +301,7 @@ body::before{
   font-size:.48rem;color:#2a5a3a;background:#040c12;padding:0 3px;
 }
 .drawn-sep{width:4px;flex-shrink:0;}
-.wait-hint{font-size:.5rem;color:#4466aa;margin-top:2px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;}
+
 
 /* Meld area */
 .melds-wrap{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;}
@@ -964,26 +964,28 @@ body::before{
   /* ===== TILE IMAGES ===== */
   .tile{position:relative;}
   .tile-img{
-    width:calc(100% - 4px);
-    height:calc(100% - 4px);
+    width:150%;
+    height:150%;
     object-fit:contain;
     display:block;
     pointer-events:none;
     position:absolute;
-    top:2px;left:2px;
+    top:50%;left:50%;
+    transform:translate(-50%,-50%);
   }
   .tile:has(.tile-img){font-size:0;overflow:hidden;}
   .tile:has(.tile-img) .tile-dora{font-size:6px;z-index:2;}
   /* dora pile cells with images */
   .dp-cell.face{position:relative;overflow:hidden;}
   .dp-cell.face .tile-img{
-    width:calc(100% - 4px);
-    height:calc(100% - 4px);
+    width:150%;
+    height:150%;
     object-fit:contain;
     display:block;
     pointer-events:none;
     position:absolute;
-    top:2px;left:2px;
+    top:50%;left:50%;
+    transform:translate(-50%,-50%);
   }
   .dp-cell.face:has(.tile-img){font-size:0;}
   /* light-peek tile with image */
@@ -2497,14 +2499,14 @@ const EMJ={
   honor:{'東':'🀀','南':'🀁','西':'🀂','北':'🀃','白':'🀆','発':'🀅','中':'🀄'},
 };
 const TILE_IMG={
-    man:{1:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/manzu1.png',9:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/manzu9.png'},
-    pin:{1:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu1.png',2:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu2.png',3:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu3.png',4:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu4.png',5:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu5.png',6:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu6.png',7:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu7.png',8:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu8.png',9:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/pinzu9.png'},
-    sou:{1:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu1.png',2:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu2.png',3:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu3.png',4:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu4.png',5:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu5.png',6:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu6.png',7:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu7.png',8:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu8.png',9:'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/souzu9.png'},
-    honor:{'東':'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/zihai1.png','南':'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/zihai2.png','西':'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/zihai3.png','北':'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/zihai4.png','発':'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/zihai5.png','中':'https://raw.githubusercontent.com/teddybearbear/teddybearbear/main/hai/zihai6.png'},
+    man:{1:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/manzu1.png',9:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/manzu9.png'},
+    pin:{1:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/pinzu1.png',2:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/pinzu2.png',3:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/pinzu3.png',4:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/pinzu4.png',5:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/pinzu5.png',6:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/pinzu6.png',7:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/pinzu7.png',8:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/pinzu8.png',9:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/pinzu9.png'},
+    sou:{1:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu1.png',2:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu2.png',3:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu3.png',4:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu4.png',5:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu5.png',6:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu6.png',7:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu7.png',8:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu8.png',9:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu9.png'},
+    honor:{'東':'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/zihai1.png','南':'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/zihai2.png','西':'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/zihai3.png','北':'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/zihai4.png','白':'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/zihai7.png','発':'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/zihai5.png','中':'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/zihai6.png'},
   };
   function emj(t){
     if(!t)return'?';
-    if(t.suit==='honor'&&t.num==='白')return '';
+    
     if(t.suit==='honor'){
       const url=TILE_IMG.honor[t.num];
       if(url)return `<img src="${url}" class="tile-img" alt="${t.num}">`;
@@ -5588,9 +5590,10 @@ function _wallTileRect(idx){
 }
 
 const _wallImgCache={};
+const _doraImgCache={};
   function tileImgUrl(t){
     if(!t)return null;
-    if(t.suit==='honor'&&t.num==='白')return null;
+    
     if(t.suit==='honor'){return TILE_IMG.honor[t.num]||null;}
     return (TILE_IMG[t.suit]&&TILE_IMG[t.suit][t.num])||null;
   }
@@ -5981,6 +5984,7 @@ function renderDoraCanvas(){
 
     // ── セル種別判定 ──
     let gone=false, isBack=true, isMine=false, isDora=false, isDoraMark=false;
+    let _tileForDraw=null;
     let isUra=false; // 裏ドラ（透明）
     let label='';
     const isLightRevealed=!!(G.lightRevealedSlots?.['dc_'+di]);
@@ -5991,7 +5995,7 @@ function renderDoraCanvas(){
       else if(isLightRevealed){
         // 光で表にした嶺上牌: 表面表示
         isBack=false; isDora=true; isDoraMark=true;
-        label=emj(G.doraPile[8+di]);
+        _tileForDraw=G.doraPile[8+di];label='x';
       } else {
         isMine=!!(amMineOwnerDP&&G.mineRinshanOwners?.[di]===NET.myIdx);
         if(isMine) label='💣';
@@ -5999,13 +6003,13 @@ function renderDoraCanvas(){
     } else if(di===7){
       // 表ドラ表示牌
       const dt0=G.doraPile[0];
-      if(dt0?.suit){ isBack=false; isDora=true; isDoraMark=true; label=emj(dt0); }
+      if(dt0?.suit){ isBack=false; isDora=true; isDoraMark=true; _tileForDraw=dt0;label='x'; }
     } else if(di<11){
       // カンドラ 8-10 → doraPile[1..3]
       const c=di-8;
       const revealed=c<G.kanDoraCount||isLightRevealed;
       const dt=G.doraPile[c+1];
-      if(revealed&&dt?.suit){ isBack=false; isDora=true; isDoraMark=true; label=emj(dt); }
+      if(revealed&&dt?.suit){ isBack=false; isDora=true; isDoraMark=true; _tileForDraw=dt;label='x'; }
     } else {
       // 下段: 裏ドラ di=11..14 → doraPile[4..7]（透明枠のみ）
       isUra=true;
@@ -6080,11 +6084,21 @@ function renderDoraCanvas(){
       ctx.drawImage(window._activeDoraOC,r.x,r.y,r.w,r.h,r.x,r.y,r.w,r.h);
     }
     // テキスト
-    if(label){
-      ctx.font=isDora?'44px serif':'44px serif';
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillStyle=isDora?'#111':'#ff4422';
-      ctx.fillText(label, r.x+r.w/2, r.y+r.h/2);
+    if(_tileForDraw){
+      const _dUrl=tileImgUrl(_tileForDraw);
+      if(_dUrl){
+        const _dCached=_doraImgCache[_dUrl];
+        if(_dCached&&_dCached.complete&&_dCached.naturalWidth>0){
+          const pad=3;ctx.drawImage(_dCached,r.x+pad,r.y+pad,r.w-pad*2,r.h-pad*2);
+        } else if(!_dCached){
+          const _dImg=new Image();_doraImgCache[_dUrl]=_dImg;
+          _dImg.onload=()=>renderDoraCanvas();_dImg.src=_dUrl;
+        }
+      } else {
+        const _dEmoji=(EMJ[_tileForDraw.suit]&&EMJ[_tileForDraw.suit][_tileForDraw.num])||(_tileForDraw.num||'?');
+        ctx.font='44px serif';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillStyle=isDora?'#111':'#ff4422';ctx.fillText(_dEmoji,r.x+r.w/2,r.y+r.h/2);
+      }
     } else if(isBack&&!penImg){
       ctx.fillStyle='#3a6a8a'; ctx.font='14px serif';
       ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -6550,13 +6564,7 @@ function renderTable(){
         tw.innerHTML='<span id="handTimerBase" style="font-size:1.44rem;color:#ff9933;min-width:1.2em;text-align:right;"></span><span style="font-size:1.2rem;color:transparent;">+</span><span id="handTimerBonus" style="font-size:1.44rem;color:#44cc88;min-width:1em;text-align:left;"></span>';
         handWrap.appendChild(tw);
       }
-      // Wait hint
-      if(p.tenpai&&p.waits.length>0&&!p.riichi){
-        const wh=document.createElement('div');
-        wh.className='wait-hint';
-        wh.textContent='待ち: '+p.waits.slice(0,7).map(emj).join(' ')+(p.waits.length>7?'…':'');
-        handWrap.appendChild(wh);
-      }
+
     }else{
       const isLightHandMode = G.lightMode==='pick';
       // オープンリーチ中は手牌全公開（闇牌は🌑のまま）
@@ -6825,7 +6833,7 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
     }else{
       const pinzuNoTsumo=G_ABILITY_MODE&&PROFILE.ability==="pinzu"&&p.isDealer;
 if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanTsumo()">ツモ上がり！</button>`;
-      if(selIdx>=0)html+=`<button class="btn btn-primary" onclick="humanDiscard()">捨てる [${emj(p.hand[selIdx])}]</button>`;
+
       if(hasKita&&!p.riichi)html+=`<button class="btn btn-kita" onclick="humanKita()">北抜き ${emj({suit:'honor',num:'北'})}</button>`;
       if(canRiichi){
         const dbl=canDoubleRiichi();
@@ -6952,7 +6960,24 @@ let PROFILE = {name:'プレイヤー', ability:'', abilities:[], totalPulls:0, c
 let G_ABILITY_MODE = true; // 能力あり/なし
 let G_TIME_MODE    = false; // 制限時間モード
 
+function _applyProfile(){
+  // ペン能力は最初から所持
+  // デバッグ: 全能力を初期付与
+  const _allAbs=['pen','mine','light','yami','haku','sanctuary','pinzu','steal'];
+  _allAbs.forEach(a=>{if(!PROFILE.abilities.includes(a))PROFILE.abilities.push(a);});
+  const ni=document.getElementById('profileName');
+  if(ni) ni.value=PROFILE.name||'';
+  const _id=document.getElementById('iconDisplay');
+  if(_id) updateIconDisplay(_id);
+  if(PROFILE.ability) pickAbility(PROFILE.ability);
+  document.querySelectorAll('#abilityList .ability-card').forEach(el=>{
+    el.classList.toggle('selected', el.dataset.ability===(PROFILE.ability||''));
+  });
+  updateProfileBadge();
+}
+
 function loadProfile(){
+  // まずlocalStorageから読み込んで即時反映
   try{
     const s=localStorage.getItem('mjProfile');
     if(s){
@@ -6960,21 +6985,25 @@ function loadProfile(){
       PROFILE=Object.assign({abilities:[],totalPulls:0,coins:10000},p);
     }
   }catch(e){}
-  // ペン能力は最初から所持
-  // デバッグ: 全能力を初期付与
-  const _allAbs=['pen','mine','light','yami','haku','sanctuary','pinzu','steal'];
-  _allAbs.forEach(a=>{if(!PROFILE.abilities.includes(a))PROFILE.abilities.push(a);});
-  const ni=document.getElementById('profileName');
-  if(ni) ni.value=PROFILE.name||'';
-  // アイコン表示更新
-  const _id=document.getElementById('iconDisplay');
-  if(_id) updateIconDisplay(_id);
-  // 能力表示更新
-  if(PROFILE.ability) pickAbility(PROFILE.ability);
-  document.querySelectorAll('#abilityList .ability-card').forEach(el=>{
-    el.classList.toggle('selected', el.dataset.ability===(PROFILE.ability||''));
-  });
-  updateProfileBadge();
+  _applyProfile();
+
+  // サーバーから最新データを取得して上書き（Neon PostgreSQL連携）
+  fetch('/api/profile')
+    .then(r=>{ if(!r.ok) throw new Error('not ok'); return r.json(); })
+    .then(data=>{
+      PROFILE=Object.assign(PROFILE, {
+        coins:      data.coins      ?? PROFILE.coins,
+        abilities:  data.abilities  ?? PROFILE.abilities,
+        totalPulls: data.totalPulls ?? PROFILE.totalPulls,
+        gachaIcons: data.gachaIcons ?? PROFILE.gachaIcons,
+        iconId:     data.iconId     ?? PROFILE.iconId,
+        ability:    data.ability    ?? PROFILE.ability,
+        name:       data.name       || PROFILE.name,
+      });
+      try{ localStorage.setItem('mjProfile',JSON.stringify(PROFILE)); }catch(e){}
+      _applyProfile();
+    })
+    .catch(()=>{ /* サーバー未接続時はlocalStorageのデータをそのまま使う */ });
 }
 
 function selectIcon(el,icon){ } // legacy (emoji icons removed)
@@ -7339,6 +7368,20 @@ function closeGacha(){
 function saveProfileSilent(){
   try{ localStorage.setItem('mjProfile',JSON.stringify(PROFILE)); }catch(e){}
   updateProfileBadge();
+  // サーバー（Neon PostgreSQL）にも保存
+  fetch('/api/profile',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      coins:      PROFILE.coins,
+      abilities:  PROFILE.abilities,
+      totalPulls: PROFILE.totalPulls,
+      gachaIcons: PROFILE.gachaIcons||[],
+      iconId:     PROFILE.iconId||'',
+      ability:    PROFILE.ability||'',
+      name:       PROFILE.name||'',
+    }),
+  }).catch(()=>{});
 }
 
 function updateProfileBadge(){
