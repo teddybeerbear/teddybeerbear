@@ -3001,7 +3001,7 @@ async function joinRankQueue(){
       document.getElementById('rankWaitPanel').style.display='none';
       document.getElementById('rankSearchPanel').style.display='';
       setRankStatus('');
-      RANK.polling = setInterval(_pollRankStatus, 2000);
+      RANK.polling = setInterval(_pollRankStatus, 1000);
       _updateSearchTimer();
     }
   });
@@ -3106,7 +3106,7 @@ function _rankGuestConnect(hostPeerId, attempt){
   // 既に接続済みか gameStart 受信済みなら中止
   if(NET.online) return;
 
-  const delay = attempt === 0 ? 300 : Math.min(2000, 500 * attempt);
+  const delay = attempt === 0 ? 2500 : Math.min(3000, 1000 * attempt);
   setTimeout(()=>{
     // 接続が既に成立していれば中止
     if(NET.online || (NET.conn && NET.conn.open)) return;
