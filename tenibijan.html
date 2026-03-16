@@ -414,6 +414,47 @@ body::before{
 #lobbyOnline input:focus{outline:none;border-color:var(--gold);}
 #roomCodeDisplay:hover{background:#041018;border-color:var(--gold);}
 
+/* ===== ROOM LOBBY SCREEN ===== */
+#roomLobbyScreen{
+  display:none;position:fixed;inset:0;z-index:15;
+  background:var(--bg);overflow-y:auto;
+  flex-direction:column;align-items:center;padding:24px 16px;
+}
+#roomLobbyScreen.active{display:flex;}
+.rls-inner{width:100%;max-width:460px;}
+.rls-code-box{
+  background:#030a10;border:2px solid var(--gold);border-radius:12px;
+  padding:12px 20px;text-align:center;margin-bottom:16px;
+}
+.rls-code-val{
+  font-size:2rem;font-weight:900;color:var(--gold);letter-spacing:.35em;
+  cursor:pointer;
+}
+.rls-code-val:hover{color:var(--gold2);}
+.rls-member-card{
+  display:flex;align-items:center;gap:12px;
+  background:#060e18;border:1.5px solid #1a3a2a;border-radius:10px;
+  padding:10px 14px;margin-bottom:8px;
+  transition:border-color .2s;
+}
+.rls-member-card.is-host-card{border-color:#c9a84c44;}
+.rls-avatar{
+  width:46px;height:46px;border-radius:8px;object-fit:contain;
+  background:#0d2030;border:1px solid #1a4a2a;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;overflow:hidden;font-size:1.5rem;
+}
+.rls-avatar img{width:100%;height:100%;object-fit:contain;}
+.rls-member-info{flex:1;min-width:0;}
+.rls-member-name{font-size:.85rem;font-weight:700;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rls-member-role{font-size:.58rem;color:#4a7a5a;margin-top:2px;}
+.rls-kick-btn{
+  font-size:.6rem;padding:5px 11px;border-radius:6px;
+  border:1.5px solid #882222;background:#1a0808;color:#cc4444;
+  cursor:pointer;flex-shrink:0;transition:background .15s;
+}
+.rls-kick-btn:hover{background:#2a0a0a;}
+
 /* ===== WALL (山牌) in center ===== */
 .timer-bar-wrap{height:8px;background:#111;border-radius:4px;overflow:hidden;border:1px solid #223;}
 #timerDisplay{display:flex;align-items:center;gap:5px;margin-left:6px;}
@@ -1343,6 +1384,49 @@ body::before{
   </div>
 </div>
 
+<!-- ROOM LOBBY SCREEN -->
+<div id="roomLobbyScreen">
+  <div class="rls-inner">
+    <div style="text-align:center;margin-bottom:18px;">
+      <div style="font-size:1.4rem;font-weight:900;color:var(--gold);letter-spacing:.2em;">🎴 ルームマッチ</div>
+    </div>
+    <div id="rlsStatus" style="font-size:.65rem;color:#4a7a5a;text-align:center;margin-bottom:10px;min-height:1.2em;"></div>
+
+    <!-- ホスト: 部屋番号 -->
+    <div id="rlsCodeSection" style="display:none;margin-bottom:16px;">
+      <div style="font-size:.58rem;color:#5a7a6a;text-align:center;margin-bottom:6px;">フレンドにこの部屋番号を教えてください</div>
+      <div class="rls-code-box">
+        <div class="rls-code-val" id="rlsCodeDisplay" onclick="copyRlsCode()" title="クリックでコピー"></div>
+        <div style="font-size:.52rem;color:#3a5a4a;margin-top:4px;">クリックでコピー</div>
+      </div>
+    </div>
+
+    <!-- ホスト: ゲームモード -->
+    <div id="rlsModeSection" style="display:none;margin-bottom:14px;">
+      <div style="font-size:.6rem;color:#5a7a6a;text-align:center;margin-bottom:4px;">ゲームモード</div>
+      <div class="pcnt" style="margin-bottom:0;">
+        <button class="pcnt-btn active" id="rlsModeAbilityOn" onclick="setRoomAbilityMode(true);updateRoomLobbyUI()">⚡ 能力あり</button>
+        <button class="pcnt-btn" id="rlsModeAbilityOff" onclick="setRoomAbilityMode(false);updateRoomLobbyUI()">♟ 能力なし</button>
+      </div>
+    </div>
+
+    <!-- メンバーリスト -->
+    <div id="rlsMemberList" style="margin-bottom:14px;"></div>
+
+    <!-- ホスト: 開始ボタン -->
+    <div id="rlsHostControls" style="display:none;">
+      <button id="rlsStartBtn" class="start-btn" style="display:none;width:100%;margin-bottom:10px;" onclick="hostStartGame()">ゲーム開始 →</button>
+    </div>
+
+    <!-- ゲスト: 待機メッセージ -->
+    <div id="rlsGuestWait" style="display:none;font-size:.62rem;color:#4a7a5a;text-align:center;margin-bottom:14px;">
+      ホストの開始を待っています<span class="thinking-dots"></span>
+    </div>
+
+    <button class="start-btn" onclick="leaveRoomLobby()" style="background:linear-gradient(135deg,#1a0808,#0d0505);border-color:#553333;color:#aa6666;">退出する</button>
+  </div>
+</div>
+
 <!-- GAME -->
 <div id="gameScreen">
   <div class="game-header" style="display:none;">
@@ -1534,7 +1618,11 @@ body::before{
     <table class="yaku-table"><thead><tr><th>役</th><th>翻</th></tr></thead><tbody id="mYakuBody"></tbody></table>
     <div class="score-display" id="mScore"></div>
     <div class="score-sub" id="mScoreSub"></div>
-    <div class="modal-btns"><button class="btn btn-primary" onclick="nextRound()">次の局へ →</button></div>
+    <div class="modal-btns">
+      <div id="winTimerDisplay" style="font-size:1.5rem;font-weight:700;color:#c9a84c;text-shadow:0 0 10px #c9a84c66;margin-bottom:6px;letter-spacing:.05em;"></div>
+      <div id="winReadyStatus" style="font-size:.62rem;color:#4a8a6a;margin-bottom:6px;min-height:1em;"></div>
+      <button class="btn btn-primary" id="winOkBtn" onclick="onWinOk()">OK →</button>
+    </div>
   </div>
 </div>
 
@@ -2785,6 +2873,8 @@ let NET={
   isRankMatch:false, // ランクマッチ中か
   guestNames:[],    // ゲストのプロフィール名 [idx1の名前, idx2の名前, idx3の名前]
   guestAbilities:[], // ゲストの能力 [idx1の能力, idx2の能力, idx3の能力]
+  guestIconIds:[],  // ゲストのアイコンID [idx1, idx2, idx3]
+  _memberDataCache:[], // ゲスト側: ホストから受け取ったメンバーデータのキャッシュ
 };
 
 // ヘルパー: 指定インデックスがオンラインゲストかどうか（ホスト視点で使用）
@@ -2976,8 +3066,10 @@ function _onRankMatched(data){
       const guestIdx = NET.conns.length + 1;
       NET.conns.push(conn);
       if(guestIdx===1) NET.conn = conn;
-      setupConn(conn, guestIdx);
-      conn.on('open',()=>{
+      conn.on('data', msg=>onNetData(msg, guestIdx));
+      conn.on('close', ()=>{ setOnlineStatus('接続が切れました'); NET.online=false; });
+      conn.on('error', e=>{ setOnlineStatus('通信エラー: '+e.message); });
+      const onOpen = ()=>{
         conn.send({type:'joined', myIdx:guestIdx, abilityMode:true, members:3});
         RANK.connectedGuests++;
         if(RANK.connectedGuests >= 2){
@@ -2992,7 +3084,8 @@ function _onRankMatched(data){
             }, 300);
           }, 800);
         }
-      });
+      };
+      if(conn.open){ onOpen(); } else { conn.on('open', onOpen); }
     });
   } else {
     // ゲスト: ホストのPeerIDに接続
@@ -3044,6 +3137,7 @@ async function createRoom(){
     document.getElementById('roomCodeDisplay').textContent=code;
     setOnlineStatus('');
     updateRoomMemberList();
+    showRoomLobby();
   });
   NET.peer.on('connection', conn=>{
     if(NET.conns.length>=3){conn.close();return;} // 最大4人(ホスト+3)
@@ -3055,10 +3149,11 @@ async function createRoom(){
     updateRoomMemberList();
     // 参加者に自分のidxと現在のメンバー情報を送る
     conn.on('open',()=>{
+      const md = _buildMemberData();
       conn.send({type:'joined',myIdx:guestIdx,abilityMode:NET.roomAbilityMode,
-        members:NET.conns.length+1});
+        members:NET.conns.length+1, memberData:md});
       // 既存ゲストにも更新通知
-      NET.conns.forEach(c=>{if(c!==conn&&c.open)c.send({type:'memberUpdate',members:NET.conns.length+1});});
+      _broadcastMemberUpdate();
     });
   });
   NET.peer.on('error', e=>{setOnlineStatus('エラー: '+e.message);});
@@ -3073,12 +3168,132 @@ function updateRoomMemberList(){
   }
   const sb = document.getElementById('roomStartBtn');
   if(sb) sb.style.display = count>=2?'':'none';
+  updateRoomLobbyUI();
+}
+
+// ── Room Lobby Screen ─────────────────────────────────────────
+function showRoomLobby(){
+  document.getElementById('lobby').style.display='none';
+  document.getElementById('roomLobbyScreen').classList.add('active');
+  updateRoomLobbyUI();
+}
+function hideRoomLobby(){
+  document.getElementById('roomLobbyScreen').classList.remove('active');
+}
+
+function _buildMemberData(){
+  return [
+    {name:PROFILE.name||'あなた', iconId:PROFILE.iconId||'', role:'ホスト'},
+    ...NET.conns.map((c,i)=>({
+      name:NET.guestNames[i]||`ゲスト${i+1}`,
+      iconId:NET.guestIconIds[i]||'',
+      role:`ゲスト${i+1}`
+    }))
+  ];
+}
+function _broadcastMemberUpdate(){
+  if(!NET.isHost) return;
+  const memberData = _buildMemberData();
+  NET.conns.forEach(c=>{
+    if(c&&c.open) c.send({type:'memberUpdate', members:memberData.length, memberData});
+  });
+}
+
+function updateRoomLobbyUI(){
+  const sc = document.getElementById('roomLobbyScreen');
+  if(!sc||!sc.classList.contains('active')) return;
+  const rlsSt = document.getElementById('rlsStatus');
+  if(rlsSt) rlsSt.textContent='';
+  if(NET.isHost){
+    const cs = document.getElementById('rlsCodeSection');
+    if(cs) cs.style.display='';
+    const cd = document.getElementById('rlsCodeDisplay');
+    if(cd) cd.textContent=NET.roomCode||'';
+    const ms = document.getElementById('rlsModeSection');
+    if(ms) ms.style.display='';
+    const hc = document.getElementById('rlsHostControls');
+    if(hc) hc.style.display='';
+    const gw = document.getElementById('rlsGuestWait');
+    if(gw) gw.style.display='none';
+    document.getElementById('rlsModeAbilityOn')?.classList.toggle('active', NET.roomAbilityMode);
+    document.getElementById('rlsModeAbilityOff')?.classList.toggle('active', !NET.roomAbilityMode);
+    const startBtn = document.getElementById('rlsStartBtn');
+    if(startBtn) startBtn.style.display = NET.conns.length>=1?'':'none';
+    // Build member cards
+    const members = _buildMemberData().map((m,i)=>({...m, isMe:i===0, connIdx:i-1}));
+    _renderRlsMembers(members);
+  } else {
+    document.getElementById('rlsCodeSection').style.display='none';
+    document.getElementById('rlsModeSection').style.display='none';
+    document.getElementById('rlsHostControls').style.display='none';
+    document.getElementById('rlsGuestWait').style.display='';
+    const members = NET._memberDataCache.map((m,i)=>({...m, isMe:i===NET.myIdx, connIdx:-1}));
+    _renderRlsMembers(members);
+  }
+}
+
+function _renderRlsMembers(members){
+  const listEl = document.getElementById('rlsMemberList');
+  if(!listEl) return;
+  const iconFn = (iconId) => iconId
+    ? `<img src="${gachaIconUrl(iconId)}" alt="">`
+    : '👤';
+  listEl.innerHTML = members.map(m=>`
+    <div class="rls-member-card${m.isMe?' is-host-card':''}">
+      <div class="rls-avatar">${iconFn(m.iconId)}</div>
+      <div class="rls-member-info">
+        <div class="rls-member-name">${m.name}${m.isMe?' ★':''}</div>
+        <div class="rls-member-role">${m.role}</div>
+      </div>
+      ${NET.isHost && m.connIdx>=0 ? `<button class="rls-kick-btn" onclick="kickPlayer(${m.connIdx})">キック</button>` : ''}
+    </div>
+  `).join('');
+}
+
+function kickPlayer(connIdx){
+  if(!NET.isHost) return;
+  const conn = NET.conns[connIdx];
+  if(!conn) return;
+  if(conn.open) conn.send({type:'kicked'});
+  setTimeout(()=>{ try{conn.close();}catch(e){} }, 120);
+  NET.conns.splice(connIdx, 1);
+  NET.guestNames.splice(connIdx, 1);
+  NET.guestAbilities.splice(connIdx, 1);
+  NET.guestIconIds.splice(connIdx, 1);
+  _broadcastMemberUpdate();
+  updateRoomLobbyUI();
+}
+
+function leaveRoomLobby(){
+  if(NET.isHost){
+    NET.conns.forEach(c=>{ if(c&&c.open){ try{c.send({type:'kicked'});}catch(e){} setTimeout(()=>c.close(),80); } });
+    if(NET.roomCode) fetch('/room/'+NET.roomCode, {method:'DELETE'}).catch(()=>{});
+  } else {
+    if(NET.conn&&NET.conn.open){ try{NET.conn.close();}catch(e){} }
+  }
+  if(NET.peer){ try{NET.peer.destroy();}catch(e){} NET.peer=null; }
+  hideRoomLobby();
+  NET.conns=[]; NET.conn=null; NET.roomCode=null; NET.isHost=false;
+  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET._memberDataCache=[];
+  setOnlineStatus('');
+  document.getElementById('lobby').style.display='flex';
+  document.getElementById('roomCodeBox').style.display='none';
+  document.getElementById('waitingDots').style.display='';
+}
+
+function copyRlsCode(){
+  const code = document.getElementById('rlsCodeDisplay')?.textContent||'';
+  navigator.clipboard?.writeText(code).then(()=>{
+    const el=document.getElementById('rlsStatus');
+    if(el){ el.textContent='コピーしました！'; setTimeout(()=>{ if(el) el.textContent=''; },2000); }
+  });
 }
 function hostStartGame(){
   if(NET.conns.length===0)return;
   NET.conns.forEach((c,i)=>{if(c.open)c.send({type:'gameStart',totalPlayers:NET.conns.length+1,abilityMode:NET.roomAbilityMode});});
   // ゲーム開始後はサーバーから部屋を削除する（新規参加を防ぐ）
   if(NET.roomCode) fetch('/room/'+NET.roomCode, {method:'DELETE'}).catch(()=>{});
+  hideRoomLobby();
   setTimeout(()=>startOnlineGame(),300);
 }
 
@@ -3151,15 +3366,30 @@ function onNetData(msg, senderIdx){
       setOnlineStatus('接続しました！ホストの開始を待っています…');
       document.getElementById('guestWaitMsg').style.display='';
       updateGuestMemberList(msg.members);
-      // 自分のプロフィール名をホストに送信
-      if(NET.conn&&NET.conn.open) NET.conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||''});
+      if(msg.memberData){
+        NET._memberDataCache=msg.memberData;
+      }
+      // 自分のプロフィール名・アイコンをホストに送信
+      if(NET.conn&&NET.conn.open) NET.conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||''});
+      showRoomLobby();
     } else if(msg.type==='memberUpdate'){
       updateGuestMemberList(msg.members);
+      if(msg.memberData){
+        NET._memberDataCache=msg.memberData;
+        updateRoomLobbyUI();
+      }
+    } else if(msg.type==='kicked'){
+      hideRoomLobby();
+      if(NET.peer){ try{NET.peer.destroy();}catch(e){} NET.peer=null; }
+      NET.conn=null; NET.conns=[]; NET._memberDataCache=[];
+      document.getElementById('lobby').style.display='flex';
+      setOnlineStatus('ホストにキックされました');
     } else if(msg.type==='gameStart'){
       numPlayers=msg.totalPlayers;
       G_ABILITY_MODE=msg.abilityMode;
       if(msg.timeMode) G_TIME_MODE=true;
       NET.online=true;
+      hideRoomLobby();
       document.getElementById('lobby').style.display='none';
       document.getElementById('gameScreen').classList.add('active');
       scaleTable();
@@ -3315,7 +3545,17 @@ function handleGuestAction(msg, senderIdx){
     case 'kita':      remoteKita(msg.pidx); break;
     case 'riichi':    remoteRiichi(msg.pidx, msg.mode, msg.tidx); break;
     case 'nextRound': nextRound(); break;
-    case 'myName': NET.guestNames[senderIdx-1]=msg.name||'プレイヤー'; NET.guestAbilities[senderIdx-1]=msg.ability??''; updateRoomMemberList(); break;
+    case 'winReady':
+      WIN_READY.readySet.add(senderIdx);
+      _checkAllWinReady();
+      break;
+    case 'myName':
+      NET.guestNames[senderIdx-1]=msg.name||'プレイヤー';
+      NET.guestAbilities[senderIdx-1]=msg.ability??'';
+      NET.guestIconIds[senderIdx-1]=msg.iconId||'';
+      updateRoomMemberList();
+      _broadcastMemberUpdate();
+      break;
     case 'penSync':
       if(NET.isHost && msg.changedKeys){
         if(!G.penDrawings) G.penDrawings={};
@@ -3368,7 +3608,17 @@ function applyHostState(msg){
       addLog('山牌を選んでクリックしてください','log-new');
     }
     renderAll();
-    if(s.winModal)showWinModalData(s.winModal);
+    if(s.winModal){
+      showWinModalData(s.winModal);
+    } else {
+      // 勝利モーダルが表示中なら閉じる（ホストが次局へ進めた）
+      const wo = document.getElementById('winOverlay');
+      if(wo && wo.classList.contains('show')){
+        wo.classList.remove('show');
+        if(WIN_READY.timer){ clearInterval(WIN_READY.timer); WIN_READY.timer=null; }
+        WIN_READY.proceeded = true;
+      }
+    }
     if(s.finalResult)showFinalResultData(s.finalResult);
   }
 }
@@ -3508,6 +3758,7 @@ function startOnlineGame(){
   if(!NET.isRankMatch){
     G_ABILITY_MODE=NET.roomAbilityMode;
   }
+  hideRoomLobby();
   document.getElementById('lobby').style.display='none';
   document.getElementById('gameScreen').classList.add('active');
   scaleTable();
@@ -4090,7 +4341,7 @@ function _afkTick(){
   const myIdx=NET.myIdx;
   // 結果オーバーレイ（次の局へ）
   const wo=document.getElementById('winOverlay');
-  if(wo&&wo.classList.contains('show')){ nextRound(); return; }
+  if(wo&&wo.classList.contains('show')){ onWinOk(); return; }
   // 流局は自動進行するためスキップ不要
   if(!G.players) return;
   // ロン選択肢
@@ -4874,9 +5125,71 @@ function commitRiichi(p){
 // ROUND MANAGEMENT
 // ============================================================
 function saveScores(){G.savedScores=G.players.map(p=>p.score);}
+// ── Win Modal Timer + Ready System ───────────────────────────
+const WIN_READY = {
+  timer: null,
+  countdown: 10,
+  readySet: new Set(),
+  selfReady: false,
+  proceeded: false,
+};
+
+function _startWinTimer(){
+  WIN_READY.countdown = 10;
+  WIN_READY.readySet = new Set();
+  WIN_READY.selfReady = false;
+  WIN_READY.proceeded = false;
+  const okBtn = document.getElementById('winOkBtn');
+  if(okBtn){ okBtn.disabled=false; okBtn.textContent='OK →'; }
+  const statusEl = document.getElementById('winReadyStatus');
+  if(statusEl) statusEl.textContent = '';
+  const timerEl = document.getElementById('winTimerDisplay');
+  if(timerEl) timerEl.textContent = '10';
+  if(WIN_READY.timer){ clearInterval(WIN_READY.timer); WIN_READY.timer=null; }
+  WIN_READY.timer = setInterval(()=>{
+    WIN_READY.countdown--;
+    const el = document.getElementById('winTimerDisplay');
+    if(el) el.textContent = WIN_READY.countdown > 0 ? WIN_READY.countdown : '';
+    if(WIN_READY.countdown <= 0){
+      clearInterval(WIN_READY.timer); WIN_READY.timer=null;
+      if(!NET.online || NET.isHost){
+        nextRound();
+      } else {
+        onWinOk();
+      }
+    }
+  }, 1000);
+}
+
+function onWinOk(){
+  if(WIN_READY.selfReady || WIN_READY.proceeded) return;
+  WIN_READY.selfReady = true;
+  const okBtn = document.getElementById('winOkBtn');
+  if(okBtn){ okBtn.disabled=true; okBtn.textContent='待機中…'; }
+  if(NET.online && !NET.isHost){
+    netSend({type:'winReady'});
+  } else if(NET.online && NET.isHost){
+    WIN_READY.readySet.add(NET.myIdx ?? 0);
+    _checkAllWinReady();
+  } else {
+    nextRound();
+  }
+}
+
+function _checkAllWinReady(){
+  if(WIN_READY.proceeded) return;
+  const total = numPlayers || 1;
+  const statusEl = document.getElementById('winReadyStatus');
+  if(statusEl) statusEl.textContent = `${WIN_READY.readySet.size}/${total}人 OK`;
+  if(WIN_READY.readySet.size >= total){
+    nextRound();
+  }
+}
+
 function nextRound(){
+  WIN_READY.proceeded = true;
+  if(WIN_READY.timer){ clearInterval(WIN_READY.timer); WIN_READY.timer=null; }
   document.getElementById('winOverlay').classList.remove('show');
-  if(NET.online&&!NET.isHost){netSend({type:'nextRound'});return;}
   if(checkEnd())return;
   advanceRound(G._dealerWon);G._dealerWon=false;
 }
@@ -4975,12 +5288,14 @@ function backToLobby(){
   document.getElementById('winOverlay').classList.remove('show');
   document.getElementById('titleConfirmOverlay').classList.remove('show');
   document.getElementById('gameScreen').classList.remove('active');
+  hideRoomLobby();
   document.getElementById('lobby').style.display='flex';
   bgmToTitle();
   // ホストが部屋を持っていた場合はサーバーから削除する
   if(NET.isHost && NET.roomCode) fetch('/room/'+NET.roomCode, {method:'DELETE'}).catch(()=>{});
   if(NET.peer){try{NET.peer.destroy();}catch(e){} NET.peer=null;NET.conn=null;NET.conns=[];NET.online=false;}
   NET.roomCode=null; NET.isHost=false; NET.isRankMatch=false;
+  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET._memberDataCache=[];
   RANK.matchId=null; RANK.connectedGuests=0;
   setOnlineStatus('');
   document.getElementById('roomCodeBox').style.display='none';
@@ -5012,6 +5327,7 @@ function showWinModal(winner,hand,winTile,isTsumo,losidx,yakus,score,han){
   document.getElementById('mScore').textContent=`+${score.toLocaleString()} 点`;
   document.getElementById('mScoreSub').textContent=`${han}翻 / ${winner.isDealer?'親':'子'}`;
   timerStop(); document.getElementById('winOverlay').classList.add('show');
+  _startWinTimer();
 }
 
 // ============================================================
