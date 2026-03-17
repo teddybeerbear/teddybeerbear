@@ -3264,8 +3264,14 @@ function _onRankMatched(data){
           RANK._gameStartFired = true;
           // 2人揃ったらゲームスタート（名前受信のため少し待つ）
           setTimeout(()=>{
+            // メンバー情報を集める
+            const membersInfo = [
+              {name: PROFILE.name||'あなた', iconId: PROFILE.iconId||'', ability: PROFILE.ability||''},
+              RANK.opponents[0] || {name: '', iconId: '', ability: ''},
+              RANK.opponents[1] || {name: '', iconId: '', ability: ''},
+            ];
             NET.conns.forEach((c)=>{
-              if(c&&c.open) c.send({type:'gameStart', totalPlayers:3, abilityMode:true, timeMode:true});
+              if(c&&c.open) c.send({type:'gameStart', totalPlayers:3, abilityMode:true, timeMode:true, membersInfo});
             });
             setTimeout(()=>{
               G_TIME_MODE = true;
@@ -3620,6 +3626,13 @@ function onNetData(msg, senderIdx){
       numPlayers=msg.totalPlayers;
       G_ABILITY_MODE=msg.abilityMode;
       if(msg.timeMode) G_TIME_MODE=true;
+      // ゲスト側: メンバー情報からアイコンIDを取得
+      if(msg.membersInfo && Array.isArray(msg.membersInfo)){
+        NET.guestNames = [msg.membersInfo[0]?.name||'', msg.membersInfo[1]?.name||'', msg.membersInfo[2]?.name||''];
+        NET.guestIconIds = [msg.membersInfo[0]?.iconId||'', msg.membersInfo[1]?.iconId||'', msg.membersInfo[2]?.iconId||''];
+        NET.guestAbilities = [msg.membersInfo[0]?.ability||'', msg.membersInfo[1]?.ability||'', msg.membersInfo[2]?.ability||''];
+        console.log('gameStartからメンバー情報を設定:', {guestNames: NET.guestNames, guestIconIds: NET.guestIconIds, guestAbilities: NET.guestAbilities});
+      }
       NET.online=true;
       bgmToGame();
       hideRoomLobby();
@@ -4029,6 +4042,7 @@ function makePlayer(id,dealer){
   const pAbility = !G_ABILITY_MODE ? '' : (id===NET.myIdx) ? (PROFILE.ability||'') : (NET.isHost && NET.guestAbilities[id-1]!==undefined) ? NET.guestAbilities[id-1] : cpuAbilities[Math.floor(Math.random()*cpuAbilities.length)];
   // ゲストのアイコンIDを取得
   const pIconId = (id===NET.myIdx) ? (PROFILE.iconId||'') : (NET.isHost ? (NET.guestIconIds[id-1]||'') : '');
+  console.log(`makePlayer: id=${id}, myIdx=${NET.myIdx}, isHost=${NET.isHost}, pIconId=${pIconId}, guestIconIds=`, NET.guestIconIds);
   return{id,name:pname,iconId:pIconId,
     wind:WINDS[id],hand:[],melds:[],discards:[],kitaTiles:[],kitaCount:0,
     score:0,isDealer:dealer,riichi:false,doubleRiichi:false,openRiichi:false,
@@ -6493,10 +6507,11 @@ function renderTable(){
       </div>
       ${riichiStick}
       <div class="p-badges">${badges}${afkBadge}</div>
-      ${pidx!==NET.myIdx && p.iconId ? `<img src="${gachaIconUrl(p.iconId)}" alt="" style="width:24px;height:24px;border-radius:3px;">` : ''}
+      ${pidx!==NET.myIdx && p.iconId ? `<img src="${gachaIconUrl(p.iconId)}" alt="" style="width:24px;height:24px;border-radius:3px;" onerror="console.error('アイコン画像読み込みエラー:', '${p.iconId}');">` : `<!-- アイコンなし: pidx=${pidx}, myIdx=${NET.myIdx}, iconId=${p.iconId} -->`}
       <span class="p-name">${p.name}</span>
       <span class="p-score">${p.score.toLocaleString()}点</span>
     `;
+    console.log(`プレイヤー${pidx}(${p.name}) アイコンID: ${p.iconId}`);
     // stripDiv は全員 handOuter に追加（後述）
 
     // Melds + kita
