@@ -3254,7 +3254,19 @@ function _onRankMatched(data){
       NET.conns.push(conn);
       if(guestIdx===1) NET.conn = conn;
       conn.on('data', msg=>onNetData(msg, guestIdx));
-      conn.on('close', ()=>{ setOnlineStatus('接続が切れました'); NET.online=false; });
+      conn.on('close', ()=>{ 
+        // 接続が切れたゲストをリストから削除
+        const idx = NET.conns.indexOf(conn);
+        if(idx !== -1) NET.conns.splice(idx, 1);
+        
+        if(NET.online && G && G.players && G.players[guestIdx]){
+          // ゲーム中にゲストが切断した場合、离席状態に設定
+          G.players[guestIdx].isDisconnected = true;
+          addLog(`🔄 ${G.players[guestIdx].name}が切断しました。`,'log-new');
+          broadcastState();
+          renderAll();
+        }
+      });
       conn.on('error', e=>{ setOnlineStatus('通信エラー: '+e.message); });
       const onOpen = ()=>{
         conn.send({type:'joined', myIdx:guestIdx, abilityMode:true, members:3});
@@ -3313,7 +3325,12 @@ function _rankGuestConnect(hostPeerId, attempt){
       setRankStatus('ホストに接続しました！ゲーム開始を待っています…');
     });
     conn.on('data', msg=>onNetData(msg, null));
-    conn.on('close', ()=>{ if(NET.online){ setOnlineStatus('接続が切れました'); NET.online=false; } });
+    conn.on('close', ()=>{ 
+      if(NET.online){ 
+        // ホスト切断時は自動的にホストに昇格
+        promoteGuestToHost();
+      } 
+    });
     conn.on('error', ()=>{
       if(!opened && !NET.online) _rankGuestConnect(hostPeerId, attempt+1);
     });
@@ -3323,6 +3340,72 @@ function _rankGuestConnect(hostPeerId, attempt){
       if(!opened && !NET.online) _rankGuestConnect(hostPeerId, attempt+1);
     }, 4000);
   }, delay);
+}
+
+// ゲストがホストに昇格する関数
+function promoteGuestToHost(){
+  if(NET.isHost) return; // 既にホストの場合は何もしない
+  
+  // ホストの役割を引き継ぐ
+  NET.isHost = true;
+  NET.myIdx = 0;
+  NET.online = true;
+  
+  // 切断したホストをプレイヤー情報から離席状態に設定
+  // （ゲーム中の場合のみ）
+  if(G && G.players && G.players.length > 0){
+    // 元のホスト（インデックス0の他のプレイヤー）を特定
+    // 昇格前のゲストのインデックスを記録
+    const formerHostIdx = 0;
+    if(G.players[formerHostIdx]){
+      G.players[formerHostIdx].isDisconnected = true;
+      addLog(`🔄 ${G.players[formerHostIdx].name}が切断しました。ホストが昇格しました。`,'log-new');
+    }
+  }
+  
+  // 古いゲスト接続をクローズ
+  if(NET.conn){
+    try{ NET.conn.close(); }catch(e){}
+    NET.conn = null;
+  }
+  NET.conns = [];
+  
+  // ホストとしてのリスナーを設定（新しいゲストからの接続を待つ）
+  if(NET.peer){
+    NET.peer.off('connection');
+    NET.peer.on('connection', conn=>{
+      if(NET.conns.length >= 2){ conn.close(); return; }
+      const guestIdx = NET.conns.length + 1;
+      NET.conns.push(conn);
+      if(guestIdx===1) NET.conn = conn;
+      conn.on('data', msg=>onNetData(msg, guestIdx));
+      conn.on('close', ()=>{ 
+        // 接続が切れたゲストをリストから削除
+        const idx = NET.conns.indexOf(conn);
+        if(idx !== -1) NET.conns.splice(idx, 1);
+        
+        // 切断したゲストを離席状態に設定
+        if(G && G.players && G.players[guestIdx]){
+          G.players[guestIdx].isDisconnected = true;
+          addLog(`🔄 ${G.players[guestIdx].name}が切断しました。`,'log-new');
+          broadcastState();
+          renderAll();
+        }
+      });
+      conn.on('error', e=>{ setOnlineStatus('通信エラー: '+e.message); });
+      const onOpen = ()=>{
+        conn.send({type:'joined', myIdx:guestIdx, abilityMode:true, members:3});
+        // 現在のゲーム状態を新ゲストに送信
+        if(NET.online){
+          broadcastState();
+        }
+      };
+      if(conn.open){ onOpen(); } else { conn.on('open', onOpen); }
+    });
+  }
+  
+  addLog('✅ ホスト昇格完了。ゲーム続行します。','log-new');
+  renderAll();
 }
 
 // ── Room creation (Host) ─────────────────────────────────────
@@ -3582,7 +3665,18 @@ async function joinRoom(){
 function setupConn(conn, guestIdx){
   conn.on('open', ()=>{ if(!NET.isHost) setOnlineStatus('接続しました！ホストを待っています…'); });
   conn.on('data', msg=>onNetData(msg, guestIdx));
-  conn.on('close', ()=>{ setOnlineStatus('接続が切れました'); NET.online=false; });
+  conn.on('close', ()=>{ 
+    if(NET.online){
+      // ゲーム中の接続切断の場合、ホストなら何もしない（ゲストが昇格するまで待機）
+      // ゲストならホストに昇格
+      if(!NET.isHost){
+        promoteGuestToHost();
+      }
+    } else {
+      // ゲーム開始前の接続切断の場合
+      NET.online=false;
+    }
+  });
   conn.on('error', e=>{ setOnlineStatus('通信エラー: '+e.message); });
 }
 
@@ -6535,7 +6629,8 @@ function renderTable(){
       p.kitaCount>0?`<span class="badge badge-dora">���×${p.kitaCount}</span>`:'',
     ].join('');
 
-    const riichiStick=p.riichi?`<span class="riichi-stick">リーチ</span>`:''; const afkBadge=(isHuman&&playerAFK)?`<span class="badge" style="background:#1a0000;border:1px solid #cc3333;color:#ff6666;">離席</span>`:'';
+    const riichiStick=p.riichi?`<span class="riichi-stick">リーチ</span>`:''; 
+    const afkBadge=((isHuman&&playerAFK)||p.isDisconnected)?`<span class="badge" style="background:#1a0000;border:1px solid #cc3333;color:#ff6666;">離席</span>`:'';
 
     const abilityLabels2={'':'','mine':'💣 地雷','light':'☀️ 光','yami':'🌑 闇','haku':'🀆 白','sanctuary':'🏛️ 聖域','pinzu':'🔵 ピンズー教','steal':'🃏 スチール','pen':'🖊️ ペン'};
     const abilityBadge = (G_ABILITY_MODE && p.ability) ? `<span class="ability-badge">${abilityLabels2[p.ability]||p.ability}</span>` : '';
