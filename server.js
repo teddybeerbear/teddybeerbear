@@ -253,62 +253,67 @@ app.get("/rank/my-rating", requireAuth, async (req, res) => {
 
 // ランクマッチキューに参加
 app.post("/rank/join", requireAuth, (req, res) => {
-  const { peerId } = req.body;
-  if (!peerId) {
-    return res.status(400).json({ error: "peerId は必須です" });
-  }
+  try {
+    const { peerId } = req.body;
+    if (!peerId) {
+      return res.status(400).json({ error: "peerId は必須です" });
+    }
 
-  // キューに追加
-  rankQueue.push({
-    peerId,
-    googleId: req.user.id,
-    name: req.user.name || "プレイヤー",
-    rating: 1500, // 仮のレート値
-    joinedAt: Date.now(),
-  });
-
-  console.log(`ランクキュー参加: ${req.user.name} (${peerId}), キュー人数: ${rankQueue.length}`);
-
-  // 3人揃ったかチェック
-  if (rankQueue.length >= 3) {
-    const matched = rankQueue.splice(0, 3); // 3人取り出す
-    const matchId = `match-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-    
-    // マッチ情報を保存
-    rankMatches.set(matchId, {
-      hostPeerId: matched[0].peerId,
-      hostIdx: 0,
-      members: matched.map(m => ({
-        peerId: m.peerId,
-        googleId: m.googleId,
-        name: m.name,
-        rating: m.rating,
-      })),
-      createdAt: Date.now(),
+    // キューに追加
+    rankQueue.push({
+      peerId,
+      googleId: req.user.id,
+      name: req.user.name || "プレイヤー",
+      rating: 1500, // 仮のレート値
+      joinedAt: Date.now(),
     });
 
-    console.log(`ランクマッチ成立: ${matchId}`, matched.map(m => m.name));
+    console.log(`ランクキュー参加: ${req.user.name} (${peerId}), キュー人数: ${rankQueue.length}`);
 
-    // マッチ成立を返す
-    return res.json({
-      matched: true,
-      matchId,
-      isHost: true,
-      myIdx: 0,
-      hostPeerId: matched[0].peerId,
-      myRating: matched[0].rating,
-      opponents: [
-        { name: matched[1].name, rating: matched[1].rating },
-        { name: matched[2].name, rating: matched[2].rating },
-      ],
+    // 3人揃ったかチェック
+    if (rankQueue.length >= 3) {
+      const matched = rankQueue.splice(0, 3); // 3人取り出す
+      const matchId = `match-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+      
+      // マッチ情報を保存
+      rankMatches.set(matchId, {
+        hostPeerId: matched[0].peerId,
+        hostIdx: 0,
+        members: matched.map(m => ({
+          peerId: m.peerId,
+          googleId: m.googleId,
+          name: m.name,
+          rating: m.rating,
+        })),
+        createdAt: Date.now(),
+      });
+
+      console.log(`ランクマッチ成立: ${matchId}`, matched.map(m => m.name));
+
+      // マッチ成立を返す
+      return res.json({
+        matched: true,
+        matchId,
+        isHost: true,
+        myIdx: 0,
+        hostPeerId: matched[0].peerId,
+        myRating: matched[0].rating,
+        opponents: [
+          { name: matched[1].name, rating: matched[1].rating },
+          { name: matched[2].name, rating: matched[2].rating },
+        ],
+      });
+    }
+
+    // 3人未満: マッチ待機
+    res.json({
+      matched: false,
+      queueSize: rankQueue.length,
     });
+  } catch (err) {
+    console.error("/rank/join エラー:", err.message);
+    res.status(500).json({ error: "サーバーエラー: " + err.message });
   }
-
-  // 3人未満: マッチ待機
-  res.json({
-    matched: false,
-    queueSize: rankQueue.length,
-  });
 });
 
 // ランクマッチ状態をポーリング
