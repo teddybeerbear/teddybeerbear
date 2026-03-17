@@ -3123,21 +3123,25 @@ function stopSyncBroadcast(){
 // ── ピア切断時のホスト再選出 ─────────────────────────────
 function onPeerDisconnected(peerId){
   peerRegistryRemove(peerId);
-  // peerIdx: 切断者のプレイヤーインデックスを特定
-  // guestPeerIds[i] = playerIdx i+1 のPeerID
-  const guestSlot = NET.guestPeerIds.indexOf(peerId);
-  const disconnectedPlayerIdx = guestSlot >= 0 ? guestSlot + 1 : 0; // 0=元ホスト
+  // ★ G.players の peerId で切断者を特定（guestPeerIds 配列ズレに依存しない）
+  let disconnectedPlayerIdx = 0; // default: 元ホスト
+  if(G && G.players){
+    const byPeer = G.players.findIndex(p => p.peerId === peerId);
+    if(byPeer >= 0){
+      disconnectedPlayerIdx = byPeer;
+    } else {
+      // fallback: guestPeerIds から
+      const guestSlot = NET.guestPeerIds.indexOf(peerId);
+      if(guestSlot >= 0) disconnectedPlayerIdx = guestSlot + 1;
+    }
+  }
 
   const newHostId = getHostPeerId();
   const myId = NET.peer?.id;
 
   if(myId && newHostId === myId && !NET.isHost){
-    // 自分が新ホストに選出された
     _doPromoteToHost(disconnectedPlayerIdx);
   } else if(NET.isHost){
-    // すでにホストなのでゲスト切断として処理
-    // _handleGuestDisconnect は conn.on('close') 経由で呼ばれるので
-    // ここではプレイヤーフラグだけ立てる
     if(G && G.players && G.players[disconnectedPlayerIdx]){
       G.players[disconnectedPlayerIdx].isDisconnected = true;
     }
@@ -3147,13 +3151,16 @@ function onPeerDisconnected(peerId){
 // ヘルパー: 指定インデックスがオンラインゲストかどうか（ホスト視点で使用）
 function isOnlineGuestIdx(pidx){
   if(!NET.online || !amIHost()) return false;
-  // 切断済み（離席）プレイヤーはCPU扱いにするため除外
-  if(G && G.players && G.players[pidx] && G.players[pidx].isDisconnected) return false;
-  // conn._playerIdx タグで判定（昇格後再接続対応）
-  if(NET.conns.some(c => c && c._playerIdx !== undefined)){
-    return NET.conns.some(c => c && c.open && c._playerIdx === pidx);
+  if(!G || !G.players || !G.players[pidx]) return false;
+  // 切断済みはCPU扱い
+  if(G.players[pidx].isDisconnected) return false;
+  // ★ PeerIDベースで判定（インデックスズレに依存しない）
+  const playerPeerId = G.players[pidx].peerId;
+  if(playerPeerId){
+    return NET.conns.some(c => c && c.open && c.peer === playerPeerId);
   }
-  return pidx > 0 && pidx <= NET.conns.length;
+  // fallback: 自分自身でなく conns に存在するか
+  return NET.conns.some(c => c && c.open && c._playerIdx === pidx);
 }
 
 // ── Lobby mode toggles ───────────────────────────────────────
@@ -3509,7 +3516,7 @@ function _reconnectToNewHost(newHostPeerId){
   conn.on('open', ()=>{
     NET.online = true;
     NET._promotingToHost = false;
-    conn.send({type:'reconnect', originalIdx: myOriginalIdx});
+    conn.send({type:'reconnect', originalIdx: myOriginalIdx, peerId: NET.peer?.id||''});
     conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',peerId:NET.peer?.id||''});
     addLog('✅ 新ホストに再接続しました','log-new');
   });
@@ -3866,8 +3873,12 @@ function setupConn(conn, guestIdx){
 function _handleGuestDisconnect(conn, guestIdx){
   const idx = NET.conns.indexOf(conn);
   if(idx !== -1) NET.conns.splice(idx, 1);
-  // conn._playerIdx があればそれを優先（昇格後再接続対応）
-  const pidx = (conn._playerIdx !== undefined) ? conn._playerIdx : guestIdx;
+  // ★ PeerIDでプレイヤーを特定（インデックスズレ対策）
+  let pidx = (conn._playerIdx !== undefined) ? conn._playerIdx : guestIdx;
+  if(conn.peer && G && G.players){
+    const byPeer = G.players.findIndex(p => p.peerId === conn.peer);
+    if(byPeer >= 0) pidx = byPeer;
+  }
   if(G && G.players && G.players[pidx]){
     addLog(`🔄 ${G.players[pidx].name}が切断しました。離席状態にします。`,'log-new');
     resumeGameAfterHostLost(pidx);
@@ -4047,11 +4058,18 @@ function handleGuestAction(msg, senderIdx){
       }
       break;
     case 'reconnect':
-      // 再接続ゲストから元のプレイヤーインデックスを受け取り conn._playerIdx を更新
       if(msg.originalIdx !== undefined){
-        const rc = NET.conns.find(c => c && c._playerIdx === senderIdx);
-        if(rc) rc._playerIdx = msg.originalIdx;
-        // 切断フラグを解除
+        // ★ conn を特定して _playerIdx を確定（PeerIDも合わせて検証）
+        const rc = NET.conns.find(c => c && (c._playerIdx === senderIdx || c.peer === msg.peerId));
+        if(rc){
+          rc._playerIdx = msg.originalIdx;
+          // G.players の peerId も更新（再接続で PeerID が変わる場合に対応）
+          if(msg.peerId && G && G.players && G.players[msg.originalIdx]){
+            G.players[msg.originalIdx].peerId = msg.peerId;
+          }
+          const pr = NET.peerRegistry.find(p=>p.conn===rc);
+          if(pr) pr.playerIdx = msg.originalIdx;
+        }
         if(G && G.players && G.players[msg.originalIdx]){
           G.players[msg.originalIdx].isDisconnected = false;
           addLog(`✅ ${G.players[msg.originalIdx].name}が再接続しました。`,'log-new');
@@ -4206,12 +4224,13 @@ function handleGuestAction(msg, senderIdx){
       NET.guestNames[senderIdx-1]=msg.name||'プレイヤー';
       NET.guestAbilities[senderIdx-1]=msg.ability??'';
       NET.guestIconIds[senderIdx-1]=msg.iconId||'';
-      // Bug4修正: ゲストのPeerIDを収集する
       if(msg.peerId) NET.guestPeerIds[senderIdx-1]=msg.peerId;
-      // ゲーム中ならG.playersにも即反映してbroadcast & 自分の画面も更新
+      // ゲーム中ならG.playersにも即反映
       if(NET.online && G && G.players && G.players[senderIdx]){
         G.players[senderIdx].iconId = msg.iconId||'';
         G.players[senderIdx].name   = msg.name||'プレイヤー';
+        // ★ peerId を player に紐付け（人格固定の核心）
+        if(msg.peerId) G.players[senderIdx].peerId = msg.peerId;
         broadcastState();
         renderAll();
       }
@@ -4268,7 +4287,11 @@ function applyHostState(msg){
     // Bug4修正: ゲストのPeerIDリストをホストから受け取って保持（ホスト昇格時に使用）
     if(s.guestPeerIds) NET.guestPeerIds = s.guestPeerIds;
     // ゲスト: 自分の iconId は PROFILE.iconId で確実に上書き
-    if(G.players[NET.myIdx]) G.players[NET.myIdx].iconId = PROFILE.iconId||'';
+    if(G.players[NET.myIdx]){
+      G.players[NET.myIdx].iconId = PROFILE.iconId||'';
+      // ★ 自分の peerId を確実に保持（ホストが送ってきた state で上書きされないよう）
+      if(NET.peer?.id) G.players[NET.myIdx].peerId = NET.peer.id;
+    }
     // ゲスト: 自分のターンでdrawフェーズなら、draw_waitに遷移してツモ選択可能にする
     if(G.phase==='draw' && G.current===NET.myIdx){
       if(G.deck.length===0){handleExhausted();return;}
@@ -4448,8 +4471,9 @@ function startOnlineGame(){
      pendingRiichi:null,riichiValidIdx:null,
      phase:'idle',firstRound:true,log:[],savedScores:null,_dealerWon:false};
   startRound();
+  // 自分（ホスト = playerIdx 0）の peerId をセット
+  if(G.players[NET.myIdx]) G.players[NET.myIdx].peerId = NET.peer?.id || '';
   broadcastState();
-  // ホストの場合は定期Syncを開始
   if(amIHost()) startSyncBroadcast();
 }
 
@@ -4482,6 +4506,7 @@ function makePlayer(id,dealer){
   const pIconId = (id === NET.myIdx) ? (PROFILE.iconId || '') : '';
 
   return{id,name:pname,iconId:pIconId,
+    peerId:'', // 接続PeerID（オンライン時に設定）
     wind:WINDS[id],hand:[],melds:[],discards:[],kitaTiles:[],kitaCount:0,
     score:0,isDealer:dealer,riichi:false,doubleRiichi:false,openRiichi:false,
     ippatsu:false,isTenhou:false,isChiihou:false,isRenhou:false,
