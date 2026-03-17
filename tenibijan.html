@@ -3523,7 +3523,15 @@ function copyRlsCode(){
 }
 function hostStartGame(){
   if(NET.conns.length===0)return;
-  NET.conns.forEach((c,i)=>{if(c.open)c.send({type:'gameStart',totalPlayers:NET.conns.length+1,abilityMode:NET.roomAbilityMode});});
+  const membersInfo = [
+    {name: PROFILE.name||'あなた', iconId: PROFILE.iconId||'', ability: PROFILE.ability||''},
+    ...NET.conns.map((c,i)=>({
+      name: NET.guestNames[i]||`ゲスト${i+1}`,
+      iconId: NET.guestIconIds[i]||'',
+      ability: NET.guestAbilities[i]||''
+    }))
+  ];
+  NET.conns.forEach((c,i)=>{if(c.open)c.send({type:'gameStart',totalPlayers:NET.conns.length+1,abilityMode:NET.roomAbilityMode,membersInfo});});
   // ゲーム開始後はサーバーから部屋を削除する（新規参加を防ぐ）
   if(NET.roomCode) fetch('/room/'+NET.roomCode, {method:'DELETE'}).catch(()=>{});
   hideRoomLobby();
@@ -3656,6 +3664,10 @@ function onNetData(msg, senderIdx){
       document.getElementById('lobby').style.display='none';
       document.getElementById('gameScreen').classList.add('active');
       scaleTable();
+      // ホストが makePlayer() を完了した後でもアイコンが反映されるよう、自分の情報を再送する
+      setTimeout(()=>{
+        if(NET.conn&&NET.conn.open) NET.conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||''});
+      }, 500);
     } else {
       applyHostState(msg);
     }
@@ -3816,6 +3828,12 @@ function handleGuestAction(msg, senderIdx){
       NET.guestNames[senderIdx-1]=msg.name||'プレイヤー';
       NET.guestAbilities[senderIdx-1]=msg.ability??'';
       NET.guestIconIds[senderIdx-1]=msg.iconId||'';
+      // ゲーム中ならG.playersにも即反映してbroadcastする
+      if(NET.online && G && G.players && G.players[senderIdx]){
+        G.players[senderIdx].iconId = msg.iconId||'';
+        G.players[senderIdx].name   = msg.name||'プレイヤー';
+        broadcastState();
+      }
       updateRoomMemberList();
       _broadcastMemberUpdate();
       break;
