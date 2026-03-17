@@ -4027,7 +4027,9 @@ function makePlayer(id,dealer){
   const pname=NET.online?onlineNames[id]:soloNames[id];
   const cpuAbilities=['mine','light','yami','haku','sanctuary','pinzu','steal'];
   const pAbility = !G_ABILITY_MODE ? '' : (id===NET.myIdx) ? (PROFILE.ability||'') : (NET.isHost && NET.guestAbilities[id-1]!==undefined) ? NET.guestAbilities[id-1] : cpuAbilities[Math.floor(Math.random()*cpuAbilities.length)];
-  return{id,name:pname,
+  // ゲストのアイコンIDを取得
+  const pIconId = (id===NET.myIdx) ? (PROFILE.iconId||'') : (NET.isHost ? (NET.guestIconIds[id-1]||'') : '');
+  return{id,name:pname,iconId:pIconId,
     wind:WINDS[id],hand:[],melds:[],discards:[],kitaTiles:[],kitaCount:0,
     score:0,isDealer:dealer,riichi:false,doubleRiichi:false,openRiichi:false,
     ippatsu:false,isTenhou:false,isChiihou:false,isRenhou:false,
@@ -6487,11 +6489,12 @@ function renderTable(){
     stripDiv.innerHTML=`
       <div class="wind-orb${p.isDealer?' dealer-orb':''}">${p.wind}</div>
       <div style="display:flex;flex-direction:column;gap:1px;">
-
         ${abilityBadge}
       </div>
       ${riichiStick}
       <div class="p-badges">${badges}${afkBadge}</div>
+      ${pidx!==NET.myIdx && p.iconId ? `<img src="${gachaIconUrl(p.iconId)}" alt="" style="width:24px;height:24px;border-radius:3px;">` : ''}
+      <span class="p-name">${p.name}</span>
       <span class="p-score">${p.score.toLocaleString()}点</span>
     `;
     // stripDiv は全員 handOuter に追加（後述）
