@@ -37,7 +37,7 @@ async function initDB() {
         google_id    TEXT PRIMARY KEY,
         name         TEXT,
         email        TEXT,
-        coins        INTEGER NOT NULL DEFAULT 10000,
+        coins        INTEGER NOT NULL DEFAULT 0,
         abilities    TEXT NOT NULL DEFAULT '[]',
         total_pulls  INTEGER NOT NULL DEFAULT 0,
         gacha_icons  TEXT NOT NULL DEFAULT '[]',
