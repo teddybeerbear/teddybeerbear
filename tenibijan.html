@@ -3012,7 +3012,100 @@ let NET={
   guestIconIds:[],  // ゲストのアイコンID [idx1, idx2, idx3]
   guestPeerIds:[],  // ゲストのPeerID [idx1のPeerID, idx2のPeerID, idx3のPeerID]
   _memberDataCache:[], // ゲスト側: ホストから受け取ったメンバーデータのキャッシュ
+  // ── P2P分散アーキテクチャ ──
+  peerRegistry:[],  // [{peerId, playerIdx, conn}] 全接続ピアの一覧（全員が持つ）
+  _syncTimer:null,  // 定期sync用タイマー
+  _lastActionId:0,  // 最後に処理したactionId
 };
+
+// ── ピアレジストリ操作 ──────────────────────────────────────
+function peerRegistryAdd(peerId, playerIdx, conn){
+  if(NET.peerRegistry.some(p=>p.peerId===peerId)) return;
+  NET.peerRegistry.push({peerId, playerIdx, conn});
+}
+function peerRegistryRemove(peerId){
+  NET.peerRegistry = NET.peerRegistry.filter(p=>p.peerId!==peerId);
+}
+
+// ホストPeerID: 全ピア中で辞書順最小 = ホスト
+function getHostPeerId(){
+  const myId = NET.peer?.id;
+  if(!myId) return null;
+  const all = [myId, ...NET.peerRegistry.map(p=>p.peerId)].filter(Boolean);
+  return all.sort()[0];
+}
+
+// 自分がホストかどうかを peerRegistry ベースで判定
+function amIHost(){
+  const myId = NET.peer?.id;
+  if(!myId) return NET.isHost; // fallback
+  return getHostPeerId() === myId;
+}
+
+// ── アクションID採番 ──────────────────────────────────────
+function _nextActionId(){
+  return ++NET._lastActionId;
+}
+
+// アクションメッセージに actionId を付けてブロードキャスト
+function sendAction(action){
+  action.actionId = _nextActionId();
+  netBroadcastAll(action);
+}
+
+// 全接続ピアにブロードキャスト（ホスト/ゲスト問わず全員へ）
+function netBroadcastAll(msg){
+  // ホストとして接続しているゲストへ
+  NET.conns.forEach(c=>{ if(c&&c.open) c.send(msg); });
+  // ゲストとしてホストへ（ホストでない場合）
+  if(!NET.isHost && NET.conn&&NET.conn.open) NET.conn.send(msg);
+  // peerRegistry の接続へ（重複しないよう open 確認済みのみ）
+  NET.peerRegistry.forEach(p=>{
+    if(p.conn && p.conn.open &&
+       !NET.conns.includes(p.conn) && p.conn !== NET.conn){
+      p.conn.send(msg);
+    }
+  });
+}
+
+// ── 定期Sync（ホストのみ） ────────────────────────────────
+function startSyncBroadcast(){
+  if(NET._syncTimer) clearInterval(NET._syncTimer);
+  NET._syncTimer = setInterval(()=>{
+    if(!NET.online || !amIHost()) return;
+    if(!G || !G.players) return;
+    const s = _buildStateSnapshot();
+    s._lastActionId = NET._lastActionId;
+    netBroadcastAll({type:'sync', state:s});
+  }, 2000);
+}
+function stopSyncBroadcast(){
+  if(NET._syncTimer){ clearInterval(NET._syncTimer); NET._syncTimer=null; }
+}
+
+// ── ピア切断時のホスト再選出 ─────────────────────────────
+function onPeerDisconnected(peerId){
+  peerRegistryRemove(peerId);
+  // peerIdx: 切断者のプレイヤーインデックスを特定
+  // guestPeerIds[i] = playerIdx i+1 のPeerID
+  const guestSlot = NET.guestPeerIds.indexOf(peerId);
+  const disconnectedPlayerIdx = guestSlot >= 0 ? guestSlot + 1 : 0; // 0=元ホスト
+
+  const newHostId = getHostPeerId();
+  const myId = NET.peer?.id;
+
+  if(myId && newHostId === myId && !NET.isHost){
+    // 自分が新ホストに選出された
+    _doPromoteToHost(disconnectedPlayerIdx);
+  } else if(NET.isHost){
+    // すでにホストなのでゲスト切断として処理
+    // _handleGuestDisconnect は conn.on('close') 経由で呼ばれるので
+    // ここではプレイヤーフラグだけ立てる
+    if(G && G.players && G.players[disconnectedPlayerIdx]){
+      G.players[disconnectedPlayerIdx].isDisconnected = true;
+    }
+  }
+}
 
 // ヘルパー: 指定インデックスがオンラインゲストかどうか（ホスト視点で使用）
 function isOnlineGuestIdx(pidx){
@@ -3259,16 +3352,17 @@ function _onRankMatched(data){
     NET.peer.on('connection', conn=>{
       if(NET.conns.length >= 2){ conn.close(); return; }
       const guestIdx = NET.conns.length + 1;
-      conn._playerIdx = guestIdx; // Bug1修正: _playerIdxタグを付与
+      conn._playerIdx = guestIdx;
       NET.conns.push(conn);
       if(guestIdx===1) NET.conn = conn;
       conn.on('data', msg=>onNetData(msg, guestIdx));
       conn.on('close', ()=>{
-        // Bug1修正: 共通のゲスト切断処理を使用（離席+CPU代行）
+        if(conn.peer && NET.online) onPeerDisconnected(conn.peer);
         _handleGuestDisconnect(conn, guestIdx);
       });
       conn.on('error', e=>{ setOnlineStatus('通信エラー: '+e.message); });
       const onOpen = ()=>{
+        if(conn.peer) peerRegistryAdd(conn.peer, guestIdx, conn);
         conn.send({type:'joined', myIdx:guestIdx, abilityMode:true, members:3});
         RANK.connectedGuests++;
         setRankStatus(`対戦相手を待っています… (${RANK.connectedGuests}/2)`);
@@ -3417,13 +3511,22 @@ function _doPromoteToHost(disconnectedPidx){
       NET.conns.push(conn);
       const assignedIdx = NET.conns.length;
       conn._playerIdx = assignedIdx;
+      // peerRegistry に登録
+      if(conn.peer) peerRegistryAdd(conn.peer, assignedIdx, conn);
+      conn.on('open', ()=>{ if(conn.peer) peerRegistryAdd(conn.peer, conn._playerIdx, conn); });
       conn.on('data', msg=>{
         if(msg.type==='reconnect' && msg.originalIdx !== undefined){
           conn._playerIdx = msg.originalIdx;
+          // peerRegistry の playerIdx も更新
+          const pr = NET.peerRegistry.find(p=>p.conn===conn);
+          if(pr) pr.playerIdx = msg.originalIdx;
         }
         onNetData(msg, conn._playerIdx);
       });
-      conn.on('close', ()=>{ _handleGuestDisconnect(conn, conn._playerIdx); });
+      conn.on('close', ()=>{
+        if(conn.peer && NET.online) onPeerDisconnected(conn.peer);
+        _handleGuestDisconnect(conn, conn._playerIdx);
+      });
       conn.on('error', e=>{ setOnlineStatus('通信エラー: '+e.message); });
       const onOpen = ()=>{
         conn.send({type:'joined', myIdx:conn._playerIdx, abilityMode:true, members:numPlayers});
@@ -3432,6 +3535,9 @@ function _doPromoteToHost(disconnectedPidx){
       if(conn.open){ onOpen(); } else { conn.on('open', onOpen); }
     });
   }
+
+  // 定期Syncを開始（新ホストとして）
+  startSyncBroadcast();
 
   setTimeout(()=>{
     renderAll();
@@ -3487,17 +3593,16 @@ async function createRoom(){
     if(NET.conns.length>=3){conn.close();return;} // 最大4人(ホスト+3)
     const guestIdx = NET.conns.length+1;
     conn.metadata = {idx:guestIdx};
-    conn._playerIdx = guestIdx; // Bug1修正: _playerIdxタグを付与
+    conn._playerIdx = guestIdx;
     NET.conns.push(conn);
     NET.conn = conn;
     setupConn(conn, guestIdx);
-    updateRoomMemberList();
-    // 参加者に自分のidxと現在のメンバー情報を送る
+    // peerRegistry に登録（open後にpeerIdが確定する）
     conn.on('open',()=>{
+      if(conn.peer) peerRegistryAdd(conn.peer, guestIdx, conn);
       const md = _buildMemberData();
       conn.send({type:'joined',myIdx:guestIdx,abilityMode:NET.roomAbilityMode,
         members:NET.conns.length+1, memberData:md});
-      // 既存ゲストにも更新通知
       _broadcastMemberUpdate();
     });
   });
@@ -3625,7 +3730,7 @@ function leaveRoomLobby(){
   if(NET.peer){ try{NET.peer.destroy();}catch(e){} NET.peer=null; }
   hideRoomLobby();
   NET.conns=[]; NET.conn=null; NET.roomCode=null; NET.isHost=false;
-  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET._memberDataCache=[];
+  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
   setOnlineStatus('');
   document.getElementById('lobby').style.display='flex';
   document.getElementById('roomCodeBox').style.display='none';
@@ -3698,15 +3803,20 @@ async function joinRoom(){
 
 // ── Shared connection setup ───────────────────────────────────
 function setupConn(conn, guestIdx){
-  conn.on('open', ()=>{ if(!NET.isHost) setOnlineStatus('接続しました！ホストを待っています…'); });
+  conn.on('open', ()=>{
+    if(!NET.isHost) setOnlineStatus('接続しました！ホストを待っています…');
+    // peerRegistry に登録（peerId が取れるタイミングで）
+    if(conn.peer) peerRegistryAdd(conn.peer, guestIdx, conn);
+  });
   conn.on('data', msg=>onNetData(msg, guestIdx));
   conn.on('close', ()=>{
+    // peerRegistry から除外 → ホスト再選出
+    if(conn.peer && NET.online) onPeerDisconnected(conn.peer);
+
     if(NET.online){
       if(NET.isHost){
-        // Bug1修正: ホスト側でゲストが切断したら離席+CPU代行
         _handleGuestDisconnect(conn, guestIdx);
       } else {
-        // ゲスト: ホスト切断 → ホスト昇格を試みる
         promoteGuestToHost();
       }
     } else {
@@ -4080,6 +4190,14 @@ function handleGuestAction(msg, senderIdx){
 
 // Guest: full state pushed by host → apply and render
 function applyHostState(msg){
+  // sync メッセージ: actionId が自分より新しい場合のみ適用
+  if(msg.type==='sync'){
+    if(msg.state && msg.state._lastActionId > NET._lastActionId){
+      NET._lastActionId = msg.state._lastActionId;
+      applyHostState({type:'state', state:msg.state});
+    }
+    return;
+  }
   if(msg.type==='state'){
     // Rebuild G from serialized state (host sends full G)
     const s=msg.state;
@@ -4127,9 +4245,8 @@ function applyHostState(msg){
   }
 }
 
-function broadcastState(extra={}){
-  if(!NET.online||!NET.isHost||NET.conns.length===0)return;
-  const s={
+function _buildStateSnapshot(extra={}){
+  return {
     deck:G.deck,deckSlots:G.deckSlots,doraInds:G.doraInds,uraInds:G.uraInds,
     doraPile:G.doraPile,rinshan:G.rinshan,rinshanIdx:G.rinshanIdx,kanDoraCount:G.kanDoraCount,
     dealer:G.dealer,current:G.current,roundNum:G.roundNum,
@@ -4139,11 +4256,15 @@ function broadcastState(extra={}){
     pendingRiichi:G.pendingRiichi,riichiValidIdx:G.riichiValidIdx,
     mineSlots:G.mineSlots,mineRinshanIdxs:G.mineRinshanIdxs,mineOwners:G.mineOwners??{},mineRinshanOwners:G.mineRinshanOwners??{},mineCount:G.mineCount,yamiSelectMode:G.yamiSelectMode,hakuSelectMode:G.hakuSelectMode,stealMode:G.stealMode,lightMode:G.lightMode,lightUserIdx:G.lightUserIdx??null,lightRevealedSlots:G.lightRevealedSlots,lightRevealedHand:G.lightRevealedHand,lightExtraDora:G.lightExtraDora??[],penDrawings:G.penDrawings??{},
     players:G.players,numPlayers,pendingAction,
-    // Bug4修正: ゲストがホスト昇格するために必要なPeerIDリストを配信
     guestPeerIds:NET.guestPeerIds,
+    _lastActionId:NET._lastActionId,
     ...extra
   };
-  netSend({type:'state',state:s});
+}
+
+function broadcastState(extra={}){
+  if(!NET.online||!NET.isHost||NET.conns.length===0)return;
+  netSend({type:'state',state:_buildStateSnapshot(extra)});
 }
 
 // Remote action handlers (host only)
@@ -4262,6 +4383,7 @@ function startOnlineGame(){
   bgmToGame();
   numPlayers=NET.conns.length+1;
   NET.online=true;
+  NET._lastActionId=0;
   if(!NET.isRankMatch){
     G_ABILITY_MODE=NET.roomAbilityMode;
   }
@@ -4275,6 +4397,8 @@ function startOnlineGame(){
      phase:'idle',firstRound:true,log:[],savedScores:null,_dealerWon:false};
   startRound();
   broadcastState();
+  // ホストの場合は定期Syncを開始
+  if(NET.isHost) startSyncBroadcast();
 }
 
 // ── Solo mode ─────────────────────────────────────────────────
@@ -5806,7 +5930,7 @@ function backToLobby(){
   if(NET.isHost && NET.roomCode) fetch('/room/'+NET.roomCode, {method:'DELETE'}).catch(()=>{});
   if(NET.peer){try{NET.peer.destroy();}catch(e){} NET.peer=null;NET.conn=null;NET.conns=[];NET.online=false;}
   NET.roomCode=null; NET.isHost=false; NET.isRankMatch=false;
-  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET._memberDataCache=[];
+  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
   RANK.matchId=null; RANK.connectedGuests=0;
   setOnlineStatus('');
   document.getElementById('roomCodeBox').style.display='none';
