@@ -3194,15 +3194,24 @@ function _updateSearchTimer(){
 async function _pollRankStatus(){
   _updateSearchTimer();
   let res;
-  try { res = await fetch('/rank/status'); } catch(e){ return; }
-  if(!res.ok) return;
+  try { res = await fetch('/rank/status'); } catch(e){ 
+    console.error('ポーリングエラー:', e);
+    return; 
+  }
+  if(!res.ok) {
+    console.error('ポーリングステータスエラー:', res.status);
+    return;
+  }
   const data = await res.json().catch(()=>({}));
+  console.log('ランクステータス:', data);
+  
   // キュー人数を表示
   if(!data.matched && data.queueSize!=null){
     const qel=document.getElementById('rankQueueCount');
     if(qel) qel.textContent=`現在 ${data.queueSize}/3 人待機中`;
   }
   if(data.matched){
+    console.log('ゲスト側もマッチ検知');
     if(RANK.polling){clearInterval(RANK.polling);RANK.polling=null;}
     _onRankMatched(data);
   }
@@ -3215,10 +3224,10 @@ function _onRankMatched(data){
   if(wp) wp.style.display='none';
   if(sp) sp.style.display='none';
   if(mp) mp.style.display='';
-  // 対戦相手名を表示
+  // 対戦相手名は非表示（名前を非表示にする要件）
   const oppEl=document.getElementById('rankOpponentNames');
-  if(oppEl && data.opponents){
-    oppEl.innerHTML=data.opponents.map(o=>`対戦相手: ${o.name} (Rt.${o.rating})`).join('<br>');
+  if(oppEl){
+    oppEl.innerHTML=''; // 名前を表示しない
   }
   setRankStatus('');
 

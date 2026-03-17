@@ -255,20 +255,34 @@ app.get("/rank/my-rating", requireAuth, async (req, res) => {
 app.post("/rank/join", requireAuth, (req, res) => {
   try {
     const { peerId } = req.body;
+    const googleId = req.user.id;
+    const name = req.user.name || "プレイヤー";
+    
     if (!peerId) {
       return res.status(400).json({ error: "peerId は必須です" });
+    }
+
+    // すでにキューに入っている場合はスキップ
+    const alreadyQueued = rankQueue.find(q => q.googleId === googleId);
+    if (alreadyQueued) {
+      // 既に参加済みの場合、キューサイズを返す
+      return res.json({
+        matched: false,
+        queueSize: rankQueue.length,
+        alreadyQueued: true,
+      });
     }
 
     // キューに追加
     rankQueue.push({
       peerId,
-      googleId: req.user.id,
-      name: req.user.name || "プレイヤー",
+      googleId,
+      name,
       rating: 1500, // 仮のレート値
       joinedAt: Date.now(),
     });
 
-    console.log(`ランクキュー参加: ${req.user.name} (${peerId}), キュー人数: ${rankQueue.length}`);
+    console.log(`ランクキュー参加: ${name} (${peerId}), キュー人数: ${rankQueue.length}`);
 
     // 3人揃ったかチェック
     if (rankQueue.length >= 3) {
@@ -278,31 +292,50 @@ app.post("/rank/join", requireAuth, (req, res) => {
       // マッチ情報を保存
       rankMatches.set(matchId, {
         hostPeerId: matched[0].peerId,
+        hostGoogleId: matched[0].googleId,
         hostIdx: 0,
-        members: matched.map(m => ({
+        members: matched.map((m, idx) => ({
           peerId: m.peerId,
           googleId: m.googleId,
           name: m.name,
           rating: m.rating,
+          idx: idx,
         })),
         createdAt: Date.now(),
       });
 
       console.log(`ランクマッチ成立: ${matchId}`, matched.map(m => m.name));
 
-      // マッチ成立を返す
-      return res.json({
-        matched: true,
-        matchId,
-        isHost: true,
-        myIdx: 0,
-        hostPeerId: matched[0].peerId,
-        myRating: matched[0].rating,
-        opponents: [
-          { name: matched[1].name, rating: matched[1].rating },
-          { name: matched[2].name, rating: matched[2].rating },
-        ],
-      });
+      // ホスト（最初の人）にはisHost=trueで返す
+      if (matched[0].googleId === googleId) {
+        return res.json({
+          matched: true,
+          matchId,
+          isHost: true,
+          myIdx: 0,
+          hostPeerId: matched[0].peerId,
+          myRating: matched[0].rating,
+          opponents: [
+            { name: matched[1].name, rating: matched[1].rating },
+            { name: matched[2].name, rating: matched[2].rating },
+          ],
+        });
+      } else {
+        // ゲスト（2番目、3番目の人）にもマッチ情報を返す
+        const myIdx = matched.findIndex(m => m.googleId === googleId);
+        return res.json({
+          matched: true,
+          matchId,
+          isHost: false,
+          myIdx: myIdx,
+          hostPeerId: matched[0].peerId,
+          myRating: matched[myIdx].rating,
+          opponents: matched.filter((_, i) => i !== myIdx).map(m => ({
+            name: m.name,
+            rating: m.rating,
+          })),
+        });
+      }
     }
 
     // 3人未満: マッチ待機
@@ -318,10 +351,41 @@ app.post("/rank/join", requireAuth, (req, res) => {
 
 // ランクマッチ状態をポーリング
 app.get("/rank/status", requireAuth, (req, res) => {
-  res.json({
-    matched: false,
-    queueSize: rankQueue.length,
-  });
+  try {
+    const googleId = req.user.id;
+    
+    // このユーザーがマッチしているか確認
+    for (const [matchId, match] of rankMatches.entries()) {
+      const member = match.members.find(m => m.googleId === googleId);
+      if (member) {
+        // マッチ成立！
+        return res.json({
+          matched: true,
+          matchId,
+          isHost: match.hostGoogleId === googleId,
+          myIdx: member.idx,
+          hostPeerId: match.hostPeerId,
+          myRating: member.rating,
+          opponents: match.members.filter(m => m.googleId !== googleId).map(m => ({
+            name: m.name,
+            rating: m.rating,
+          })),
+        });
+      }
+    }
+    
+    // マッチしていない場合はキューサイズを返す
+    res.json({
+      matched: false,
+      queueSize: rankQueue.length,
+    });
+  } catch (err) {
+    console.error("/rank/status エラー:", err.message);
+    res.json({
+      matched: false,
+      queueSize: rankQueue.length,
+    });
+  }
 });
 
 // ランクマッチキューから削除
