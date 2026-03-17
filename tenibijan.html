@@ -3346,20 +3346,22 @@ function _rankGuestConnect(hostPeerId, attempt){
 function promoteGuestToHost(){
   if(NET.isHost) return; // 既にホストの場合は何もしない
   
+  // 元のゲストのインデックスを保存
+  const formerGuestIdx = NET.myIdx;
+  
   // ホストの役割を引き継ぐ
   NET.isHost = true;
-  NET.myIdx = 0;
+  // 重要：NET.myIdxは変更しない。自分はゲスト時のインデックスのまま
+  // NET.myIdx は変更しない
   NET.online = true;
   
   // 切断したホストをプレイヤー情報から離席状態に設定
   // （ゲーム中の場合のみ）
   if(G && G.players && G.players.length > 0){
-    // 元のホスト（インデックス0の他のプレイヤー）を特定
-    // 昇格前のゲストのインデックスを記録
-    const formerHostIdx = 0;
-    if(G.players[formerHostIdx]){
-      G.players[formerHostIdx].isDisconnected = true;
-      addLog(`🔄 ${G.players[formerHostIdx].name}が切断しました。ホストが昇格しました。`,'log-new');
+    // インデックス0（元のホスト）を離席状態に
+    if(G.players[0]){
+      G.players[0].isDisconnected = true;
+      addLog(`🔄 ${G.players[0].name}が切断しました。ホストが昇格しました。`,'log-new');
     }
   }
   
@@ -3377,7 +3379,6 @@ function promoteGuestToHost(){
       if(NET.conns.length >= 2){ conn.close(); return; }
       const guestIdx = NET.conns.length + 1;
       NET.conns.push(conn);
-      if(guestIdx===1) NET.conn = conn;
       conn.on('data', msg=>onNetData(msg, guestIdx));
       conn.on('close', ()=>{ 
         // 接続が切れたゲストをリストから削除
@@ -3404,8 +3405,17 @@ function promoteGuestToHost(){
     });
   }
   
+  // 現在のゲーム状態をすべての接続に送信
+  if(NET.online && G){
+    setTimeout(()=>{
+      broadcastState();
+      renderAll();
+    }, 300);
+  } else {
+    renderAll();
+  }
+  
   addLog('✅ ホスト昇格完了。ゲーム続行します。','log-new');
-  renderAll();
 }
 
 // ── Room creation (Host) ─────────────────────────────────────
