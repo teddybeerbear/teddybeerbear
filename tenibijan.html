@@ -3264,12 +3264,13 @@ function _onRankMatched(data){
           RANK._gameStartFired = true;
           // 2人揃ったらゲームスタート（名前受信のため少し待つ）
           setTimeout(()=>{
-            // メンバー情報を集める
+            // メンバー情報を集める（ホストはNET.guestIconIdsを使う）
             const membersInfo = [
               {name: PROFILE.name||'あなた', iconId: PROFILE.iconId||'', ability: PROFILE.ability||''},
-              RANK.opponents[0] || {name: '', iconId: '', ability: ''},
-              RANK.opponents[1] || {name: '', iconId: '', ability: ''},
+              {name: NET.guestNames[0]||'ゲスト1', iconId: NET.guestIconIds[0]||'', ability: NET.guestAbilities[0]||''},
+              {name: NET.guestNames[1]||'ゲスト2', iconId: NET.guestIconIds[1]||'', ability: NET.guestAbilities[1]||''},
             ];
+            console.log('ホストからgameStart送信:', membersInfo);
             NET.conns.forEach((c)=>{
               if(c&&c.open) c.send({type:'gameStart', totalPlayers:3, abilityMode:true, timeMode:true, membersInfo});
             });
@@ -3626,13 +3627,26 @@ function onNetData(msg, senderIdx){
       numPlayers=msg.totalPlayers;
       G_ABILITY_MODE=msg.abilityMode;
       if(msg.timeMode) G_TIME_MODE=true;
+      
+      console.log('gameStart受信:', {myIdx: NET.myIdx, isHost: NET.isHost, membersInfo: msg.membersInfo});
+      
       // ゲスト側: メンバー情報からアイコンIDを取得
       if(msg.membersInfo && Array.isArray(msg.membersInfo)){
-        NET.guestNames = [msg.membersInfo[0]?.name||'', msg.membersInfo[1]?.name||'', msg.membersInfo[2]?.name||''];
-        NET.guestIconIds = [msg.membersInfo[0]?.iconId||'', msg.membersInfo[1]?.iconId||'', msg.membersInfo[2]?.iconId||''];
-        NET.guestAbilities = [msg.membersInfo[0]?.ability||'', msg.membersInfo[1]?.ability||'', msg.membersInfo[2]?.ability||''];
-        console.log('gameStartからメンバー情報を設定:', {guestNames: NET.guestNames, guestIconIds: NET.guestIconIds, guestAbilities: NET.guestAbilities});
+        // membersInfo: [player0, player1, player2]
+        // ゲスト側がこれを受け取ったら、自分のインデックス以外をNET.guestIconIdsに設定
+        if(!NET.isHost){
+          // ゲスト側: 全メンバーの情報を保持
+          for(let i = 0; i < msg.membersInfo.length; i++){
+            if(i === NET.myIdx) continue; // 自分は skip
+            const guestArrayIdx = i < NET.myIdx ? i : i - 1;
+            NET.guestIconIds[guestArrayIdx] = msg.membersInfo[i]?.iconId || '';
+            NET.guestNames[guestArrayIdx] = msg.membersInfo[i]?.name || '';
+            NET.guestAbilities[guestArrayIdx] = msg.membersInfo[i]?.ability || '';
+          }
+          console.log('ゲスト側メンバー情報を設定:', {myIdx: NET.myIdx, guestIconIds: NET.guestIconIds, guestNames: NET.guestNames});
+        }
       }
+      
       NET.online=true;
       bgmToGame();
       hideRoomLobby();
@@ -4040,9 +4054,29 @@ function makePlayer(id,dealer){
   const pname=NET.online?onlineNames[id]:soloNames[id];
   const cpuAbilities=['mine','light','yami','haku','sanctuary','pinzu','steal'];
   const pAbility = !G_ABILITY_MODE ? '' : (id===NET.myIdx) ? (PROFILE.ability||'') : (NET.isHost && NET.guestAbilities[id-1]!==undefined) ? NET.guestAbilities[id-1] : cpuAbilities[Math.floor(Math.random()*cpuAbilities.length)];
-  // ゲストのアイコンIDを取得
-  const pIconId = (id===NET.myIdx) ? (PROFILE.iconId||'') : (NET.isHost ? (NET.guestIconIds[id-1]||'') : '');
-  console.log(`makePlayer: id=${id}, myIdx=${NET.myIdx}, isHost=${NET.isHost}, pIconId=${pIconId}, guestIconIds=`, NET.guestIconIds);
+  
+  // アイコンIDの取得ロジック
+  let pIconId = '';
+  if(id === NET.myIdx){
+    // 自分のアイコン
+    pIconId = PROFILE.iconId || '';
+  } else {
+    // 他人のアイコン（ホスト・ゲスト共通）
+    // ホストの場合: id=0以外なら NET.guestIconIds[id-1]
+    // ゲストの場合: NET.guestIconIds[適切なインデックス]
+    if(NET.isHost && id > 0){
+      pIconId = NET.guestIconIds[id-1] || '';
+    } else if(!NET.isHost){
+      // ゲスト側: id と NET.myIdx の関係でインデックスを計算
+      const adjustedId = id < NET.myIdx ? id : id - 1;
+      if(adjustedId >= 0 && adjustedId < 2){
+        pIconId = NET.guestIconIds[adjustedId] || '';
+      }
+    }
+  }
+  
+  console.log(`makePlayer: id=${id}, myIdx=${NET.myIdx}, isHost=${NET.isHost}, pIconId="${pIconId}", guestIconIds=`, NET.guestIconIds);
+  
   return{id,name:pname,iconId:pIconId,
     wind:WINDS[id],hand:[],melds:[],discards:[],kitaTiles:[],kitaCount:0,
     score:0,isDealer:dealer,riichi:false,doubleRiichi:false,openRiichi:false,
