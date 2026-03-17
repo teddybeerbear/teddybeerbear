@@ -149,7 +149,7 @@ app.get("/api/profile", requireAuth, async (req, res) => {
         [uid, req.user.name, req.user.email]
       );
       return res.json({
-        coins: 10000,
+        coins: 0,
         abilities: [],
         totalPulls: 0,
         gachaIcons: [],
@@ -196,7 +196,7 @@ app.post("/api/profile", requireAuth, async (req, res) => {
         uid,
         name || req.user.name,
         req.user.email,
-        coins ?? 10000,
+        coins ?? 0,
         JSON.stringify(abilities ?? []),
         totalPulls ?? 0,
         JSON.stringify(gachaIcons ?? []),
