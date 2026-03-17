@@ -3435,9 +3435,8 @@ function _doPromoteToHost(disconnectedPidx){
 
   setTimeout(()=>{
     renderAll();
-    _restartGameLoopAsHost(disconnectedPidx);
-    broadcastState();
-  }, 300);
+    resumeGameAfterHostLost(disconnectedPidx);
+  }, 100);
 
   addLog('✅ ホスト昇格完了。ゲーム続行します。','log-new');
 }
@@ -3725,83 +3724,61 @@ function _handleGuestDisconnect(conn, guestIdx){
   const pidx = (conn._playerIdx !== undefined) ? conn._playerIdx : guestIdx;
   if(G && G.players && G.players[pidx]){
     addLog(`🔄 ${G.players[pidx].name}が切断しました。離席状態にします。`,'log-new');
-    renderAll();
-    _restartGameLoopAsHost(pidx);
-    broadcastState();
+    resumeGameAfterHostLost(pidx);
   }
 }
 
-// ホスト昇格後にゲームループを全フェーズ・全プレイヤー対応で再起動する
-function _restartGameLoopAsHost(disconnectedPidx){
+function resumeGameAfterHostLost(disconnectedPidx){
   if(!G || !G.players) return;
   if(['end','win','idle'].includes(G.phase)) return;
 
-  // 切断者を必ず離席状態に設定
+  // 切断者を離席状態に設定
   if(G.players[disconnectedPidx]){
     G.players[disconnectedPidx].isDisconnected = true;
   }
 
   const cur = G.current;
-  const phase = G.phase;
 
-  // ── pending_pon/ron: 切断者が待機中なら自動スキップ ──────
-  if((phase==='pending_pon'||phase==='pending_ron') && pendingAction){
-    if(pendingAction.target === disconnectedPidx){
+  // draw_wait は cpuAction が処理できないので draw に戻す
+  if(G.phase === 'draw_wait') G.phase = 'draw';
+
+  // pending_ron/pon: 切断者が待機中のみスキップ、それ以外はそのまま継続
+  if(G.phase === 'pending_ron' || G.phase === 'pending_pon'){
+    if(pendingAction && pendingAction.target === disconnectedPidx){
       const pa = pendingAction;
       pendingAction = null;
-      nextTurn((pa.from+1)%numPlayers);
+      nextTurn((pa.from + 1) % numPlayers);
       broadcastState();
-      return;
-    }
-    // 切断者以外の待機なら、そのまま（自分の番か他ゲストの番）
-    if(pendingAction.target === NET.myIdx){
-      renderAll(); // UI を見せる（自分が判断できる）
-    } else if(isOnlineGuestIdx(pendingAction.target)){
-      broadcastState(); // 他ゲストに任せる
     } else {
-      // CPU が待機中 → CPU代行
-      const pa = pendingAction;
-      if(cpuDecideRon(cur, pa.tile)){ handleRon(cur, pa.tile, pa.from); }
-      else if(cpuDecidePon(cur, pa.tile)){ handlePon(cur, pa.tile, pa.from); }
-      else {
-        pendingAction = null;
-        nextTurn((pa.from+1)%numPlayers);
-      }
+      // 自分または他ゲストが待機中 → renderAll/broadcastState で UI を出す
+      renderAll();
       broadcastState();
     }
     return;
   }
 
-  // ── 切断者のターン → CPU代行 ──────────────────────────────
-  if(cur === disconnectedPidx){
-    if(phase === 'draw_wait') G.phase = 'draw';
-    setTimeout(cpuAction, 700);
-    return;
-  }
-
-  // ── 自分（新ホスト）のターン → UI を出す ─────────────────
+  // 自分のターン
   if(cur === NET.myIdx){
-    if(phase === 'draw' || phase === 'draw_wait'){
-      if(G.deck.length===0){ handleExhausted(); return; }
+    if(G.phase === 'draw'){
+      if(G.deck.length === 0){ handleExhausted(); return; }
       G.phase = 'draw_wait';
       timerOnMyTurn();
-      if(autoDrawEnabled){ renderAll(); broadcastState(); setTimeout(autoPickWall,200); return; }
-      addLog('山牌を選んでクリックしてください','log-new');
-      renderAll(); broadcastState();
+      if(autoDrawEnabled){ renderAll(); broadcastState(); setTimeout(autoPickWall, 200); return; }
+      addLog('山牌を選んでクリックしてください', 'log-new');
     }
-    // discard フェーズは renderAll() で捨て牌UIが出るのでそのまま
+    renderAll();
+    broadcastState();
     return;
   }
 
-  // ── 他のオンラインゲストのターン → broadcastState で渡す ─
+  // 他のオンラインゲストのターン
   if(isOnlineGuestIdx(cur)){
     broadcastState();
     return;
   }
 
-  // ── CPU のターン → cpuAction 呼び出し ────────────────────
-  if(phase === 'draw_wait') G.phase = 'draw';
-  setTimeout(cpuAction, 700);
+  // CPU（切断者含む）のターン
+  setTimeout(cpuAction, 500);
 }
 
 // ── Send/receive ──────────────────────────────────────────────
