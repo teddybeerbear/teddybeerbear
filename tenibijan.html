@@ -3636,12 +3636,15 @@ function onNetData(msg, senderIdx){
         // ゲスト側がこれを受け取ったら、自分のインデックス以外をNET.guestIconIdsに設定
         if(!NET.isHost){
           // ゲスト側: 全メンバーの情報を保持
+          // NET.guestIconIds/Names/Abilities は「自分以外」を順番に格納
+          // 例: myIdx=1 なら [id=0のデータ, id=2のデータ]
+          let guestSlot = 0;
           for(let i = 0; i < msg.membersInfo.length; i++){
             if(i === NET.myIdx) continue; // 自分は skip
-            const guestArrayIdx = i < NET.myIdx ? i : i - 1;
-            NET.guestIconIds[guestArrayIdx] = msg.membersInfo[i]?.iconId || '';
-            NET.guestNames[guestArrayIdx] = msg.membersInfo[i]?.name || '';
-            NET.guestAbilities[guestArrayIdx] = msg.membersInfo[i]?.ability || '';
+            NET.guestIconIds[guestSlot] = msg.membersInfo[i]?.iconId || '';
+            NET.guestNames[guestSlot] = msg.membersInfo[i]?.name || '';
+            NET.guestAbilities[guestSlot] = msg.membersInfo[i]?.ability || '';
+            guestSlot++;
           }
           console.log('ゲスト側メンバー情報を設定:', {myIdx: NET.myIdx, guestIconIds: NET.guestIconIds, guestNames: NET.guestNames});
         }
@@ -4067,10 +4070,13 @@ function makePlayer(id,dealer){
     if(NET.isHost && id > 0){
       pIconId = NET.guestIconIds[id-1] || '';
     } else if(!NET.isHost){
-      // ゲスト側: id と NET.myIdx の関係でインデックスを計算
-      const adjustedId = id < NET.myIdx ? id : id - 1;
-      if(adjustedId >= 0 && adjustedId < 2){
-        pIconId = NET.guestIconIds[adjustedId] || '';
+      // ゲスト側: guestIconIds は「自分以外を順に」格納している
+      // id=0,1,2 のうち自分(NET.myIdx)を除いた順番
+      let slot = 0;
+      for(let i = 0; i < 3; i++){
+        if(i === NET.myIdx) continue;
+        if(i === id){ pIconId = NET.guestIconIds[slot] || ''; break; }
+        slot++;
       }
     }
   }
@@ -6541,7 +6547,7 @@ function renderTable(){
       </div>
       ${riichiStick}
       <div class="p-badges">${badges}${afkBadge}</div>
-      ${pidx!==NET.myIdx && p.iconId ? `<img src="${gachaIconUrl(p.iconId)}" alt="" style="width:24px;height:24px;border-radius:3px;" onerror="console.error('アイコン画像読み込みエラー:', '${p.iconId}');">` : `<!-- アイコンなし: pidx=${pidx}, myIdx=${NET.myIdx}, iconId=${p.iconId} -->`}
+      ${p.iconId ? `<img src="${gachaIconUrl(p.iconId)}" alt="" style="width:24px;height:24px;border-radius:3px;" onerror="console.error('アイコン画像読み込みエラー:', '${p.iconId}');">` : `<!-- アイコンなし: pidx=${pidx}, myIdx=${NET.myIdx}, iconId=${p.iconId} -->`}
       <span class="p-name">${p.name}</span>
       <span class="p-score">${p.score.toLocaleString()}点</span>
     `;
