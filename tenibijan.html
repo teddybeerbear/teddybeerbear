@@ -3344,52 +3344,53 @@ function _rankGuestConnect(hostPeerId, attempt){
 
 // ゲストがホストに昇格する関数
 function promoteGuestToHost(){
-  if(NET.isHost) return; // 既にホストの場合は何もしない
+  if(NET.isHost) return;
+  // 競合防止: 複数ゲストが同時に呼んでも1回だけ実行
+  if(NET._promotingToHost) return;
+  NET._promotingToHost = true;
 
-  // Bug3修正: 複数ゲストいる場合、myIdx=1のゲストだけがホスト昇格し
-  // myIdx=2以上のゲストは新ホスト(元guest1)に再接続する
   if(NET.myIdx > 1){
-    // 新ホストのPeerIDを知っている場合は再接続を試みる
-    const newHostPeerId = NET.guestPeerIds[0]; // idx=1のゲストのPeerID
+    const newHostPeerId = NET.guestPeerIds[0];
     if(newHostPeerId){
       addLog('🔄 新しいホストに再接続中…','log-new');
-      NET.conn = null;
+      if(NET.conn){ try{ NET.conn.close(); }catch(e){} NET.conn=null; }
+      NET.online = false; // 再接続中は一時的にfalseにする
       setTimeout(()=>_reconnectToNewHost(newHostPeerId), 800);
     } else {
-      // PeerIDが不明な場合は自分もホスト昇格する（最終手段）
       addLog('⚠️ 新ホストPeerID不明のため自分がホスト昇格します','log-new');
-      _doPromoteToHost(0); // 元ホスト(idx=0)が切断
+      _doPromoteToHost(0);
     }
     return;
   }
 
   // myIdx=1のゲストがホスト昇格
-  _doPromoteToHost(0); // 元ホスト(idx=0)が切断
+  _doPromoteToHost(0);
 }
 
 // 新ホスト(元guest1)への再接続
 function _reconnectToNewHost(newHostPeerId){
-  if(NET.isHost || NET.online) return;
+  // Bug修正: NET.onlineのガードを除去（ゲーム中の再接続を許可）
+  if(NET.isHost) return;
   if(NET.conn){ try{ NET.conn.close(); }catch(e){} NET.conn=null; }
-  const myOriginalIdx = NET.myIdx; // 自分の元のプレイヤーインデックスを保持
+  const myOriginalIdx = NET.myIdx;
   const conn = NET.peer.connect(newHostPeerId, {reliable:true});
   NET.conn = conn;
   conn.on('open', ()=>{
     NET.online = true;
-    // 新ホストに元のインデックスを通知してから myName を送る
+    NET._promotingToHost = false;
     conn.send({type:'reconnect', originalIdx: myOriginalIdx});
     conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',peerId:NET.peer?.id||''});
     addLog('✅ 新ホストに再接続しました','log-new');
   });
   conn.on('data', msg=>onNetData(msg, null));
-  conn.on('close', ()=>{ if(NET.online && !NET.isHost) promoteGuestToHost(); });
+  conn.on('close', ()=>{ if(!NET.isHost){ NET._promotingToHost=false; promoteGuestToHost(); } });
   conn.on('error', ()=>{
-    // 再接続失敗した場合は自分がホスト昇格
     addLog('⚠️ 再接続失敗。自分がホスト昇格します','log-new');
+    NET._promotingToHost = false;
     _doPromoteToHost(0);
   });
   setTimeout(()=>{
-    if(!NET.online && !NET.isHost) _doPromoteToHost(0);
+    if(!NET.online && !NET.isHost){ NET._promotingToHost=false; _doPromoteToHost(0); }
   }, 5000);
 }
 
@@ -3399,28 +3400,24 @@ function _doPromoteToHost(disconnectedPidx){
 
   NET.isHost = true;
   NET.online = true;
+  NET._promotingToHost = false;
 
-  // 切断したホストを離席状態に設定
   if(G && G.players && G.players[disconnectedPidx]){
     G.players[disconnectedPidx].isDisconnected = true;
     addLog(`🔄 ${G.players[disconnectedPidx].name}が切断しました。ホスト昇格しました。`,'log-new');
   }
 
-  // 古いホスト接続をクローズ
   if(NET.conn){ try{ NET.conn.close(); }catch(e){} NET.conn=null; }
   NET.conns = [];
 
-  // ホストとしてのリスナーを設定
   if(NET.peer){
     NET.peer.off('connection');
     NET.peer.on('connection', conn=>{
       if(NET.conns.length >= 2){ conn.close(); return; }
-      // Bug3修正: 既存プレイヤーの再接続か新規かを判断
       NET.conns.push(conn);
-      const assignedIdx = NET.conns.length; // 暫定インデックス
+      const assignedIdx = NET.conns.length;
       conn._playerIdx = assignedIdx;
       conn.on('data', msg=>{
-        // 再接続時に myName で _playerIdx を確定する
         if(msg.type==='reconnect' && msg.originalIdx !== undefined){
           conn._playerIdx = msg.originalIdx;
         }
@@ -3436,15 +3433,24 @@ function _doPromoteToHost(disconnectedPidx){
     });
   }
 
-  // Bug2修正: 昇格後、切断者のターンならCPUを代行起動
   setTimeout(()=>{
     broadcastState();
     renderAll();
     _triggerCpuForDisconnected(disconnectedPidx);
+    // 自分のターンで draw フェーズのまま凍結していたら draw_wait に移行
+    if(G && G.phase==='draw' && G.current===NET.myIdx){
+      if(G.deck.length===0){ handleExhausted(); return; }
+      G.phase='draw_wait';
+      timerOnMyTurn();
+      if(autoDrawEnabled){ renderAll(); broadcastState(); setTimeout(autoPickWall,200); return; }
+      addLog('山牌を選んでクリックしてください','log-new');
+      renderAll(); broadcastState();
+    }
   }, 300);
 
   addLog('✅ ホスト昇格完了。ゲーム続行します。','log-new');
 }
+
 
 // ── Room creation (Host) ─────────────────────────────────────
 function setRoomAbilityMode(on){
@@ -3742,23 +3748,29 @@ function _triggerCpuForDisconnected(pidx){
   if(['end','win','idle'].includes(G.phase)) return;
   if(G.current === pidx){
     setTimeout(cpuAction, 700);
-  } else if((G.phase==='pending_pon'||G.phase==='pending_ron') && pendingAction){
-    // ポン/ロン待ちで切断者が待機しているなら自動スキップ
-    // ホスト視点では humanSkipRon/Pon を直接呼べる（オンライン送信はしない）
+  } else if(G.phase==='pending_ron' && pendingAction){
+    // 切断者がロン待ちを保持している場合のみスキップ
+    // pendingAction.target === pidx or pidx === NET.myIdx(は切断しない) のみ対象
     const pa = pendingAction;
-    setTimeout(()=>{
-      if(!G.players[pidx]?.isDisconnected) return;
-      if(!pendingAction) return;
-      if(G.phase==='pending_ron'){
+    if(pa.target === pidx){
+      setTimeout(()=>{
+        if(!pendingAction) return;
         pendingAction=null;
         nextTurn((pa.from+1)%numPlayers);
         broadcastState();
-      } else if(G.phase==='pending_pon'){
+      }, 600);
+    }
+  } else if(G.phase==='pending_pon' && pendingAction){
+    // 切断者がポン待ちを保持している場合のみスキップ
+    const pa = pendingAction;
+    if(pa.target === pidx){
+      setTimeout(()=>{
+        if(!pendingAction) return;
         pendingAction=null;
         nextTurn((pa.from+1)%numPlayers);
         broadcastState();
-      }
-    }, 600);
+      }, 600);
+    }
   }
 }
 
