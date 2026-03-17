@@ -3496,13 +3496,14 @@ function _doPromoteToHost(disconnectedPidx){
   NET.online = true;
   NET._promotingToHost = false;
 
+  // ★古い接続をクリア（ゲスト時代の接続が残ると isOnlineGuestIdx が誤判定する）
+  NET.conn = null;
+  NET.conns = NET.conns.filter(c => c && c.open);
+
   if(G && G.players && G.players[disconnectedPidx]){
     G.players[disconnectedPidx].isDisconnected = true;
     addLog(`🔄 ${G.players[disconnectedPidx].name}が切断しました。ホスト昇格しました。`,'log-new');
   }
-
-  if(NET.conn){ try{ NET.conn.close(); }catch(e){} NET.conn=null; }
-  NET.conns = [];
 
   if(NET.peer){
     NET.peer.off('connection');
@@ -3511,13 +3512,11 @@ function _doPromoteToHost(disconnectedPidx){
       NET.conns.push(conn);
       const assignedIdx = NET.conns.length;
       conn._playerIdx = assignedIdx;
-      // peerRegistry に登録
       if(conn.peer) peerRegistryAdd(conn.peer, assignedIdx, conn);
       conn.on('open', ()=>{ if(conn.peer) peerRegistryAdd(conn.peer, conn._playerIdx, conn); });
       conn.on('data', msg=>{
         if(msg.type==='reconnect' && msg.originalIdx !== undefined){
           conn._playerIdx = msg.originalIdx;
-          // peerRegistry の playerIdx も更新
           const pr = NET.peerRegistry.find(p=>p.conn===conn);
           if(pr) pr.playerIdx = msg.originalIdx;
         }
@@ -3536,12 +3535,12 @@ function _doPromoteToHost(disconnectedPidx){
     });
   }
 
-  // 定期Syncを開始（新ホストとして）
   startSyncBroadcast();
 
+  // ★ nextTurn で再起動（resumeGameAfterHostLost より確実）
   setTimeout(()=>{
     renderAll();
-    resumeGameAfterHostLost(disconnectedPidx);
+    nextTurn(G.current);
   }, 100);
 
   addLog('✅ ホスト昇格完了。ゲーム続行します。','log-new');
@@ -3882,7 +3881,7 @@ function resumeGameAfterHostLost(disconnectedPidx){
   }
 
   // 他のオンラインゲストのターン
-  if(isOnlineGuestIdx(cur)){
+  if(isOnlineGuestIdx(cur) && !amIHost()){
     broadcastState();
     return;
   }
@@ -4860,7 +4859,7 @@ function nextTurn(pidx){
   // Online: ホスト（amIHost()）だけがCPU/ドロー進行。ゲストはstate pushを待つ
   if(NET.online&&!amIHost()){broadcastState();return;}
   if(NET.online&&amIHost()){
-    if(isOnlineGuestIdx(pidx)){/* guest's turn – wait for guest action */broadcastState();return;}
+    if(isOnlineGuestIdx(pidx) && !amIHost()){/* guest's turn – wait for guest action */broadcastState();return;}
     if(pidx!==NET.myIdx){setTimeout(cpuAction,700);return;} // CPU's turn
     // host's own turn falls through
   }
