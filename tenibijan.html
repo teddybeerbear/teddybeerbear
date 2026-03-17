@@ -3109,7 +3109,7 @@ function onPeerDisconnected(peerId){
 
 // ヘルパー: 指定インデックスがオンラインゲストかどうか（ホスト視点で使用）
 function isOnlineGuestIdx(pidx){
-  if(!NET.online || !NET.isHost) return false;
+  if(!NET.online || !amIHost()) return false;
   // 切断済み（離席）プレイヤーはCPU扱いにするため除外
   if(G && G.players && G.players[pidx] && G.players[pidx].isDisconnected) return false;
   // conn._playerIdx タグで判定（昇格後再接続対応）
@@ -3814,7 +3814,7 @@ function setupConn(conn, guestIdx){
     if(conn.peer && NET.online) onPeerDisconnected(conn.peer);
 
     if(NET.online){
-      if(NET.isHost){
+      if(amIHost()){
         _handleGuestDisconnect(conn, guestIdx);
       } else {
         promoteGuestToHost();
@@ -3893,7 +3893,7 @@ function resumeGameAfterHostLost(disconnectedPidx){
 
 // ── Send/receive ──────────────────────────────────────────────
 function netSend(msg){
-  if(NET.isHost){
+  if(amIHost()){
     // ホスト: 全ゲストに送信
     NET.conns.forEach(c=>{if(c&&c.open)c.send(msg);});
   } else {
@@ -3903,7 +3903,7 @@ function netSend(msg){
 }
 
 function onNetData(msg, senderIdx){
-  if(NET.isHost){
+  if(amIHost()){
     handleGuestAction(msg, senderIdx);
   } else {
     if(msg.type==='joined'){
@@ -4015,12 +4015,12 @@ function handleGuestAction(msg, senderIdx){
     case 'skipRon':   remoteSkipRon(msg.from); break;
     case 'pon':       handlePon(msg.pidx, msg.tile, msg.from); broadcastState(); break;
     case 'skipPon':   remoteSkipPon(msg.from); break;
-    case 'kakan':     if(NET.isHost){handleKakan(msg.pidx,msg.handIdx);broadcastState();} break;
-    case 'ankan':     if(NET.isHost){handleAnkan(msg.pidx,msg.tileKey);broadcastState();} break;
-    case 'steal':     if(NET.isHost){_doSteal(msg.myIdx,msg.fromPidx,msg.discardIdx);} break;
-    case 'haku':      if(NET.isHost){remoteHaku(msg.pidx,msg.tidx);} break;
+    case 'kakan':     if(amIHost()){handleKakan(msg.pidx,msg.handIdx);broadcastState();} break;
+    case 'ankan':     if(amIHost()){handleAnkan(msg.pidx,msg.tileKey);broadcastState();} break;
+    case 'steal':     if(amIHost()){_doSteal(msg.myIdx,msg.fromPidx,msg.discardIdx);} break;
+    case 'haku':      if(amIHost()){remoteHaku(msg.pidx,msg.tidx);} break;
     case 'lightRevealWall':
-      if(NET.isHost){
+      if(amIHost()){
         const si=msg.slotIdx;
         if(G.deckSlots&&G.deckSlots[si]!==null){
           if(!G.lightRevealedSlots) G.lightRevealedSlots={};
@@ -4038,7 +4038,7 @@ function handleGuestAction(msg, senderIdx){
       }
       break;
     case 'lightRevealHand':
-      if(NET.isHost){
+      if(amIHost()){
         const p=G.players[msg.pidx];
         if(p&&msg.handIdx>=0&&msg.handIdx<p.hand.length){
           if(!G.lightRevealedHand) G.lightRevealedHand={};
@@ -4056,7 +4056,7 @@ function handleGuestAction(msg, senderIdx){
       }
       break;
     case 'lightRevealDoraCanvas':
-      if(NET.isHost){
+      if(amIHost()){
         const di=msg.di;
         let tile=null,label='';
         if(di<7){const usedR=G.rinshanIdx;if(di>=usedR){tile=G.doraPile[8+di];label='嶺上牌';}}
@@ -4076,7 +4076,7 @@ function handleGuestAction(msg, senderIdx){
       }
       break;
     case 'lightDispelDiscardYami':
-      if(NET.isHost){
+      if(amIHost()){
         const p=G.players[msg.pidx];
         const t=p&&p.discards[msg.discardIdx];
         if(t&&t._yami){
@@ -4091,7 +4091,7 @@ function handleGuestAction(msg, senderIdx){
       }
       break;
     case 'lightDispelHandYami':
-      if(NET.isHost){
+      if(amIHost()){
         const p=G.players[msg.pidx];
         if(p&&p.yamiTileIdx>=0){
           p.yamiTileIdx=-1;
@@ -4105,7 +4105,7 @@ function handleGuestAction(msg, senderIdx){
       }
       break;
     case 'lightRevealMine':
-      if(NET.isHost){
+      if(amIHost()){
         const ui=msg.userIdx??senderIdx;
         if(ui!=null&&G.players[ui]) G.players[ui].abilityUsed=true;
         G.lightMode=false;
@@ -4114,7 +4114,7 @@ function handleGuestAction(msg, senderIdx){
       }
       break;
     case 'plantMine':
-      if(NET.isHost){
+      if(amIHost()){
         const si=msg.slotIdx;
         if(G.deckSlots&&G.deckSlots[si]!==null&&!G.mineSlots.includes(si)){
           G.mineSlots.push(si);
@@ -4129,7 +4129,7 @@ function handleGuestAction(msg, senderIdx){
       }
       break;
     case 'plantMineRinshan':
-      if(NET.isHost){
+      if(amIHost()){
         const ri=msg.ri;
         if(ri>=0&&ri<G.rinshan.length&&!G.mineRinshanIdxs.includes(ri)){
           G.mineRinshanIdxs.push(ri);
@@ -4167,7 +4167,7 @@ function handleGuestAction(msg, senderIdx){
       _broadcastMemberUpdate();
       break;
     case 'penSync':
-      if(NET.isHost && msg.changedKeys){
+      if(amIHost() && msg.changedKeys){
         if(!G.penDrawings) G.penDrawings={};
         for(const k of Object.keys(msg.changedKeys)){
           G.penDrawings[k]=msg.changedKeys[k];
@@ -4178,7 +4178,7 @@ function handleGuestAction(msg, senderIdx){
       }
       break;
     case 'penClear':
-      if(NET.isHost){
+      if(amIHost()){
         G.penDrawings={};
         Object.keys(_penImgCache).forEach(k=>delete _penImgCache[k]);
         renderWall(); renderDoraCanvas();
@@ -4263,7 +4263,7 @@ function _buildStateSnapshot(extra={}){
 }
 
 function broadcastState(extra={}){
-  if(!NET.online||!NET.isHost||NET.conns.length===0)return;
+  if(!NET.online||!amIHost()||NET.conns.length===0)return;
   netSend({type:'state',state:_buildStateSnapshot(extra)});
 }
 
@@ -4398,7 +4398,7 @@ function startOnlineGame(){
   startRound();
   broadcastState();
   // ホストの場合は定期Syncを開始
-  if(NET.isHost) startSyncBroadcast();
+  if(amIHost()) startSyncBroadcast();
 }
 
 // ── Solo mode ─────────────────────────────────────────────────
@@ -4530,7 +4530,7 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; timerSt
   if(G.current===NET.myIdx) timerOnMyTurn();
   if(!NET.online&&G.current!==0)setTimeout(cpuAction,900);
   // オンラインホスト: ゲストの番ならCPUを呼ばない
-  if(NET.online&&NET.isHost&&G.current!==NET.myIdx&&!isOnlineGuestIdx(G.current))setTimeout(cpuAction,900);
+  if(NET.online&&amIHost()&&G.current!==NET.myIdx&&!isOnlineGuestIdx(G.current))setTimeout(cpuAction,900);
 }
 
 // ============================================================
@@ -4730,20 +4730,20 @@ function handleKakan(pidx, handIdx){
   G.phase='discard';
   if(canWin(p.hand)){
     p.isRinshanKaihou=true;
-    if(pidx===NET.myIdx||(NET.online&&NET.isHost&&pidx!==NET.myIdx)){
+    if(pidx===NET.myIdx||(NET.online&&amIHost()&&pidx!==NET.myIdx)){
       setTimeout(()=>handleWin(pidx,rep,true,-1),400);return;
     }
   }
   renderAll();broadcastState();
   // オンラインホスト: ゲストの番ならCPUを呼ばない
   if(!NET.online&&pidx!==0)setTimeout(cpuAction,700);
-  if(NET.online&&NET.isHost&&pidx!==NET.myIdx&&!isOnlineGuestIdx(pidx))setTimeout(cpuAction,700);
+  if(NET.online&&amIHost()&&pidx!==NET.myIdx&&!isOnlineGuestIdx(pidx))setTimeout(cpuAction,700);
 }
 
 function humanKakan(handIdx){
   const myIdx=NET.myIdx;
   if(G.current!==myIdx||G.phase!=='discard')return;
-  if(NET.online&&!NET.isHost){netSend({type:'kakan',pidx:myIdx,handIdx});return;}
+  if(NET.online&&!amIHost()){netSend({type:'kakan',pidx:myIdx,handIdx});return;}
   handleKakan(myIdx,handIdx);
 }
 
@@ -4808,13 +4808,13 @@ function handleAnkan(pidx, tileKey){
   renderAll();broadcastState();
   // オンラインホスト: ゲストの番ならCPUを呼ばない
   if(!NET.online&&pidx!==NET.myIdx)setTimeout(cpuAction,700);
-  if(NET.online&&NET.isHost&&pidx!==NET.myIdx&&!isOnlineGuestIdx(pidx))setTimeout(cpuAction,700);
+  if(NET.online&&amIHost()&&pidx!==NET.myIdx&&!isOnlineGuestIdx(pidx))setTimeout(cpuAction,700);
 }
 
 function humanAnkan(tileKey){
   const myIdx=NET.myIdx;
   if(G.current!==myIdx||G.phase!=='discard')return;
-  if(NET.online&&!NET.isHost){netSend({type:'ankan',pidx:myIdx,tileKey});return;}
+  if(NET.online&&!amIHost()){netSend({type:'ankan',pidx:myIdx,tileKey});return;}
   handleAnkan(myIdx,tileKey);
 }
 
@@ -4852,15 +4852,14 @@ function handlePon(pidx,tile,fromPidx){
   if(pidx===NET.myIdx){ timerOnMyTurn(); }
   // オンラインホスト: ゲストの番ならCPUを呼ばない
   if(!NET.online&&pidx!==0)setTimeout(cpuAction,700);
-  if(NET.online&&NET.isHost&&pidx!==NET.myIdx&&!isOnlineGuestIdx(pidx))setTimeout(cpuAction,700);
+  if(NET.online&&amIHost()&&pidx!==NET.myIdx&&!isOnlineGuestIdx(pidx))setTimeout(cpuAction,700);
 }
 
 function nextTurn(pidx){
   G.current=pidx;G.phase='draw';G.firstRound=false;renderAll();
-  // Online: only host runs CPU/draw logic; guests wait for state push
-  if(NET.online&&!NET.isHost){broadcastState();return;}
-  // Online host: run CPU only for non-human seats
-  if(NET.online&&NET.isHost){
+  // Online: ホスト（amIHost()）だけがCPU/ドロー進行。ゲストはstate pushを待つ
+  if(NET.online&&!amIHost()){broadcastState();return;}
+  if(NET.online&&amIHost()){
     if(isOnlineGuestIdx(pidx)){/* guest's turn – wait for guest action */broadcastState();return;}
     if(pidx!==NET.myIdx){setTimeout(cpuAction,700);return;} // CPU's turn
     // host's own turn falls through
@@ -5221,7 +5220,7 @@ function humanPickWall(slotIdx){
   if(G.phase!=='draw_wait'||G.current!==NET.myIdx)return;
   SFX.draw();
   if(G.deckSlots[slotIdx]===null)return;
-  if(NET.online&&!NET.isHost){
+  if(NET.online&&!amIHost()){
     netSend({type:'wallPick',pidx:NET.myIdx,slotIdx});
     return;
   }
@@ -5362,7 +5361,7 @@ function handleRon(widx,tile,fromidx){
 // CPU AI
 // ============================================================
 function cpuAction(){
-  if(NET.online&&!NET.isHost)return; // guests never run cpu
+  if(NET.online&&!amIHost())return; // guests never run cpu
   const idx=G.current;const p=G.players[idx];
   if(['end','win','idle'].includes(G.phase))return;
   if(G.phase==='draw'){
@@ -5543,7 +5542,7 @@ function humanSelect(idx){
     const t=p.hand[idx];
     if(!t._isHaku){
       // オンライン対戦でゲストの場合はホストへ通知してホスト側で変換する
-      if(NET.online&&!NET.isHost){
+      if(NET.online&&!amIHost()){
         G.hakuSelectMode=false;
         netSend({type:'haku',pidx:NET.myIdx,tidx:idx});
         renderAll();
@@ -5586,7 +5585,7 @@ function humanDiscard(){
   const isYamiDiscard = (p.yamiTileIdx>=0 && p.yamiTileIdx===idx);
   if(isYamiDiscard) p.abilityUsed=true;
   selIdx=-1;
-  if(NET.online&&!NET.isHost){
+  if(NET.online&&!amIHost()){
     if(G.pendingRiichi){netSend({type:'riichi',pidx:NET.myIdx,mode:G.pendingRiichi,tidx:idx});}
     else{netSend({type:'discard',pidx:NET.myIdx,tidx:idx,isYami:isYamiDiscard});}
     return;
@@ -5603,14 +5602,14 @@ function humanTsumo(){
   if(G_ABILITY_MODE && PROFILE.ability==='pinzu' && G.players[myIdx].isDealer){
     addLog('🔵 ピンズー教：親番はツモ上がり不可','log-new');return;
   }
-  if(NET.online&&!NET.isHost){netSend({type:'tsumo',pidx:myIdx});return;}
+  if(NET.online&&!amIHost()){netSend({type:'tsumo',pidx:myIdx});return;}
   handleWin(myIdx,G.players[myIdx].drawnTile,true,-1);
 }
 
 function humanRon(){
   if(!pendingAction||pendingAction.type!=='ron')return;
   const{tile,from}=pendingAction;
-  if(NET.online&&!NET.isHost){netSend({type:'ron',pidx:NET.myIdx,tile,from});pendingAction=null;return;}
+  if(NET.online&&!amIHost()){netSend({type:'ron',pidx:NET.myIdx,tile,from});pendingAction=null;return;}
   pendingAction=null;
   handleRon(NET.myIdx,tile,from);
 }
@@ -5618,7 +5617,7 @@ function humanRon(){
 function humanSkipRon(){
   if(!pendingAction)return;
   const f=pendingAction.from;
-  if(NET.online&&!NET.isHost){netSend({type:'skipRon',from:f});pendingAction=null;return;}
+  if(NET.online&&!amIHost()){netSend({type:'skipRon',from:f});pendingAction=null;return;}
   pendingAction=null;
   nextTurn((f+1)%numPlayers);
 }
@@ -5626,7 +5625,7 @@ function humanSkipRon(){
 function humanPon(){
   if(!pendingAction||pendingAction.type!=='pon')return;
   const{tile,from}=pendingAction;
-  if(NET.online&&!NET.isHost){netSend({type:'pon',pidx:NET.myIdx,tile,from});pendingAction=null;return;}
+  if(NET.online&&!amIHost()){netSend({type:'pon',pidx:NET.myIdx,tile,from});pendingAction=null;return;}
   pendingAction=null;
   handlePon(NET.myIdx,tile,from);
 }
@@ -5640,7 +5639,7 @@ function humanMinkan(){
   if(!tile) return;
   const cnt=cntMap(p.hand);
   if((cnt[tk(tile)]||0)<3) return;
-  if(NET.online&&!NET.isHost){netSend({type:'minkan',pidx:myIdx,tile});return;}
+  if(NET.online&&!amIHost()){netSend({type:'minkan',pidx:myIdx,tile});return;}
   handleMinkan(myIdx,tile,pendingAction.from);
   broadcastState();
 }
@@ -5656,24 +5655,24 @@ function handleMinkan(pidx,tile,fromPidx){
   G.phase='discard';G.current=pidx;
   if(canWin(p.hand)){
     p.isRinshanKaihou=true;
-    if(pidx===NET.myIdx||(NET.online&&NET.isHost&&pidx!==NET.myIdx)){
+    if(pidx===NET.myIdx||(NET.online&&amIHost()&&pidx!==NET.myIdx)){
       setTimeout(()=>handleWin(pidx,rep,true,-1),400);return;
     }
   }
   renderAll();broadcastState();
-  if(NET.online&&NET.isHost&&pidx!==NET.myIdx) setTimeout(()=>cpuTurn(pidx),800);
+  if(NET.online&&amIHost()&&pidx!==NET.myIdx) setTimeout(()=>cpuTurn(pidx),800);
 }
 function humanSkipPon(){
   if(!pendingAction)return;
   const f=pendingAction.from;
-  if(NET.online&&!NET.isHost){netSend({type:'skipPon',from:f});pendingAction=null;return;}
+  if(NET.online&&!amIHost()){netSend({type:'skipPon',from:f});pendingAction=null;return;}
   pendingAction=null;
   nextTurn((f+1)%numPlayers);
 }
 
 function humanKita(){
   if(G.current!==NET.myIdx||G.phase!=='discard')return;
-  if(NET.online&&!NET.isHost){netSend({type:'kita',pidx:NET.myIdx});return;}
+  if(NET.online&&!amIHost()){netSend({type:'kita',pidx:NET.myIdx});return;}
   const myIdx=NET.myIdx;
   const p=G.players[myIdx];
   const ki=p.hand.findIndex(t=>t.suit==='honor'&&t.num==='北');
@@ -5787,7 +5786,7 @@ function _startWinTimer(){
     if(el) el.textContent = WIN_READY.countdown > 0 ? WIN_READY.countdown : '';
     if(WIN_READY.countdown <= 0){
       clearInterval(WIN_READY.timer); WIN_READY.timer=null;
-      if(!NET.online || NET.isHost){
+      if(!NET.online || amIHost()){
         nextRound();
       } else {
         onWinOk();
@@ -5801,9 +5800,9 @@ function onWinOk(){
   WIN_READY.selfReady = true;
   const okBtn = document.getElementById('winOkBtn');
   if(okBtn){ okBtn.disabled=true; okBtn.textContent='待機中…'; }
-  if(NET.online && !NET.isHost){
+  if(NET.online && !amIHost()){
     netSend({type:'winReady'});
-  } else if(NET.online && NET.isHost){
+  } else if(NET.online && amIHost()){
     WIN_READY.readySet.add(NET.myIdx ?? 0);
     _checkAllWinReady();
   } else {
@@ -6461,14 +6460,14 @@ function penCanvasClear(){
   _doraCanvasInited = false;
   renderWall();
   renderDoraCanvas();
-  if(NET.online && !NET.isHost){ netSend({type:'penClear'}); }
+  if(NET.online && !amIHost()){ netSend({type:'penClear'}); }
   else { broadcastState(); }
 }
 
 // ── ペン描画同期ヘルパー ──────────────────────────────
 function _syncPenDrawings(changedKeys){
   if(!NET.online){ return; }
-  if(NET.isHost){
+  if(amIHost()){
     broadcastState();
   } else {
     // ゲスト: 変更分だけホストに送信
@@ -7472,7 +7471,7 @@ function humanSteal(fromPidx, discardIdx){
   // 闇捨て牌（_yami）は盗めない
   const tile=from.discards[discardIdx];
   if(tile._yami) return;
-  if(NET.online&&!NET.isHost){
+  if(NET.online&&!amIHost()){
     netSend({type:'steal',myIdx,fromPidx,discardIdx});
     G.stealMode=false;renderAll();return;
   }
@@ -8141,7 +8140,7 @@ function _shopToast(msg){
 function lightRevealWall(slotIdx){
   if(G.lightMode!=='pick') return;
   if(!G.deckSlots||G.deckSlots[slotIdx]===null) return;
-  if(NET.online&&!NET.isHost){
+  if(NET.online&&!amIHost()){
     netSend({type:'lightRevealWall',slotIdx,userIdx:NET.myIdx});
     G.lightMode=false;
     renderAll();
@@ -8166,7 +8165,7 @@ function lightRevealHand(pidx, handIdx){
   if(pidx===NET.myIdx) return;
   const p=G.players[pidx];
   if(!p||handIdx<0||handIdx>=p.hand.length) return;
-  if(NET.online&&!NET.isHost){
+  if(NET.online&&!amIHost()){
     netSend({type:'lightRevealHand',pidx,handIdx,userIdx:NET.myIdx});
     G.lightMode=false;
     renderAll();
@@ -8193,7 +8192,7 @@ function lightDispelDiscardYami(pidx, discardIdx){
   if(!p) return;
   const t=p.discards[discardIdx];
   if(!t||!t._yami) return;
-  if(NET.online&&!NET.isHost){
+  if(NET.online&&!amIHost()){
     netSend({type:'lightDispelDiscardYami',pidx,discardIdx,userIdx:NET.myIdx});
     G.lightMode=false;
     renderAll();
@@ -8212,7 +8211,7 @@ function lightDispelHandYami(pidx){
   if(G.lightMode!=='yami') return;
   const p=G.players[pidx];
   if(!p||p.yamiTileIdx<0) return;
-  if(NET.online&&!NET.isHost){
+  if(NET.online&&!amIHost()){
     netSend({type:'lightDispelHandYami',pidx,userIdx:NET.myIdx});
     G.lightMode=false;
     renderAll();
@@ -8229,7 +8228,7 @@ function lightDispelHandYami(pidx){
 
 function lightRevealDoraCanvas(di){
   if(G.lightMode!=='pick') return;
-  if(NET.online&&!NET.isHost){
+  if(NET.online&&!amIHost()){
     netSend({type:'lightRevealDoraCanvas',di,userIdx:NET.myIdx});
     G.lightMode=false;
     renderAll();
@@ -8276,7 +8275,7 @@ function lightRevealMine(){
   // ローカルにポップアップ表示（使用者のみ）
   showLightPeek(tile, '地雷（山牌位置）', true);
   SFX.light();
-  if(NET.online&&!NET.isHost){
+  if(NET.online&&!amIHost()){
     netSend({type:'lightRevealMine',userIdx:NET.myIdx});
     G.lightMode=false;
     renderAll();
@@ -8346,7 +8345,7 @@ function plantMine(slotIdx){
   if(!G.minePlantMode) return;
   if(!G.deckSlots||G.deckSlots[slotIdx]===null) return;
   if(G.mineSlots.includes(slotIdx)) return;
-  if(NET.online&&!NET.isHost){
+  if(NET.online&&!amIHost()){
     netSend({type:'plantMine',slotIdx});
     G.minePlantMode=false;
     renderAll();
@@ -8366,7 +8365,7 @@ function plantMineRinshan(ri){
   if(!G.minePlantMode) return;
   if(ri<0||ri>=G.rinshan.length) return;
   if(G.mineRinshanIdxs.includes(ri)) return;
-  if(NET.online&&!NET.isHost){
+  if(NET.online&&!amIHost()){
     netSend({type:'plantMineRinshan',ri});
     G.minePlantMode=false;
     renderAll();
