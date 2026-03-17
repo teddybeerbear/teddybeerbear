@@ -3052,6 +3052,8 @@ const RANK = {
   opponents: [],        // [{name, rating}]
   connectedGuests: 0,   // ホスト側: 接続済みゲスト数
   _gameStartFired: false, // ゲームスタート二重発火防止
+  buttonCooldown: false, // ボタンクールタイム
+  buttonClickCount: 0,   // 3人カウント用
 };
 
 function _rankReset(){
@@ -3063,6 +3065,8 @@ function _rankReset(){
   RANK.opponents=[];
   RANK.connectedGuests=0;
   RANK._gameStartFired=false;
+  RANK.buttonCooldown=false;
+  RANK.buttonClickCount=0;
   const wp=document.getElementById('rankWaitPanel');
   const sp=document.getElementById('rankSearchPanel');
   const mp=document.getElementById('rankMatchedPanel');
@@ -3105,47 +3109,121 @@ async function _loadMyRating(){
 }
 
 async function joinRankQueue(){
-  setRankStatus('接続中…');
-  const peerId = 'mj-rank-'+Date.now()+'-'+Math.floor(Math.random()*9999);
-  RANK.peerId = peerId;
-  NET.peer = new Peer(peerId, {debug:0});
+  // ボタンがクールタイム中か確認
+  if(RANK.buttonCooldown){
+    return;
+  }
+  
+  // ボタンをクールタイム状態にする
+  RANK.buttonCooldown = true;
+  const btn = document.querySelector('.lobby-card[id="lobbyRank"] .start-btn');
+  if(btn){
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'not-allowed';
+  }
+  
+  // 5秒後にボタンを再度有効化
+  setTimeout(()=>{
+    RANK.buttonCooldown = false;
+    if(btn){
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.style.cursor = 'pointer';
+    }
+  }, 5000);
+  
+  // 3人カウント機能
+  RANK.buttonClickCount++;
+  setRankStatus(`${RANK.buttonClickCount}/3 人がマッチング開始を押しました`);
+  
+  // 3人揃ったら自動でマッチング開始
+  if(RANK.buttonClickCount < 3){
+    // 3人未満なら通常の待機へ
+    setRankStatus('接続中…');
+    const peerId = 'mj-rank-'+Date.now()+'-'+Math.floor(Math.random()*9999);
+    RANK.peerId = peerId;
+    NET.peer = new Peer(peerId, {debug:0});
 
-  NET.peer.on('open', async ()=>{
-    let res;
-    try {
-      res = await fetch('/rank/join', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({peerId}),
+    NET.peer.on('open', async ()=>{
+      let res;
+      try {
+        res = await fetch('/rank/join', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({peerId}),
+        });
+      } catch(e){
+        setRankStatus('サーバーへの接続に失敗しました');
+        NET.peer.destroy(); NET.peer=null;
+        return;
+      }
+      const data = await res.json().catch(()=>({}));
+      if(!res.ok){
+        setRankStatus('エラー: '+(data.error||res.status));
+        NET.peer.destroy(); NET.peer=null;
+        return;
+      }
+
+      if(data.matched){
+        _onRankMatched(data);
+      } else {
+        RANK.searchStartAt = Date.now();
+        document.getElementById('rankWaitPanel').style.display='none';
+        document.getElementById('rankSearchPanel').style.display='';
+        setRankStatus('');
+        RANK.polling = setInterval(_pollRankStatus, 1000);
+        _updateSearchTimer();
+      }
+    });
+
+    NET.peer.on('error', e=>{
+      setRankStatus('エラー: '+e.message);
+      _rankReset();
+    });
+  } else {
+    // 3人揃ったら即座にゲーム開始
+    setRankStatus('3人揃いました！ゲーム開始準備中…');
+    RANK.buttonClickCount = 0; // リセット
+    
+    // 少し遅延させてゲーム開始を呼ぶ
+    setTimeout(()=>{
+      setRankStatus('接続中…');
+      const peerId = 'mj-rank-'+Date.now()+'-'+Math.floor(Math.random()*9999);
+      RANK.peerId = peerId;
+      NET.peer = new Peer(peerId, {debug:0});
+
+      NET.peer.on('open', async ()=>{
+        let res;
+        try {
+          res = await fetch('/rank/join', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({peerId}),
+          });
+        } catch(e){
+          setRankStatus('サーバーへの接続に失敗しました');
+          NET.peer.destroy(); NET.peer=null;
+          return;
+        }
+        const data = await res.json().catch(()=>({}));
+        if(!res.ok){
+          setRankStatus('エラー: '+(data.error||res.status));
+          NET.peer.destroy(); NET.peer=null;
+          return;
+        }
+
+        if(data.matched){
+          _onRankMatched(data);
+        }
       });
-    } catch(e){
-      setRankStatus('サーバーへの接続に失敗しました');
-      NET.peer.destroy(); NET.peer=null;
-      return;
-    }
-    const data = await res.json().catch(()=>({}));
-    if(!res.ok){
-      setRankStatus('エラー: '+(data.error||res.status));
-      NET.peer.destroy(); NET.peer=null;
-      return;
-    }
 
-    if(data.matched){
-      _onRankMatched(data);
-    } else {
-      RANK.searchStartAt = Date.now();
-      document.getElementById('rankWaitPanel').style.display='none';
-      document.getElementById('rankSearchPanel').style.display='';
-      setRankStatus('');
-      RANK.polling = setInterval(_pollRankStatus, 1000);
-      _updateSearchTimer();
-    }
-  });
-
-  NET.peer.on('error', e=>{
-    setRankStatus('エラー: '+e.message);
-    _rankReset();
-  });
+      NET.peer.on('error', e=>{
+        setRankStatus('エラー: '+e.message);
+        _rankReset();
+      });
+    }, 500);
+  }
 }
 
 function _updateSearchTimer(){
