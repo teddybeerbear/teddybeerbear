@@ -3437,14 +3437,17 @@ function _doPromoteToHost(disconnectedPidx){
     broadcastState();
     renderAll();
     _triggerCpuForDisconnected(disconnectedPidx);
-    // 自分のターンで draw フェーズのまま凍結していたら draw_wait に移行
-    if(G && G.phase==='draw' && G.current===NET.myIdx){
-      if(G.deck.length===0){ handleExhausted(); return; }
-      G.phase='draw_wait';
-      timerOnMyTurn();
-      if(autoDrawEnabled){ renderAll(); broadcastState(); setTimeout(autoPickWall,200); return; }
-      addLog('山牌を選んでクリックしてください','log-new');
-      renderAll(); broadcastState();
+    // 自分のターンで凍結していた場合を全フェーズ対応
+    if(G && G.current === NET.myIdx){
+      if(G.phase === 'draw' || G.phase === 'draw_wait'){
+        if(G.deck.length===0){ handleExhausted(); return; }
+        G.phase='draw_wait';
+        timerOnMyTurn();
+        if(autoDrawEnabled){ renderAll(); broadcastState(); setTimeout(autoPickWall,200); return; }
+        addLog('山牌を選んでクリックしてください','log-new');
+        renderAll(); broadcastState();
+      }
+      // discard フェーズは renderAll() で UI が表示されるのでそのまま
     }
   }, 300);
 
@@ -3747,30 +3750,25 @@ function _triggerCpuForDisconnected(pidx){
   if(!G || !G.players) return;
   if(['end','win','idle'].includes(G.phase)) return;
   if(G.current === pidx){
+    // draw_wait は cpuAction が処理できないので draw に戻してから呼ぶ
+    if(G.phase === 'draw_wait') G.phase = 'draw';
     setTimeout(cpuAction, 700);
-  } else if(G.phase==='pending_ron' && pendingAction){
-    // 切断者がロン待ちを保持している場合のみスキップ
-    // pendingAction.target === pidx or pidx === NET.myIdx(は切断しない) のみ対象
+  } else if(G.phase==='pending_ron' && pendingAction && pendingAction.target === pidx){
     const pa = pendingAction;
-    if(pa.target === pidx){
-      setTimeout(()=>{
-        if(!pendingAction) return;
-        pendingAction=null;
-        nextTurn((pa.from+1)%numPlayers);
-        broadcastState();
-      }, 600);
-    }
-  } else if(G.phase==='pending_pon' && pendingAction){
-    // 切断者がポン待ちを保持している場合のみスキップ
+    setTimeout(()=>{
+      if(!pendingAction) return;
+      pendingAction=null;
+      nextTurn((pa.from+1)%numPlayers);
+      broadcastState();
+    }, 600);
+  } else if(G.phase==='pending_pon' && pendingAction && pendingAction.target === pidx){
     const pa = pendingAction;
-    if(pa.target === pidx){
-      setTimeout(()=>{
-        if(!pendingAction) return;
-        pendingAction=null;
-        nextTurn((pa.from+1)%numPlayers);
-        broadcastState();
-      }, 600);
-    }
+    setTimeout(()=>{
+      if(!pendingAction) return;
+      pendingAction=null;
+      nextTurn((pa.from+1)%numPlayers);
+      broadcastState();
+    }, 600);
   }
 }
 
