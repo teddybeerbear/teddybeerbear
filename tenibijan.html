@@ -24,6 +24,23 @@ function scaleTable(){
   });
 }
 window.addEventListener('resize', scaleTable);
+
+// ── ブラウザ閉じ・タブ閉じ時にピアを確実に閉じる ──────────
+// pagehide はモバイル含め最も信頼性が高い
+window.addEventListener('pagehide', ()=>{
+  if(NET.peer){
+    // 全ゲストにdisconnectを明示送信
+    try{ netBroadcastAll({type:'hostDisconnect'}); }catch(e){}
+    try{ NET.peer.destroy(); }catch(e){}
+  }
+});
+// beforeunload はデスクトップブラウザ用の保険
+window.addEventListener('beforeunload', ()=>{
+  if(NET.peer){
+    try{ netBroadcastAll({type:'hostDisconnect'}); }catch(e){}
+    try{ NET.peer.destroy(); }catch(e){}
+  }
+});
 </script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
@@ -3069,6 +3086,8 @@ function netBroadcastAll(msg){
 }
 
 // ── 定期Sync（ホストのみ） ────────────────────────────────
+let _pingTimers = {}; // {peerId: timeoutId}
+
 function startSyncBroadcast(){
   if(NET._syncTimer) clearInterval(NET._syncTimer);
   NET._syncTimer = setInterval(()=>{
@@ -3077,10 +3096,28 @@ function startSyncBroadcast(){
     const s = _buildStateSnapshot();
     s._lastActionId = NET._lastActionId;
     netBroadcastAll({type:'sync', state:s});
+
+    // ping keepalive: pongが5秒以内に返らなければ切断扱い
+    NET.conns.forEach(c=>{
+      if(!c||!c.open) return;
+      const pid = c.peer;
+      if(!pid) return;
+      // 前のタイマーがまだ残っていればスキップ
+      if(_pingTimers[pid]) return;
+      try{ c.send({type:'ping'}); }catch(e){}
+      _pingTimers[pid] = setTimeout(()=>{
+        delete _pingTimers[pid];
+        // pongが来なかった → 切断と判断
+        if(c.open){
+          try{ c.close(); }catch(e){}
+        }
+      }, 5000);
+    });
   }, 2000);
 }
 function stopSyncBroadcast(){
   if(NET._syncTimer){ clearInterval(NET._syncTimer); NET._syncTimer=null; }
+  Object.keys(_pingTimers).forEach(k=>{ clearTimeout(_pingTimers[k]); delete _pingTimers[k]; });
 }
 
 // ── ピア切断時のホスト再選出 ─────────────────────────────
@@ -3936,6 +3973,12 @@ function onNetData(msg, senderIdx){
         NET._memberDataCache=msg.memberData;
         updateRoomLobbyUI();
       }
+    } else if(msg.type==='hostDisconnect'){
+      // ホストが明示的に切断を通知 → 即座にホスト昇格処理
+      promoteGuestToHost();
+    } else if(msg.type==='ping'){
+      // keepalive pong を返す
+      if(NET.conn&&NET.conn.open) NET.conn.send({type:'pong'});
     } else if(msg.type==='kicked'){
       hideRoomLobby();
       if(NET.peer){ try{NET.peer.destroy();}catch(e){} NET.peer=null; }
@@ -3993,6 +4036,16 @@ function updateGuestMemberList(count){
 function handleGuestAction(msg, senderIdx){
   if(G.phase==='win'||G.phase==='end')return;
   switch(msg.type){
+    case 'pong':
+      // ping に対する pong → タイムアウトキャンセル
+      if(senderIdx !== undefined){
+        const conn = NET.conns.find(c=>c&&c._playerIdx===senderIdx);
+        if(conn&&conn.peer&&_pingTimers[conn.peer]){
+          clearTimeout(_pingTimers[conn.peer]);
+          delete _pingTimers[conn.peer];
+        }
+      }
+      break;
     case 'reconnect':
       // 再接続ゲストから元のプレイヤーインデックスを受け取り conn._playerIdx を更新
       if(msg.originalIdx !== undefined){
