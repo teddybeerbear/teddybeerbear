@@ -1457,6 +1457,7 @@ body::before{
       <div style="font-size:1.5rem;margin:8px 0;">🎉</div>
       <div style="font-size:.75rem;color:var(--gold);font-weight:700;margin-bottom:6px;">マッチング成功！</div>
       <div id="rankOpponentNames" style="font-size:.65rem;color:#5a9a7a;margin-bottom:12px;line-height:1.8;"></div>
+      <div id="rankMemberList" style="width:100%;margin-bottom:12px;"></div>
       <div style="font-size:.58rem;color:#4a6a5a;">接続中<span class="thinking-dots"></span></div>
     </div>
   </div>
@@ -3230,6 +3231,9 @@ function _onRankMatched(data){
     oppEl.innerHTML=''; // 名前を表示しない
   }
   setRankStatus('');
+  // メンバーリスト初期表示（自分のみ）
+  NET._memberDataCache = [];
+  _updateRankMemberList();
 
   RANK.matchId = data.matchId;
   RANK.myRating = data.myRating;
@@ -3483,6 +3487,48 @@ function _renderRlsMembers(members){
   `).join('');
 }
 
+// ── ランクマッチ: メンバーリスト更新 ────────────────────────────
+function _buildRankMemberData(){
+  // ホスト側: 自分 + 接続済みゲストの情報を組み立てる
+  const list = [{name: PROFILE.name||'あなた', iconId: PROFILE.iconId||'', isMe: true}];
+  for(let i=0;i<2;i++){
+    list.push({
+      name: NET.guestNames[i] || (i===0?'対戦相手1':'対戦相手2'),
+      iconId: NET.guestIconIds[i]||'',
+      isMe: false
+    });
+  }
+  return list;
+}
+
+function _updateRankMemberList(){
+  const listEl = document.getElementById('rankMemberList');
+  if(!listEl) return;
+  let members;
+  if(NET.isHost){
+    members = _buildRankMemberData();
+  } else {
+    // ゲスト側: _memberDataCache を使う（ランクマッチでも共用）
+    members = (NET._memberDataCache||[]).map((m,i)=>({...m, isMe: i===NET.myIdx}));
+    if(!members.length){
+      // キャッシュがまだない場合は自分だけ表示
+      members = [{name: PROFILE.name||'あなた', iconId: PROFILE.iconId||'', isMe: true}];
+    }
+  }
+  const iconFn = (iconId) => iconId
+    ? `<img src="${gachaIconUrl(iconId)}" alt="" style="width:100%;height:100%;object-fit:contain;">`
+    : '👤';
+  listEl.innerHTML = members.map(m=>`
+    <div class="rls-member-card${m.isMe?' is-me-card':''}">
+      <div class="rls-avatar">${iconFn(m.iconId)}</div>
+      <div class="rls-member-info">
+        <div class="rls-member-name">${m.isMe ? (m.name+'　★') : '???'}</div>
+        <div class="rls-member-role">${m.isMe?'あなた':'対戦相手'}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
 function kickPlayer(connIdx){
   if(!NET.isHost) return;
   const conn = NET.conns[connIdx];
@@ -3623,7 +3669,11 @@ function onNetData(msg, senderIdx){
       updateGuestMemberList(msg.members);
       if(msg.memberData){
         NET._memberDataCache=msg.memberData;
-        updateRoomLobbyUI();
+        if(NET.isRankMatch){
+          _updateRankMemberList();
+        } else {
+          updateRoomLobbyUI();
+        }
       }
     } else if(msg.type==='kicked'){
       hideRoomLobby();
@@ -3831,6 +3881,13 @@ function handleGuestAction(msg, senderIdx){
         G.players[senderIdx].name   = msg.name||'プレイヤー';
         broadcastState();
         renderAll();
+      }
+      // ランクマッチ接続待ち中: メンバーリスト更新 & ゲスト全員にbroadcast
+      if(NET.isRankMatch && !NET.online){
+        _updateRankMemberList();
+        // 全ゲストに最新メンバーデータを送る
+        const rankMD = _buildRankMemberData();
+        NET.conns.forEach(c=>{ if(c&&c.open) c.send({type:'memberUpdate', members:rankMD.length, memberData:rankMD}); });
       }
       updateRoomMemberList();
       _broadcastMemberUpdate();
