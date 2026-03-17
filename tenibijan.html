@@ -3659,15 +3659,12 @@ function onNetData(msg, senderIdx){
       }
       
       NET.online=true;
+      applyHostState._sentMyName = false; // 新ゲーム開始時リセット
       bgmToGame();
       hideRoomLobby();
       document.getElementById('lobby').style.display='none';
       document.getElementById('gameScreen').classList.add('active');
       scaleTable();
-      // ホストが makePlayer() を完了した後でもアイコンが反映されるよう、自分の情報を再送する
-      setTimeout(()=>{
-        if(NET.conn&&NET.conn.open) NET.conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||''});
-      }, 500);
     } else {
       applyHostState(msg);
     }
@@ -3828,11 +3825,12 @@ function handleGuestAction(msg, senderIdx){
       NET.guestNames[senderIdx-1]=msg.name||'プレイヤー';
       NET.guestAbilities[senderIdx-1]=msg.ability??'';
       NET.guestIconIds[senderIdx-1]=msg.iconId||'';
-      // ゲーム中ならG.playersにも即反映してbroadcastする
+      // ゲーム中ならG.playersにも即反映してbroadcast & 自分の画面も更新
       if(NET.online && G && G.players && G.players[senderIdx]){
         G.players[senderIdx].iconId = msg.iconId||'';
         G.players[senderIdx].name   = msg.name||'プレイヤー';
         broadcastState();
+        renderAll();
       }
       updateRoomMemberList();
       _broadcastMemberUpdate();
@@ -3876,6 +3874,17 @@ function applyHostState(msg){
     numPlayers=s.numPlayers;
     pendingAction=s.pendingAction;
     selIdx=-1;
+    // ゲスト: 自分の iconId は常に PROFILE.iconId で上書き（ホスト側が空で送ってくる場合がある）
+    if(G.players[NET.myIdx] && PROFILE.iconId){
+      G.players[NET.myIdx].iconId = PROFILE.iconId;
+    }
+    // 初回 state 受信時: 自分のアイコン情報をホストに送り返してもらうよう要求
+    if(!applyHostState._sentMyName){
+      applyHostState._sentMyName = true;
+      if(NET.conn && NET.conn.open){
+        NET.conn.send({type:'myName', name:PROFILE.name||'プレイヤー', ability:PROFILE.ability||'', iconId:PROFILE.iconId||''});
+      }
+    }
     // ゲスト: 自分のターンでdrawフェーズなら、draw_waitに遷移してツモ選択可能にする
     if(G.phase==='draw' && G.current===NET.myIdx){
       if(G.deck.length===0){handleExhausted();return;}
@@ -5498,6 +5507,8 @@ function nextRound(){
   if(WIN_READY.timer){ clearInterval(WIN_READY.timer); WIN_READY.timer=null; }
   document.getElementById('winOverlay').classList.remove('show');
   if(checkEnd())return;
+  // 次局でアイコンを再送できるようリセット
+  applyHostState._sentMyName = false;
   advanceRound(G._dealerWon);G._dealerWon=false;
 }
 function advanceRound(dealerWon){
