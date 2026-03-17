@@ -439,9 +439,11 @@ body::before{
   display:flex;align-items:center;gap:12px;
   background:#060e18;border:1.5px solid #1a3a2a;border-radius:10px;
   padding:10px 14px;margin-bottom:8px;
-  transition:border-color .2s;
+  transition:all .2s;
 }
-.rls-member-card.is-host-card{border-color:#c9a84c44;}
+.rls-member-card:hover{border-color:#2a5a4a;background:#091820;}
+.rls-member-card.is-me-card{border-color:#c9a84c44;background:#0d1a0d;}
+.rls-member-card.is-host-card{border-color:#c9a84c44;background:#0d1a0d;}
 .rls-avatar{
   width:46px;height:46px;border-radius:8px;object-fit:contain;
   background:#0d2030;border:1px solid #1a4a2a;
@@ -453,11 +455,12 @@ body::before{
 .rls-member-name{font-size:.85rem;font-weight:700;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .rls-member-role{font-size:.58rem;color:#4a7a5a;margin-top:2px;}
 .rls-kick-btn{
-  font-size:.6rem;padding:5px 11px;border-radius:6px;
+  font-size:.6rem;padding:6px 12px;border-radius:6px;
   border:1.5px solid #882222;background:#1a0808;color:#cc4444;
-  cursor:pointer;flex-shrink:0;transition:background .15s;
+  cursor:pointer;flex-shrink:0;transition:all .15s;
+  white-space:nowrap;
 }
-.rls-kick-btn:hover{background:#2a0a0a;}
+.rls-kick-btn:hover{background:#2a0a0a;border-color:#aa3333;color:#ff5555;box-shadow:0 0 8px #cc444433;}
 
 /* ===== WALL (山牌) in center ===== */
 .timer-bar-wrap{height:8px;background:#111;border-radius:4px;overflow:hidden;border:1px solid #223;}
@@ -1487,7 +1490,10 @@ body::before{
     </div>
 
     <!-- メンバーリスト -->
-    <div id="rlsMemberList" style="margin-bottom:14px;"></div>
+    <div style="margin-bottom:14px;">
+      <div style="font-size:.65rem;color:#5a7a6a;text-align:center;margin-bottom:8px;font-weight:700;">参加者（<span id="rlsMemberCount">1</span>/4）</div>
+      <div id="rlsMemberList" style="max-height:240px;overflow-y:auto;"></div>
+    </div>
 
     <!-- ホスト: 開始ボタン -->
     <div id="rlsHostControls" style="display:none;">
@@ -1495,8 +1501,8 @@ body::before{
     </div>
 
     <!-- ゲスト: 待機メッセージ -->
-    <div id="rlsGuestWait" style="display:none;font-size:.62rem;color:#4a7a5a;text-align:center;margin-bottom:14px;">
-      ホストの開始を待っています<span class="thinking-dots"></span>
+    <div id="rlsGuestWait" style="display:none;font-size:.62rem;color:#4a7a6a;text-align:center;margin-bottom:14px;background:#0d1a10;padding:12px;border-radius:6px;border:1px solid #1a3a2a;">
+      ホストがゲーム開始を待っています<span class="thinking-dots"></span>
     </div>
 
     <button class="start-btn" onclick="leaveRoomLobby()" style="background:linear-gradient(135deg,#1a0808,#0d0505);border-color:#553333;color:#aa6666;">退出する</button>
@@ -2542,6 +2548,35 @@ const TILE_IMG={
     sou:{1:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu1.png',2:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu2.png',3:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu3.png',4:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu4.png',5:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu5.png',6:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu6.png',7:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu7.png',8:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu8.png',9:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/souzu9.png'},
     honor:{'東':'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/zihai1.png','南':'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/zihai2.png','西':'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/zihai3.png','北':'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/zihai4.png','発':'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/zihai5.png','中':'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/hai/zihai6.png'},
   };
+  
+  // 牌画像プリロード
+  const _imageCache = new Map();
+  function preloadTileImages() {
+    const allUrls = new Set();
+    
+    // man, pin, sou, honor から全URL収集
+    Object.values(TILE_IMG).forEach(suit => {
+      if (typeof suit === 'object') {
+        Object.values(suit).forEach(url => allUrls.add(url));
+      }
+    });
+    
+    // 全画像を非同期でプリロード
+    allUrls.forEach(url => {
+      if (!_imageCache.has(url)) {
+        const img = new Image();
+        img.src = url;
+        _imageCache.set(url, img);
+      }
+    });
+  }
+  
+  // ページ読み込み完了後にプリロード開始
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', preloadTileImages);
+  } else {
+    preloadTileImages();
+  }
   function emj(t){
     if(!t)return'?';
     
@@ -2763,14 +2798,17 @@ function evalYaku(hand5,winTile,isTsumo,player,roundWind){
   const melds=player.melds||[];
   const isMenzen=melds.length===0;
 
+  // 全牌を集める（手牌5枚 + 鳴いた牌）
+  const allTiles=[...hand5,...melds.flatMap(m=>m.tiles||[])];
+
   // Yakuman (複合役満を累積する)
   const ymList=[];
   if(player.isTenhou)ymList.push({name:'天和',han:26});
   if(player.isChiihou)ymList.push({name:'地和',han:13});
   if(player.isRenhou)ymList.push({name:'人和',han:13});
-  if(isZiiso(hand5))ymList.push({name:'字一色',han:13});
-  if(isChinroutou(hand5))ymList.push({name:'チンロウトウ',han:13});
-  if(isRyuuiisou(hand5))ymList.push({name:'緑一色',han:13});
+  if(isZiiso(allTiles))ymList.push({name:'字一色',han:13});
+  if(isChinroutou(allTiles))ymList.push({name:'チンロウトウ',han:13});
+  if(isRyuuiisou(allTiles))ymList.push({name:'緑一色',han:13});
   if(isKokushi(hand5))ymList.push({name:'国士無双（東南西北中）',han:13});
   const meldTypes=melds.map(m=>m.type);
   const kanCount=meldTypes.filter(t=>['ankan','minkan','kakan'].includes(t)).length;
@@ -2813,14 +2851,18 @@ function evalYaku(hand5,winTile,isTsumo,player,roundWind){
   if(isTsumo&&isMenzen)yakus.push({name:'ツモ',han:1});
 
   const cnt=cntMap(hand5);
-  const isTanyao=hand5.every(t=>t.suit!=='honor'&&t.suit!=='man'&&t.num>=2&&t.num<=8);
+  const allCnt=cntMap(allTiles);
+  const isTanyao=allTiles.every(t=>t.suit!=='honor'&&t.suit!=='man'&&t.num>=2&&t.num<=8);
   if(isTanyao)yakus.push({name:'タンヤオ',han:1});
 
   const yakuhais=[...new Set(['白','発','中',player.wind,roundWind])];
   for(const yh of yakuhais){
     const k=`honor_${yh}`;
     if((cnt[k]||0)>=3)yakus.push({name:`役牌（${yh}）`,han:1});
-    for(const m of melds)if(m.tiles.every(t=>t.suit==='honor'&&t.num===yh))yakus.push({name:`役牌（${yh}）鳴き`,han:1});
+    // 鳴いた役牌と手牌の役牌を合わせてカウント
+    const allCntYh=(allCnt[k]||0);
+    const inMelds=melds.filter(m=>m.tiles.some(t=>t.suit==='honor'&&t.num===yh)).length;
+    if(inMelds>0&&allCntYh>=3)yakus.push({name:`役牌（${yh}）鳴き`,han:1});
   }
 
   // 平和: 門前・雀頭が数字牌・残り3枚が順子のみ・両面待ち（ツモも可）
@@ -2877,8 +2919,8 @@ function evalYaku(hand5,winTile,isTsumo,player,roundWind){
       for(const blocks of decomps){
         const allBlocks=[...blocks,...meldBlocks];
         const allHaveTO=allBlocks.every(b=>b.some(hasTO));
-        if(allHaveTO&&!isZiiso([...hand5,...melds.flatMap(m=>m.tiles||[])])){
-          const hasH=[...hand5,...melds.flatMap(m=>m.tiles||[])].some(t=>t.suit==='honor');
+        if(allHaveTO&&!isZiiso(allTiles)){
+          const hasH=allTiles.some(t=>t.suit==='honor');
           if(!hasH){if(isMenzen)yakus.push({name:'純チャン',han:3});else yakus.push({name:'鳴き純チャン',han:2});}
           else{if(isMenzen)yakus.push({name:'チャンタ',han:2});else yakus.push({name:'鳴きチャンタ',han:1});}
           break;
@@ -2887,9 +2929,9 @@ function evalYaku(hand5,winTile,isTsumo,player,roundWind){
     }
   }
 
-  // Toitoi
-  const allTP=Object.values(cnt).every(v=>v===2||v===3)&&
-    Object.values(cnt).filter(v=>v===2).length===1&&Object.values(cnt).filter(v=>v>=3).length===1;
+  // Toitoi - 全牌（手牌+鳴いた牌）で判定
+  const allTP=Object.values(allCnt).every(v=>v===2||v===3)&&
+    Object.values(allCnt).filter(v=>v===2).length===1&&Object.values(allCnt).filter(v=>v>=3).length===1;
   const mAllT=melds.every(m=>['pon','ankan','minkan','kakan'].includes(m.type));
   if(allTP&&mAllT)yakus.push({name:'トイトイ',han:2});
 
@@ -2898,8 +2940,8 @@ function evalYaku(hand5,winTile,isTsumo,player,roundWind){
   if(dcnt>=4)yakus.push({name:'小三元',han:2});
 
   // Honitsu / Chinitsu
-  const numSuits=new Set(hand5.filter(t=>t.suit!=='honor').map(t=>t.suit));
-  const hasHon=hand5.some(t=>t.suit==='honor');
+  const numSuits=new Set(allTiles.filter(t=>t.suit!=='honor').map(t=>t.suit));
+  const hasHon=allTiles.some(t=>t.suit==='honor');
   if(numSuits.size===1&&!hasHon){if(isMenzen)yakus.push({name:'清一色',han:6});else yakus.push({name:'鳴き清一色',han:5});}
   else if(numSuits.size===1&&hasHon){if(isMenzen)yakus.push({name:'ホンイツ',han:3});else yakus.push({name:'鳴きホンイツ',han:2});}
 
@@ -3355,6 +3397,9 @@ function updateRoomLobbyUI(){
     // Build member cards
     const members = _buildMemberData().map((m,i)=>({...m, isMe:i===0, connIdx:i-1}));
     _renderRlsMembers(members);
+    // Update member count
+    const mc = document.getElementById('rlsMemberCount');
+    if(mc) mc.textContent = members.length;
   } else {
     document.getElementById('rlsCodeSection').style.display='none';
     document.getElementById('rlsModeSection').style.display='none';
@@ -3362,6 +3407,9 @@ function updateRoomLobbyUI(){
     document.getElementById('rlsGuestWait').style.display='';
     const members = NET._memberDataCache.map((m,i)=>({...m, isMe:i===NET.myIdx, connIdx:-1}));
     _renderRlsMembers(members);
+    // Update member count
+    const mc = document.getElementById('rlsMemberCount');
+    if(mc) mc.textContent = members.length;
   }
 }
 
@@ -3372,13 +3420,13 @@ function _renderRlsMembers(members){
     ? `<img src="${gachaIconUrl(iconId)}" alt="">`
     : '👤';
   listEl.innerHTML = members.map(m=>`
-    <div class="rls-member-card${m.isMe?' is-host-card':''}">
+    <div class="rls-member-card${m.isMe?' is-me-card':''}${m.role==='ホスト'?' is-host-card':''}">
       <div class="rls-avatar">${iconFn(m.iconId)}</div>
       <div class="rls-member-info">
-        <div class="rls-member-name">${m.name}${m.isMe?' ★':''}</div>
+        <div class="rls-member-name">${m.name}${m.isMe?' ★':m.role==='ホスト'?' 👑':''}</div>
         <div class="rls-member-role">${m.role}</div>
       </div>
-      ${NET.isHost && m.connIdx>=0 ? `<button class="rls-kick-btn" onclick="kickPlayer(${m.connIdx})">キック</button>` : ''}
+      ${NET.isHost && m.connIdx>=0 ? `<button class="rls-kick-btn" title="このプレイヤーをキック" onclick="kickPlayer(${m.connIdx})">キック</button>` : ''}
     </div>
   `).join('');
 }
@@ -6910,7 +6958,9 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
       html+=`<button class="btn btn-ron" onclick="humanRon()">ロン！ ${emj(pendingAction?.tile)}</button>`;
       html+=`<button class="btn btn-danger" onclick="humanSkipRon()">スキップ</button>`;
     }
-  }else if(G.phase==='pending_pon'){
+  }
+  // ポン可能: ロンの有無に関わらず表示
+  if(G.phase==='pending_pon'){
     // ポン対象が自分の場合のみ表示（オンラインではtargetで判定）
     const ponTarget = pendingAction?.target ?? NET.myIdx;
     if(ponTarget===NET.myIdx){
