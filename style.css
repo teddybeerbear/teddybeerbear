@@ -77,7 +77,8 @@ body::before{
 
 /* ===== GAME SCREEN ===== */
 #gameScreen{
-  display:none;position:fixed;inset:0;z-index:10;
+  display:none;
+  position:fixed;inset:0;z-index:10;
   flex-direction:column;align-items:center;justify-content:center;
   padding:0;gap:0;overflow:hidden;
 }
@@ -391,7 +392,8 @@ body::before{
 
 /* ===== ROOM LOBBY SCREEN ===== */
 #roomLobbyScreen{
-  display:none;position:fixed;inset:0;z-index:15;
+  display:none;
+  position:fixed;inset:0;z-index:15;
   background:var(--bg);overflow-y:auto;
   flex-direction:column;align-items:center;padding:24px 16px;
 }
@@ -551,9 +553,10 @@ body::before{
 
 /* ===== GACHA SCREEN ===== */
 #gachaScreen{
+  display:none;
   position:fixed;inset:0;z-index:50;
   background:#000;
-  display:none;flex-direction:column;align-items:center;justify-content:flex-start;
+  flex-direction:column;align-items:center;justify-content:flex-start;
   overflow-y:auto;padding:20px 16px 40px;
 }
 #gachaScreen.active{display:flex;}
@@ -583,9 +586,10 @@ body::before{
 
 /* ショップ画面 */
 #shopScreen{
+  display:none;
   position:fixed;inset:0;z-index:50;
   background:#000;
-  display:none;flex-direction:column;align-items:center;justify-content:flex-start;
+  flex-direction:column;align-items:center;justify-content:flex-start;
   overflow-y:auto;padding:20px 16px 40px;
 }
 #shopScreen.active{display:flex;}
@@ -777,9 +781,10 @@ body::before{
 
 /* ===== ICON COLLECTION SCREEN ===== */
 #iconCollectionScreen{
+  display:none;
   position:fixed;inset:0;z-index:60;
   background:var(--bg);
-  display:none;flex-direction:column;align-items:center;
+  flex-direction:column;align-items:center;
   overflow-y:auto;padding:20px 16px 40px;
 }
 #iconCollectionScreen.active{display:flex;}
@@ -836,8 +841,9 @@ body::before{
 
 /* ===== PROFILE SCREEN ===== */
 #profileScreen{
+  display:none;
   position:relative;z-index:10;
-  display:none;flex-direction:column;align-items:center;justify-content:center;
+  flex-direction:column;align-items:center;justify-content:center;
   min-height:100vh;gap:16px;padding:20px;
 }
 #profileScreen.active{display:flex;}
