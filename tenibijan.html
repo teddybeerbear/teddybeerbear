@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>手にビまーじゃん</title>
+<title>手にビまーじゃんvar001</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 function _centerHandSeats(table){ /* CSS固定値で処理 */ }
@@ -1204,7 +1204,7 @@ body::before{
     <div id="abilityPopup" style="display:none;background:#030a10;border:1px solid #1a3a2a;border-radius:10px;padding:8px;margin-bottom:10px;max-height:260px;overflow-y:auto;">
       <div class="popup-ability-opt" data-ability="" onclick="pickAbility('')">
   <span style="font-size:1.4rem;margin-right:8px;">🚫</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">能力なし</span><br><span style="font-size:.55rem;color:#5a7a6a;">���殊能力なし</span></span>
+  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">能力なし</span><br><span style="font-size:.55rem;color:#5a7a6a;">   殊能力なし</span></span>
   
 </div><div class="popup-ability-opt" data-ability="mine" onclick="pickAbility('mine')">
   <span style="font-size:1.4rem;margin-right:8px;">💣</span>
@@ -1796,7 +1796,7 @@ const SFX = (() => {
     return ctx;
   }
 
-  // 矩形波の���いビー���
+  // 矩形波の   いビー   
   function beep(freq, dur, v, t0) {
     const c = ac(), t = t0 ?? c.currentTime;
     const o = c.createOscillator();
@@ -2356,7 +2356,7 @@ let _tileIdSeq=0;
 function mt(suit,num){return{suit,num,_id:_tileIdSeq++};}
 function sortTiles(tiles){
   const so={man:0,pin:1,sou:2,honor:3};
-  const ho={'東':0,'南':1,'西':2,'��':3,'白':4,'発':5,'中':6};
+  const ho={'東':0,'南':1,'西':2,'  ':3,'白':4,'発':5,'中':6};
   return[...tiles].sort((a,b)=>{
     if(so[a.suit]!==so[b.suit])return so[a.suit]-so[b.suit];
     const an=typeof a.num==='number'?a.num:ho[a.num];
@@ -4201,6 +4201,8 @@ function applyHostState(msg){
       // ★ 自分の peerId を確実に保持（ホストが送ってきた state で上書きされないよう）
       if(NET.peer?.id) G.players[NET.myIdx].peerId = NET.peer.id;
     }
+    // ★ state 整合性を正規化（ホスト切断直後の不完全 state に対応）
+    _normalizeState();
     // ゲスト: 自分のターンでdrawフェーズなら、draw_waitに遷移してツモ選択可能にする
     if(G.phase==='draw' && G.current===NET.myIdx){
       if(G.deck.length===0){handleExhausted();return;}
@@ -4845,7 +4847,7 @@ function checkPon(fromPidx,tile){
   for(let i=0;i<numPlayers;i++){
     if(i===fromPidx)continue;
     const p=G.players[i];
-    if(p.riichi)continue; // リー��中はポン不可
+    if(p.riichi)continue; // リー  中はポン不可
     const cnt=cntMap(p.hand);
     if((cnt[tk(tile)]||0)>=2){
       // オンライン: 自分自身か、ホストが管理しているゲストか判定
@@ -4878,83 +4880,78 @@ function handlePon(pidx,tile,fromPidx){
   if(NET.online&&amIHost()&&pidx!==NET.myIdx&&!isOnlineGuestIdx(pidx))setTimeout(cpuAction,700);
 }
 
+// ── ゲーム状態の整合性修正 ────────────────────────────────────
+// ホスト切断後に引き継いだ state が中途半端な場合に正規化する。
+function _normalizeState(){
+  if(!G || !G.players) return;
+  const p = G.players[G.current];
+  if(!p) return;
+
+  // discard フェーズなのに drawnTile が null → ツモ前に切断 → draw に巻き戻す
+  if(G.phase === 'discard' && !p.drawnTile){
+    G.phase = 'draw';
+  }
+  // draw フェーズなのに drawnTile が存在 → ツモ済みなのに phase がズレている → discard に修正
+  if((G.phase === 'draw' || G.phase === 'draw_wait') && p.drawnTile){
+    G.phase = 'discard';
+  }
+  // pending_ron/pon で pendingAction が null → 宙ぶらりん → draw に戻す
+  if((G.phase === 'pending_ron' || G.phase === 'pending_pon') && !pendingAction){
+    G.phase = 'draw';
+    p.drawnTile = null;
+  }
+}
+
 // ホスト昇格後に現在のフェーズをそのまま再開する。
-// nextTurn() は「次のプレイヤーへ移行する」関数であり
-// G.phase='draw'/G.firstRound=false を強制リセットしてしまうため、
-// ホスト切断→昇格の際には使えない。
 function _resumeCurrentPhase(){
   if(!G || !G.players) return;
+
+  // ① 進行中の宙ぶらりんアクションを破棄
+  pendingAction = null;
+
+  // ② state 整合性を正規化
+  _normalizeState();
+
   const pidx = G.current;
   const p    = G.players[pidx];
   if(!p) return;
 
-  switch(G.phase){
-    case 'draw':
-    case 'draw_wait':
-      // まだ牌を引いていないターン
-      if(pidx === NET.myIdx){
-        // 自分のターン → draw_wait に遷移して山牌選択を待つ
+  // ③ フェーズに応じて再開
+  const _dispatch = (phase) => {
+    if(pidx === NET.myIdx){
+      if(phase === 'draw'){
         G.phase = 'draw_wait';
         timerOnMyTurn();
         if(autoDrawEnabled){ broadcastState(); setTimeout(autoPickWall, 200); return; }
         addLog('山牌を選んでクリックしてください','log-new');
-        broadcastState();
-      } else if(isOnlineGuestIdx(pidx)){
-        // オンラインゲストのターン → draw フェーズのまま state を push して待つ
-        G.phase = 'draw';
-        broadcastState();
       } else {
-        // CPU（または切断者）→ cpuAction に任せる
-        G.phase = 'draw';
-        broadcastState();
-        setTimeout(cpuAction, 700);
+        // discard: 既にツモ済み
+        timerOnMyTurn();
       }
-      break;
+      broadcastState();
+    } else if(isOnlineGuestIdx(pidx)){
+      G.phase = phase; // draw のまま push → ゲスト側で draw_wait に遷移
+      broadcastState();
+    } else {
+      G.phase = phase;
+      broadcastState();
+      setTimeout(cpuAction, 700);
+    }
+  };
 
+  switch(G.phase){
+    case 'draw':
+    case 'draw_wait':
+      _dispatch('draw');
+      break;
     case 'discard':
-      // ★修正: discard フェーズなのに drawnTile が null の場合、
-      // ホストが drawTile 直後に broadcastState する前に切断した古い state を
-      // 引き継いでいる可能性がある。draw フェーズに修正して再実行する。
-      // （枚数計算ではなく drawnTile で判定: この変数は drawTile 実行後に必ずセットされ
-      //   discardAction 実行後にクリアされる。null ＝ まだ引いていない）
-      if(!p.drawnTile){
-        // ツモがまだ state に反映されていない → draw に戻して再実行
-        if(pidx === NET.myIdx){
-          G.phase = 'draw_wait';
-          timerOnMyTurn();
-          if(autoDrawEnabled){ broadcastState(); setTimeout(autoPickWall, 200); return; }
-          addLog('山牌を選んでクリックしてください','log-new');
-          broadcastState();
-        } else if(isOnlineGuestIdx(pidx)){
-          G.phase = 'draw';
-          broadcastState();
-        } else {
-          G.phase = 'draw';
-          broadcastState();
-          setTimeout(cpuAction, 700);
-        }
-      } else {
-        // 正常な discard 状態（既に牌を引いている）
-        if(pidx === NET.myIdx){
-          timerOnMyTurn();
-          broadcastState();
-        } else if(isOnlineGuestIdx(pidx)){
-          broadcastState();
-        } else {
-          broadcastState();
-          setTimeout(cpuAction, 700);
-        }
-      }
+      _dispatch('discard');
       break;
-
     case 'pending_ron':
     case 'pending_pon':
-      // ロン/ポン待機中 → そのまま state を push して各クライアントに判断させる
       broadcastState();
       break;
-
     default:
-      // その他（idle, end 等）は何もしない
       broadcastState();
       break;
   }
@@ -5244,7 +5241,7 @@ function humanHakuAuto(){
   const p=G.players[myIdx];
   if(!G_ABILITY_MODE||PROFILE.ability!=='haku'||p.abilityUsed)return;
   if(!p||p.riichi||G.phase!=='discard')return;
-  // cpuWorstTileIdxと同じロジックで孤立牌���自動選択
+  // cpuWorstTileIdxと同じロジックで孤立牌   自動選択
   const idx=cpuWorstTileIdx(p);
   if(idx<0)return;
   const t=p.hand[idx];
@@ -5357,7 +5354,7 @@ function humanPickWall(slotIdx){
   }
 
   G.phase='discard';
-  // タイマーはdraw_wait開始時に起動済み → ここでは継��（restartしない）
+  // タイマーはdraw_wait開始時に起動済み → ここでは継  （restartしない）
   if(!p.isDealer&&G.firstRound&&canWin(p.hand))p.isChiihou=true;
   if(canWin(p.hand)){addLog(`${emj(tile)} ツモ！上がれます`,'log-tsumo');renderAll();broadcastState();return;}
   const drawnIsKita=tile.suit==='honor'&&tile.num==='北';
@@ -6222,12 +6219,12 @@ function renderCornerAbilityBtns(){
     }
   }
 
-  // ── 闇 🌑 ───────────────────────────���───────────────────
+  // ── 闇 🌑 ───────────────────────────   ───────────────────
   if(ab==='yami'&&!p.abilityUsed&&(phase==='discard')&&isMyTurn){
     if(!G.yamiSelectMode){
       const yamiSet=p.yamiTileIdx>=0&&p.yamiTileIdx<p.hand.length;
       if(!yamiSet)
-        add('🌑 闇','#cc99ff','#7744aa',()=>{G.yamiSelectMode=true;renderAll();},'捨て牌を裏向��に');
+        add('🌑 闇','#cc99ff','#7744aa',()=>{G.yamiSelectMode=true;renderAll();},'捨て牌を裏向  に');
     }
   }
 }
@@ -7034,7 +7031,7 @@ function renderTable(){
         :p.riichi&&p.openRiichi?`<span class="badge" style="background:#1a0020;border:1px solid #8844cc;color:#cc88ff;letter-spacing:-.02em;">オープンリーチ</span>`
         :p.riichi?`<span class="badge badge-riichi">リーチ</span>`:'',
       (p.tenpai&&!p.riichi&&pidx===NET.myIdx)?`<span class="badge badge-tenpai">テンパイ</span>`:'',
-      p.kitaCount>0?`<span class="badge badge-dora">���×${p.kitaCount}</span>`:'',
+      p.kitaCount>0?`<span class="badge badge-dora">   ×${p.kitaCount}</span>`:'',
     ].join('');
 
     const riichiStick=p.riichi?`<span class="riichi-stick">リーチ</span>`:''; 
@@ -7356,7 +7353,7 @@ function renderTable(){
     dw.classList.add('discard-abs','discard-abs-'+_sideName);
     dw.dataset.discardSide=_si;
     if(_si===1||_si===3){
-      // left/right: table-center の子として position:absolute で外側��定
+      // left/right: table-center の子として position:absolute で外側  定
       const tcEl2=document.getElementById('tableCenter');
       tcEl2.querySelectorAll('.discard-abs-'+_sideName).forEach(el=>el.remove());
       tcEl2.appendChild(dw);
@@ -7464,7 +7461,7 @@ function _positionDiscards(table){
   const GRID_W=314; // 捨て牌外枠幅 left/right（8列, padding+border込み）
 
   // 右: rotate(-90deg) origin(0,0)
-  // top=GRID_W → 回��後の上端=top-GRID_W=0 → tc上端に揃う
+  // top=GRID_W → 回  後の上端=top-GRID_W=0 → tc上端に揃う
   // left=tcW+GAP → tc右辺外にぴったり
   tc.querySelectorAll('.discard-abs-right').forEach(dw=>{
     dw.style.left=(tcW+GAP)+'px';
@@ -7537,12 +7534,12 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
       }
       // 白・闇: セレクトモード中のヒント+キャンセルのみ（ボタン本体はcornerBtns）
       if(G_ABILITY_MODE&&PROFILE.ability==='haku'&&G.hakuSelectMode){
-        html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変���る手牌をクリック！</span>`;
+        html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変   る手牌をクリック！</span>`;
         html+=`<button class="btn btn-danger" onclick="G.hakuSelectMode=false;renderAll();">キャンセル</button>`;
       }
       if(G_ABILITY_MODE&&PROFILE.ability==='yami'&&G.yamiSelectMode){
         html+=`<span class="action-hint" style="color:#cc99ff;">🌑 闇にする手牌をクリック！</span>`;
-        html+=`<button class="btn btn-danger" onclick="G.yamiSelectMode=false;renderAll();">キャ���セル</button>`;
+        html+=`<button class="btn btn-danger" onclick="G.yamiSelectMode=false;renderAll();">キャ   セル</button>`;
       }
       // 加槓チェック(右下ボタンへ移動済み): ポン済み牌と同じ牌が手牌にある
       for(let ki=0;ki<p.hand.length;ki++){
@@ -7830,7 +7827,7 @@ function pickAbility(ability){
     'yami':['🌑','闇','オープンリーチ時に牌を裏向きに'],
     'haku':['🀆','白','手牌1枚を白に変換'],
     'sanctuary':['🏛️','聖域','親番中、失点を受けない'],
-    'steal':['🃏','スチール','捨て牌���ら1枚盗む'],
+    'steal':['🃏','スチール','捨て牌   ら1枚盗む'],
     'pen':['🖊️','ペン','山牌に絵を描く'],
     'pinzu':['🔵','ピンズー教','筒子の位置が見える'],
   };
