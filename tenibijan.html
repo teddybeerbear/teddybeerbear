@@ -2568,11 +2568,13 @@ function getHostPeerId(){
   return all.sort()[0];
 }
 
-// 自分がホストかどうかを peerRegistry ベースで判定
+// 自分がホストかどうかの判定
+// ★修正: peerRegistryベースの辞書順判定は廃止。
+// ゲスト同士は直接接続しないため peerRegistry に互いが登録されず、
+// 切断後に全ゲストが自身をホストと誤判定するバグの原因だった。
+// NET.isHost フラグ（createRoom/promoteToHost時に明示セット）を正とする。
 function amIHost(){
-  const myId = NET.peer?.id;
-  if(!myId) return NET.isHost; // fallback
-  return getHostPeerId() === myId;
+  return NET.isHost;
 }
 
 // ── アクションID採番 ──────────────────────────────────────
@@ -2652,12 +2654,13 @@ function onPeerDisconnected(peerId){
     }
   }
 
-  const newHostId = getHostPeerId();
-  const myId = NET.peer?.id;
-
-  if(myId && newHostId === myId && !NET.isHost){
-    _doPromoteToHost(disconnectedPlayerIdx);
-  } else if(NET.isHost){
+  // ★修正: ホスト昇格の判断は NET.isHost フラグを使う
+  // （getHostPeerId()のpeerRegistryベース判定は廃止）
+  if(!NET.isHost){
+    // ゲストは promoteGuestToHost() に任せる（競合防止ロジック内蔵）
+    promoteGuestToHost();
+  } else {
+    // 現ホスト: 切断したゲストをCPU扱いにする
     if(G && G.players && G.players[disconnectedPlayerIdx]){
       G.players[disconnectedPlayerIdx].isDisconnected = true;
     }
@@ -3032,6 +3035,9 @@ function _reconnectToNewHost(newHostPeerId){
   conn.on('open', ()=>{
     NET.online = true;
     NET._promotingToHost = false;
+    // ★修正: 新ホストのPeerIDをpeerRegistryに登録
+    // （amIHost()の判定に使われないが、切断検知のために保持）
+    if(conn.peer) peerRegistryAdd(conn.peer, 0, conn);
     conn.send({type:'reconnect', originalIdx: myOriginalIdx, peerId: NET.peer?.id||''});
     conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',peerId:NET.peer?.id||''});
     addLog('✅ 新ホストに再接続しました','log-new');
@@ -3107,13 +3113,19 @@ function _doPromoteToHost(disconnectedPidx){
       conn.on('error', e=>{ setOnlineStatus('通信エラー: '+e.message); });
 
       // ★修正: open 時には joined を送らず、reconnect メッセージを待つ
-      // 5秒待っても reconnect が来ない場合は、仮のインデックスで確定させる
+      // 8秒待っても reconnect が来ない場合は、G.playersのpeerId照合でidxを特定
       setTimeout(() => {
         if(!finalized && conn.open) {
           finalized = true;
-          finalizeConnection(conn._playerIdx);
+          // G.playersのpeerIdで本来のidxを探す（仮インデックスより精度が高い）
+          let bestIdx = conn._playerIdx;
+          if(G && G.players && conn.peer){
+            const byPeer = G.players.findIndex(p=>p.peerId===conn.peer);
+            if(byPeer>=0) bestIdx=byPeer;
+          }
+          finalizeConnection(bestIdx);
         }
-      }, 2000);
+      }, 8000);
     });
   }
 
@@ -3492,8 +3504,10 @@ function onNetData(msg, senderIdx){
     handleGuestAction(msg, senderIdx);
   } else {
     if(msg.type==='joined'){
-      // ゲーム中の再接続（新ホストへの再接続）の場合は myIdx を上書きしない
-      const isReconnecting = NET.online && G && G.players && G.players.length > 0;
+      // ★修正: ゲーム中の再接続判定から NET.online を除外
+      // 再接続フロー中に NET.online が一時的に false になるため、
+      // NET.online を条件に含めると誤って myIdx が上書きされ席がズレる原因になる。
+      const isReconnecting = G && G.players && G.players.length > 0;
       if(!isReconnecting){
         NET.myIdx=msg.myIdx;
         G_ABILITY_MODE=msg.abilityMode;
