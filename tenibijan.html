@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>手にビまーじゃん0033</title>
+<title>手にビまーじゃん</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 function _centerHandSeats(table){ /* CSS固定値で処理 */ }
@@ -1204,7 +1204,7 @@ body::before{
     <div id="abilityPopup" style="display:none;background:#030a10;border:1px solid #1a3a2a;border-radius:10px;padding:8px;margin-bottom:10px;max-height:260px;overflow-y:auto;">
       <div class="popup-ability-opt" data-ability="" onclick="pickAbility('')">
   <span style="font-size:1.4rem;margin-right:8px;">🚫</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">能力なし</span><br><span style="font-size:.55rem;color:#5a7a6a;">   殊能力なし</span></span>
+  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">能力なし</span><br><span style="font-size:.55rem;color:#5a7a6a;">���殊能力なし</span></span>
   
 </div><div class="popup-ability-opt" data-ability="mine" onclick="pickAbility('mine')">
   <span style="font-size:1.4rem;margin-right:8px;">💣</span>
@@ -1796,7 +1796,7 @@ const SFX = (() => {
     return ctx;
   }
 
-  // 矩形波の   いビー   
+  // 矩形波の���いビー���
   function beep(freq, dur, v, t0) {
     const c = ac(), t = t0 ?? c.currentTime;
     const o = c.createOscillator();
@@ -2356,7 +2356,7 @@ let _tileIdSeq=0;
 function mt(suit,num){return{suit,num,_id:_tileIdSeq++};}
 function sortTiles(tiles){
   const so={man:0,pin:1,sou:2,honor:3};
-  const ho={'東':0,'南':1,'西':2,'  ':3,'白':4,'発':5,'中':6};
+  const ho={'東':0,'南':1,'西':2,'��':3,'白':4,'発':5,'中':6};
   return[...tiles].sort((a,b)=>{
     if(so[a.suit]!==so[b.suit])return so[a.suit]-so[b.suit];
     const an=typeof a.num==='number'?a.num:ho[a.num];
@@ -3309,12 +3309,11 @@ function _doPromoteToHost(disconnectedPidx){
   if(NET.peer){
     NET.peer.off('connection');
     NET.peer.on('connection', conn=>{
-      if(NET.conns.length >= 2){ conn.close(); return; }
-      NET.conns.push(conn);
-      
-      // ★修正: 再接続時は msg.originalIdx が届くまで playerIdx を確定させない
-      // ただし、既存のロジックとの互換性のため、一旦仮のインデックスを振っておく
-      const assignedIdx = NET.conns.length;
+      // ★ 満員チェック: rejoin かどうかを先に判別するため open 後にメッセージを待つ
+      // 通常の新規接続は conns.length>=2 で弾く。rejoin は満員でも受け入れる。
+      const isGameActive = NET.online && G && G.players && G.players.length > 0;
+      // 仮インデックスを振っておく（rejoin でなければこのままになる）
+      const assignedIdx = NET.conns.length + 1;
       conn._playerIdx = assignedIdx;
 
       if(conn.peer) peerRegistryAdd(conn.peer, assignedIdx, conn);
@@ -3343,7 +3342,18 @@ function _doPromoteToHost(disconnectedPidx){
       };
 
       let finalized = false;
+      let isRejoin = false;
+
       conn.on('data', msg=>{
+        // ★ rejoin メッセージは最優先で処理（満員チェックより前）
+        if(msg.type === 'rejoin' && !finalized){
+          isRejoin = true;
+          finalized = true;
+          // conns に追加してから _handleRejoin へ
+          if(!NET.conns.includes(conn)) NET.conns.push(conn);
+          _handleRejoin(conn, msg);
+          return;
+        }
         if(msg.type==='reconnect' && msg.originalIdx !== undefined){
           finalized = true;
           finalizeConnection(msg.originalIdx);
@@ -3352,26 +3362,39 @@ function _doPromoteToHost(disconnectedPidx){
         onNetData(msg, conn._playerIdx);
       });
 
+      // rejoin でない通常接続の場合のみ満員チェックを適用
+      conn.on('open', ()=>{
+        // open 時点では rejoin かどうか不明なので、タイムアウトで判断
+        setTimeout(()=>{
+          if(!isRejoin && !finalized){
+            // 通常接続: 満員なら拒否
+            if(NET.conns.length >= 2 && !NET.conns.includes(conn)){
+              conn.close();
+              return;
+            }
+            if(!NET.conns.includes(conn)) NET.conns.push(conn);
+            finalized = true;
+            // 8秒待っても reconnect が来ない場合は G.players の peerId 照合で特定
+            setTimeout(() => {
+              if(!finalized && conn.open) {
+                let bestIdx = conn._playerIdx;
+                if(G && G.players && conn.peer){
+                  const byPeer = G.players.findIndex(p=>p.peerId===conn.peer);
+                  if(byPeer>=0) bestIdx=byPeer;
+                }
+                finalized = true;
+                finalizeConnection(bestIdx);
+              }
+            }, 8000);
+          }
+        }, 500);
+      });
+
       conn.on('close', ()=>{
         if(conn.peer && NET.online) onPeerDisconnected(conn.peer);
         _handleGuestDisconnect(conn, conn._playerIdx);
       });
       conn.on('error', e=>{ setOnlineStatus('通信エラー: '+e.message); });
-
-      // ★修正: open 時には joined を送らず、reconnect メッセージを待つ
-      // 8秒待っても reconnect が来ない場合は、G.playersのpeerId照合でidxを特定
-      setTimeout(() => {
-        if(!finalized && conn.open) {
-          finalized = true;
-          // G.playersのpeerIdで本来のidxを探す（仮インデックスより精度が高い）
-          let bestIdx = conn._playerIdx;
-          if(G && G.players && conn.peer){
-            const byPeer = G.players.findIndex(p=>p.peerId===conn.peer);
-            if(byPeer>=0) bestIdx=byPeer;
-          }
-          finalizeConnection(bestIdx);
-        }
-      }, 8000);
     });
   }
 
@@ -4855,7 +4878,7 @@ function checkPon(fromPidx,tile){
   for(let i=0;i<numPlayers;i++){
     if(i===fromPidx)continue;
     const p=G.players[i];
-    if(p.riichi)continue; // リー  中はポン不可
+    if(p.riichi)continue; // リー��中はポン不可
     const cnt=cntMap(p.hand);
     if((cnt[tk(tile)]||0)>=2){
       // オンライン: 自分自身か、ホストが管理しているゲストか判定
@@ -5249,7 +5272,7 @@ function humanHakuAuto(){
   const p=G.players[myIdx];
   if(!G_ABILITY_MODE||PROFILE.ability!=='haku'||p.abilityUsed)return;
   if(!p||p.riichi||G.phase!=='discard')return;
-  // cpuWorstTileIdxと同じロジックで孤立牌   自動選択
+  // cpuWorstTileIdxと同じロジックで孤立牌���自動選択
   const idx=cpuWorstTileIdx(p);
   if(idx<0)return;
   const t=p.hand[idx];
@@ -5362,7 +5385,7 @@ function humanPickWall(slotIdx){
   }
 
   G.phase='discard';
-  // タイマーはdraw_wait開始時に起動済み → ここでは継  （restartしない）
+  // タイマーはdraw_wait開始時に起動済み → ここでは継��（restartしない）
   if(!p.isDealer&&G.firstRound&&canWin(p.hand))p.isChiihou=true;
   if(canWin(p.hand)){addLog(`${emj(tile)} ツモ！上がれます`,'log-tsumo');renderAll();broadcastState();return;}
   const drawnIsKita=tile.suit==='honor'&&tile.num==='北';
@@ -6248,12 +6271,12 @@ function renderCornerAbilityBtns(){
     }
   }
 
-  // ── 闇 🌑 ───────────────────────────   ───────────────────
+  // ── 闇 🌑 ───────────────────────────���───────────────────
   if(ab==='yami'&&!p.abilityUsed&&(phase==='discard')&&isMyTurn){
     if(!G.yamiSelectMode){
       const yamiSet=p.yamiTileIdx>=0&&p.yamiTileIdx<p.hand.length;
       if(!yamiSet)
-        add('🌑 闇','#cc99ff','#7744aa',()=>{G.yamiSelectMode=true;renderAll();},'捨て牌を裏向  に');
+        add('🌑 闇','#cc99ff','#7744aa',()=>{G.yamiSelectMode=true;renderAll();},'捨て牌を裏向��に');
     }
   }
 }
@@ -7060,7 +7083,7 @@ function renderTable(){
         :p.riichi&&p.openRiichi?`<span class="badge" style="background:#1a0020;border:1px solid #8844cc;color:#cc88ff;letter-spacing:-.02em;">オープンリーチ</span>`
         :p.riichi?`<span class="badge badge-riichi">リーチ</span>`:'',
       (p.tenpai&&!p.riichi&&pidx===NET.myIdx)?`<span class="badge badge-tenpai">テンパイ</span>`:'',
-      p.kitaCount>0?`<span class="badge badge-dora">   ×${p.kitaCount}</span>`:'',
+      p.kitaCount>0?`<span class="badge badge-dora">���×${p.kitaCount}</span>`:'',
     ].join('');
 
     const riichiStick=p.riichi?`<span class="riichi-stick">リーチ</span>`:''; 
@@ -7382,7 +7405,7 @@ function renderTable(){
     dw.classList.add('discard-abs','discard-abs-'+_sideName);
     dw.dataset.discardSide=_si;
     if(_si===1||_si===3){
-      // left/right: table-center の子として position:absolute で外側  定
+      // left/right: table-center の子として position:absolute で外側��定
       const tcEl2=document.getElementById('tableCenter');
       tcEl2.querySelectorAll('.discard-abs-'+_sideName).forEach(el=>el.remove());
       tcEl2.appendChild(dw);
@@ -7490,7 +7513,7 @@ function _positionDiscards(table){
   const GRID_W=314; // 捨て牌外枠幅 left/right（8列, padding+border込み）
 
   // 右: rotate(-90deg) origin(0,0)
-  // top=GRID_W → 回  後の上端=top-GRID_W=0 → tc上端に揃う
+  // top=GRID_W → 回��後の上端=top-GRID_W=0 → tc上端に揃う
   // left=tcW+GAP → tc右辺外にぴったり
   tc.querySelectorAll('.discard-abs-right').forEach(dw=>{
     dw.style.left=(tcW+GAP)+'px';
@@ -7563,12 +7586,12 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
       }
       // 白・闇: セレクトモード中のヒント+キャンセルのみ（ボタン本体はcornerBtns）
       if(G_ABILITY_MODE&&PROFILE.ability==='haku'&&G.hakuSelectMode){
-        html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変   る手牌をクリック！</span>`;
+        html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変���る手牌をクリック！</span>`;
         html+=`<button class="btn btn-danger" onclick="G.hakuSelectMode=false;renderAll();">キャンセル</button>`;
       }
       if(G_ABILITY_MODE&&PROFILE.ability==='yami'&&G.yamiSelectMode){
         html+=`<span class="action-hint" style="color:#cc99ff;">🌑 闇にする手牌をクリック！</span>`;
-        html+=`<button class="btn btn-danger" onclick="G.yamiSelectMode=false;renderAll();">キャ   セル</button>`;
+        html+=`<button class="btn btn-danger" onclick="G.yamiSelectMode=false;renderAll();">キャ���セル</button>`;
       }
       // 加槓チェック(右下ボタンへ移動済み): ポン済み牌と同じ牌が手牌にある
       for(let ki=0;ki<p.hand.length;ki++){
@@ -7856,7 +7879,7 @@ function pickAbility(ability){
     'yami':['🌑','闇','オープンリーチ時に牌を裏向きに'],
     'haku':['🀆','白','手牌1枚を白に変換'],
     'sanctuary':['🏛️','聖域','親番中、失点を受けない'],
-    'steal':['🃏','スチール','捨て牌   ら1枚盗む'],
+    'steal':['🃏','スチール','捨て牌���ら1枚盗む'],
     'pen':['🖊️','ペン','山牌に絵を描く'],
     'pinzu':['🔵','ピンズー教','筒子の位置が見える'],
   };
