@@ -3300,9 +3300,40 @@ function _onRankMatched(data){
     // ホスト: 2人のゲストからの接続を待つ（先にリスナーを登録してからキューを削除）
     NET.peer.off('connection');
     NET.peer.on('connection', conn=>{
-      // ★ゲーム中の復帰接続は満員でも受け入れる（rejoinメッセージで判断）
       const isGameActive = NET.online && G && G.players && G.players.length > 0;
-      if(NET.conns.length >= 2 && !isGameActive){ conn.close(); return; }
+
+      if(isGameActive){
+        // ★ゲーム中: rejoin のみ受け入れる。無関係な新規接続は即拒否する
+        let _rejoinHandled = false;
+        const _onRejoinData = msg=>{
+          if(msg.type === 'rejoin' && !_rejoinHandled){
+            _rejoinHandled = true;
+            conn.off('data', _onRejoinData);
+            if(!NET.conns.includes(conn)) NET.conns.push(conn);
+            _handleRejoin(conn, msg);
+          }
+        };
+        conn.on('data', _onRejoinData);
+        const _onRejoinOpen = ()=>{
+          if(conn.peer) peerRegistryAdd(conn.peer, null, conn);
+          // rejoin メッセージを待つ猶予（最大3秒）
+          setTimeout(()=>{
+            if(!_rejoinHandled){
+              // rejoin でない → 無関係な接続。拒否して即クローズ
+              try{ if(conn.open) conn.send({type:'rankFull'}); }catch(e){}
+              setTimeout(()=>{ try{ conn.close(); }catch(e){} }, 200);
+            }
+          }, 3000);
+        };
+        if(conn.open){ _onRejoinOpen(); } else { conn.on('open', _onRejoinOpen); }
+        // 切断時: このconnはNET.connsに入っていないのでゲームに影響しない
+        conn.on('close', ()=>{});
+        conn.on('error', ()=>{});
+        return;
+      }
+
+      // 通常接続: ゲーム開始前のマッチング
+      if(NET.conns.length >= 2){ conn.close(); return; }
 
       const guestIdx = NET.conns.length + 1;
       conn._playerIdx = guestIdx;
@@ -3323,13 +3354,6 @@ function _onRankMatched(data){
 
       const onOpen = ()=>{
         if(conn.peer) peerRegistryAdd(conn.peer, guestIdx, conn);
-        if(isGameActive){
-          // ゲーム中: rejoin か通常接続かを判断するため少し待つ
-          setTimeout(()=>{
-            if(!_rejoinHandled && conn.open) conn.close();
-          }, 5000);
-          return;
-        }
         conn.send({type:'joined', myIdx:guestIdx, abilityMode:true, members:3});
         RANK.connectedGuests++;
         setRankStatus(`対戦相手を待っています… (${RANK.connectedGuests}/2)`);
@@ -3383,18 +3407,46 @@ function _rankGuestConnect(hostPeerId, attempt){
     NET.conns = [];
 
     let opened = false;
+    let joinedReceived = false;
     conn.on('open', ()=>{
       opened = true;
       // ★ランクマッチゲスト: 接続先ホストのPeerIDを記録（復帰時に使う）
       NET.currentHostPeerId = hostPeerId;
       setRankStatus('ホストに接続しました！ゲーム開始を待っています…');
     });
-    conn.on('data', msg=>onNetData(msg, null));
+    conn.on('data', msg=>{
+      if(msg.type === 'rankFull'){
+        // ★ホストがゲーム中で無関係な接続を拒否してきた → 別の部屋を探すため再マッチング
+        console.log('rankFull受信: このホストはゲーム中。再マッチングします。');
+        try{ conn.close(); }catch(e){}
+        NET.conn = null;
+        setRankStatus('再マッチング中…');
+        // サーバーに再度キュー参加を試みる
+        setTimeout(async ()=>{
+          if(NET.online) return;
+          try{
+            const res = await fetch('/rank/status');
+            if(!res.ok){ _rankGuestConnect(hostPeerId, attempt+1); return; }
+            const data = await res.json();
+            if(data.matched){
+              if(RANK.polling){clearInterval(RANK.polling);RANK.polling=null;}
+              _onRankMatched(data);
+            } else {
+              // まだマッチしていない → ポーリング継続
+              if(!RANK.polling) RANK.polling = setInterval(_pollRankStatus, 1000);
+            }
+          }catch(e){ _rankGuestConnect(hostPeerId, attempt+1); }
+        }, 1000);
+        return;
+      }
+      if(msg.type === 'joined' || msg.type === 'gameStart') joinedReceived = true;
+      onNetData(msg, null);
+    });
     attachConnHandlers(conn, ()=>getPlayerIdxByConn(conn));
 
-    // 接続タイムアウト: openされない場合はリトライ
+    // 接続タイムアウト: openされない or joinedが届かない場合はリトライ
     setTimeout(()=>{
-      if(!opened && !NET.online) _rankGuestConnect(hostPeerId, attempt+1);
+      if(!NET.online && !joinedReceived) _rankGuestConnect(hostPeerId, attempt+1);
     }, 4000);
   }, delay);
 }
