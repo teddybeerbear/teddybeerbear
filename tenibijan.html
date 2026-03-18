@@ -4048,9 +4048,24 @@ function initGame(){
 }
 
 function makePlayer(id,dealer){
-  const onlineNames=[PROFILE.name||'あなた', NET.guestNames[0]||'フレンド', NET.guestNames[1]||'CPU西', NET.guestNames[2]||'CPU北'];
-  const soloNames=[PROFILE.name||'あなた','CPU南','CPU西','CPU北'];
-  const pname=NET.online?onlineNames[id]:soloNames[id];
+  // ★修正: onlineNames を myIdx 基準に変更。
+  // 旧コード: onlineNames[0]=PROFILE.name（ホストが常にindex0という決め打ち）
+  // → ホスト昇格後(NET.myIdx=1)に makePlayer(0) で PROFILE.name が使われ、
+  //   他プレイヤーから見ると「新ホストの名前が旧ホストの席に表示される」バグの原因だった。
+  // 新コード: id===NET.myIdx なら自分の名前、それ以外は既存G.playersから引き継ぐ。
+  let pname;
+  if(NET.online){
+    if(id === NET.myIdx){
+      pname = PROFILE.name || 'あなた';
+    } else {
+      // 既存の G.players から名前を引き継ぐ（ホスト引き継ぎ後の rounds でも名前が保持される）
+      // G.players はこの時点ではまだ旧ラウンドの配列を指している
+      pname = (G && G.players && G.players[id] && G.players[id].name) || `CPU${id}`;
+    }
+  } else {
+    const soloNames=[PROFILE.name||'あなた','CPU南','CPU西','CPU北'];
+    pname = soloNames[id];
+  }
   const cpuAbilities=['mine','light','yami','haku','sanctuary','pinzu','steal'];
   const pAbility = !G_ABILITY_MODE ? '' : (id===NET.myIdx) ? (PROFILE.ability||'') : (NET.isHost && NET.guestAbilities[id-1]!==undefined) ? NET.guestAbilities[id-1] : cpuAbilities[Math.floor(Math.random()*cpuAbilities.length)];
   
@@ -4108,10 +4123,19 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; timerSt
   G.penDrawings = _prevPenDrawings;
   Object.keys(_penImgCache).forEach(k=>delete _penImgCache[k]);
 
+  const _prevPlayers = G.players ? G.players.slice() : [];
   G.players=Array.from({length:numPlayers},(_,i)=>{
     const p=makePlayer(i,i===G.dealer);
     p.wind=WINDS[(i-G.dealer+numPlayers)%numPlayers];
     if(G.savedScores)p.score=G.savedScores[i]||0;
+    // ★修正: オンライン時は前局の peerId・ability・name を引き継ぐ
+    // startRound で G.players を全再生成すると peerId が '' にリセットされ
+    // isOnlineGuestIdx の判定が壊れる。名前は makePlayer で既に修正済みだが
+    // peerId は makePlayer では設定されないためここで明示的に引き継ぐ。
+    if(NET.online && _prevPlayers[i]){
+      if(_prevPlayers[i].peerId) p.peerId = _prevPlayers[i].peerId;
+      if(_prevPlayers[i].ability && !p.ability) p.ability = _prevPlayers[i].ability;
+    }
     return p;
   });
 
