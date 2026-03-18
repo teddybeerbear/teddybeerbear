@@ -1276,11 +1276,11 @@ body::before{
           <span style="font-size:.65rem;color:#5a7a6a;width:60px;">タイトル曲</span>
           <select id="titleBgmSel" style="flex:1;background:#030a10;color:var(--gold);border:1px solid #1a3a2a;border-radius:5px;font-size:.62rem;padding:3px 6px;"
             onchange="_titleBgmKey=this.value; BGM.fadeOut(()=>BGM.fadeIn(_titleBgmKey));">
-            <option value="sakura">🌸 さくらポップ</option>
-            <option value="teatime">🍵 ティータイム</option>
-            <option value="adventure">⭐ アドベンチャー</option>
-            <option value="waltz">🌙 夜風のワルツ</option>
-            <option value="gameboy">🎮 ゲームボーイ</option>
+            <option value="yourself">yourself</option>
+            <option value="thinking">シンキング</option>
+            <option value="firststep">ファーストステップ</option>
+            <option value="puzzle">思考のパズル</option>
+            <option value="akizuki">秋月の夜</option>
             <option value="none">🔇 なし</option>
           </select>
         </div>
@@ -1288,11 +1288,11 @@ body::before{
           <span style="font-size:.65rem;color:#5a7a6a;width:60px;">対局曲</span>
           <select id="gameBgmSel" style="flex:1;background:#030a10;color:var(--gold);border:1px solid #1a3a2a;border-radius:5px;font-size:.62rem;padding:3px 6px;"
             onchange="_gameBgmKey=this.value;">
-            <option value="adventure">⭐ アドベンチャー</option>
-            <option value="sakura">🌸 さくらポップ</option>
-            <option value="teatime">🍵 ティータイム</option>
-            <option value="waltz">🌙 夜風のワルツ</option>
-            <option value="gameboy">🎮 ゲームボーイ</option>
+            <option value="thinking">シンキング</option>
+            <option value="yourself">yourself</option>
+            <option value="firststep">ファーストステップ</option>
+            <option value="puzzle">思考のパズル</option>
+            <option value="akizuki">秋月の夜</option>
             <option value="none">🔇 なし</option>
           </select>
         </div>
@@ -1980,565 +1980,81 @@ const SFX = (() => {
 // BGM ENGINE — 8bit可愛い曲 (Web Audio API 完全合成 / ~2分ループ)
 // ============================================================
 const BGM = (() => {
-  let ctx = null;
-  let masterGain = null;
-  let currentNodes = [];
-  let currentTrack = null;
-  let isPlaying = false;
-  let vol = 0.022;
-  let loopTimer = null;
-
-  function ac() {
-    if (!ctx) {
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
-      masterGain = ctx.createGain();
-      masterGain.gain.value = vol;
-      masterGain.connect(ctx.destination);
-    }
-    if (ctx.state === 'suspended') ctx.resume();
-    return ctx;
-  }
-
-  // ── 基本オシレータ ──────────────────────────────────────
-  function note(freq, t, dur, wave, gain, detune=0) {
-    if (!freq) return;
-    const c = ac();
-    const o = c.createOscillator();
-    const g = c.createGain();
-    o.type = wave;
-    o.frequency.value = freq;
-    if (detune) o.detune.value = detune;
-    const att = 0.008, rel = Math.min(0.04, dur * 0.15);
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(gain, t + att);
-    g.gain.setValueAtTime(gain * 0.8, t + att + Math.min(0.06, dur*0.3));
-    g.gain.linearRampToValueAtTime(0, t + dur - rel);
-    o.connect(g); g.connect(masterGain);
-    o.start(t); o.stop(t + dur + 0.02);
-    currentNodes.push(o, g);
-  }
-
-  function bell(freq, t, dur, gain) {
-    note(freq, t, dur, 'sine', gain);
-    note(freq * 2.75, t, dur * 0.4, 'sine', gain * 0.15);
-  }
-
-  function kick(t) {
-    const c = ac();
-    const o = c.createOscillator();
-    const g = c.createGain();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(140, t);
-    o.frequency.exponentialRampToValueAtTime(38, t + 0.07);
-    g.gain.setValueAtTime(0.22 * vol, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
-    o.connect(g); g.connect(masterGain);
-    o.start(t); o.stop(t + 0.14);
-    currentNodes.push(o, g);
-  }
-
-  function snare(t) {
-    const c = ac();
-    const buf = c.createBuffer(1, Math.ceil(c.sampleRate * 0.08), c.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    const src2 = c.createBufferSource(); src2.buffer = buf;
-    const flt = c.createBiquadFilter(); flt.type = 'bandpass'; flt.frequency.value = 2200; flt.Q.value = 0.8;
-    const g = c.createGain();
-    g.gain.setValueAtTime(0.09 * vol, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
-    src2.connect(flt); flt.connect(g); g.connect(masterGain);
-    src2.start(t); src2.stop(t + 0.09);
-    currentNodes.push(src2, g);
-  }
-
-  function hihat(t, open=false) {
-    const c = ac();
-    const buf = c.createBuffer(1, Math.ceil(c.sampleRate * (open?0.12:0.04)), c.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    const src2 = c.createBufferSource(); src2.buffer = buf;
-    const flt = c.createBiquadFilter(); flt.type = 'highpass'; flt.frequency.value = 7000;
-    const g = c.createGain();
-    g.gain.setValueAtTime(0.04 * vol, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + (open?0.12:0.04));
-    src2.connect(flt); flt.connect(g); g.connect(masterGain);
-    src2.start(t); src2.stop(t + 0.15);
-    currentNodes.push(src2, g);
-  }
-
-  // 周波数定数
-  const F = {
-    C3:130.8,Cs3:138.6,D3:146.8,Ds3:155.6,E3:164.8,F3:174.6,Fs3:185.0,G3:196.0,Gs3:207.7,A3:220.0,As3:233.1,B3:246.9,
-    C4:261.6,Cs4:277.2,D4:293.7,Ds4:311.1,E4:329.6,F4:349.2,Fs4:370.0,G4:392.0,Gs4:415.3,A4:440.0,As4:466.2,B4:493.9,
-    C5:523.3,Cs5:554.4,D5:587.3,Ds5:622.3,E5:659.3,F5:698.5,Fs5:740.0,G5:784.0,Gs5:830.6,A5:880.0,As5:932.3,B5:987.8,
-    C6:1046.5,D6:1174.7,E6:1318.5,F6:1396.9,G6:1568.0,A6:1760.0,B6:1975.5,
+  const tracks = {
+    yourself: "https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/BGM/yourself.mp3",
+    thinking: "https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/BGM/%E3%82%B7%E3%83%B3%E3%82%AD%E3%83%B3%E3%82%B0.mp3",
+    firststep: "https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/BGM/%E3%83%95%E3%82%A1%E3%83%BC%E3%82%B9%E3%83%88%E3%82%B9%E3%83%86%E3%83%83%E3%83%97.mp3",
+    puzzle: "https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/BGM/%E6%80%9D%E8%80%83%E3%81%AE%E3%83%91%E3%82%BA%E3%83%AB.mp3",
+    akizuki: "https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/BGM/%E7%A7%8B%E6%9C%88%E3%81%AE%E5%A4%9C.mp3"
   };
-
-  // ── ノートシーケンサ ─────────────────────────────────────
-  // seq = [[freq_or_null, beats], ...]  beat=秒
-  function seq(notes, beat, startT, wave, gain) {
-    let t = startT;
-    notes.forEach(([f, b]) => {
-      const dur = b * beat;
-      if (f) note(f, t, dur * 0.86, wave, gain);
-      t += dur;
-    });
-    return t - startT;
-  }
-  function seqBell(notes, beat, startT, gain) {
-    let t = startT;
-    notes.forEach(([f, b]) => {
-      if (f) bell(f, t, b * beat * 0.9, gain);
-      t += b * beat;
-    });
-  }
-
-  // ── ドラムパターン ───────────────────────────────────────
-  // pat = kick/snare/hihat pattern over N beats
-  function drums(beat, startT, totalBeats, pat) {
-    // pat.kick, pat.snare, pat.hh: arrays of beat positions (0-based)
-    const bars = Math.ceil(totalBeats / pat.len);
-    for (let bar = 0; bar < bars; bar++) {
-      const base = startT + bar * pat.len * beat;
-      (pat.kick  || []).forEach(b => kick(base + b * beat));
-      (pat.snare || []).forEach(b => snare(base + b * beat));
-      (pat.hh    || []).forEach(b => hihat(base + b * beat));
-      (pat.ohh   || []).forEach(b => hihat(base + b * beat, true));
-    }
-  }
-
-  // ╔══════════════════════════════════════════════════════╗
-  // ║  曲定義  ~120秒��ー�� (約2分)                        ║
-  // ╚══════════════════════════════════════════════════════╝
-
-  const TRACKS = {
-
-    // ────────────────────────────────────────────────────────
-    // 🌸 さくらポップ  BPM=132  Eマイナー和風ポップ
-    // ────────────────────────────────────────────────────────
-    sakura: {
-      label: '🌸 さくらポップ',
-      build(startT) {
-        const bpm = 132, b = 60/bpm;
-        const totalB = b * 128; // 128拍 ≈ 116秒
-
-        // メロディ (4小節×8回 = 32小節)
-        // パートA (8小節)
-        const mA = [
-          [F.E5,1],[F.G5,0.5],[F.A5,0.5],[F.B5,1],[F.A5,0.5],[F.G5,0.5],
-          [F.E5,2],[null,2],
-          [F.D5,0.5],[F.E5,0.5],[F.G5,1],[F.A5,1],[F.G5,1],
-          [F.E5,2],[F.D5,1],[F.E5,1],
-          [F.G5,0.5],[F.A5,0.5],[F.B5,1],[F.A5,0.5],[F.G5,0.5],[F.E5,1],
-          [F.A5,2],[F.B5,2],
-          [F.A5,0.5],[F.G5,0.5],[F.E5,1],[F.D5,0.5],[F.E5,0.5],[F.G5,1],
-          [F.E5,3],[null,1],
-        ];
-        // パートB (8小節) — 高音域
-        const mB = [
-          [F.B5,1],[F.A5,0.5],[F.G5,0.5],[F.E5,1],[F.G5,1],
-          [F.A5,2],[F.B5,2],
-          [F.G5,1],[F.A5,1],[F.B5,1],[F.A5,1],
-          [F.G5,2],[F.E5,2],
-          [F.A5,0.5],[F.B5,0.5],[F.A5,1],[F.G5,1],[F.E5,1],
-          [F.D5,1],[F.E5,1],[F.G5,2],
-          [F.A5,1],[F.G5,0.5],[F.E5,0.5],[F.D5,1],[F.E5,1],
-          [F.E5,3],[null,1],
-        ];
-
-        // メロディ演奏: A→A→B→A (32小節=128拍)
-        let t = startT;
-        const mDur = seq(mA, b, t, 'square', 0.42); t += mDur;
-        seq(mA, b, t, 'square', 0.42); t += mDur;
-        seq(mB, b, t, 'square', 0.44); t += mDur;
-        seq(mA, b, t, 'square', 0.42); t += mDur;
-
-        // ハーモニー (sine, 8拍サイクル×16)
-        const hm = [
-          [F.E4,2],[F.A4,2],[F.B4,2],[F.A4,2],
-          [F.G4,2],[F.E4,2],[F.D4,2],[F.E4,2],
-        ];
-        for (let r = 0; r < 16; r++) seq(hm, b, startT + r*8*b, 'sine', 0.18);
-
-        // ベース (triangle, 8拍サイクル×16)
-        const bs = [[F.E3,2],[F.A3,2],[F.G3,2],[F.B3,2]];
-        for (let r = 0; r < 32; r++) seq(bs, b, startT + r*4*b, 'triangle', 0.28);
-
-        // ドラム
-        drums(b, startT, 128, {
-          len:8,
-          kick: [0,2,4,6],
-          snare:[2,6],
-          hh:   [0,1,2,3,4,5,6,7],
-        });
-
-        return totalB;
-      }
-    },
-
-    // ────────────────────────────────────────────────────────
-    // 🍵 のんびりティータイム  BPM=90  Cメジャー・のどか
-    // ────────────────────────────────────────────────────────
-    teatime: {
-      label: '🍵 のんびりティータイム',
-      build(startT) {
-        const bpm = 90, b = 60/bpm;
-        const totalB = b * 108; // ≈ 120秒
-
-        const mA = [
-          [F.C5,1],[F.E5,1],[F.G5,1],[F.E5,1],
-          [F.D5,1],[F.F5,1],[F.A5,1],[F.F5,1],
-          [F.E5,1],[F.G5,1],[F.C6,2],
-          [F.G5,1],[F.E5,1],[F.C5,2],
-          [F.F5,1],[F.A5,1],[F.G5,1],[F.F5,1],
-          [F.E5,1],[F.D5,1],[F.C5,2],
-          [F.G4,1],[F.A4,1],[F.C5,1],[F.E5,1],
-          [F.C5,3],[null,1],
-        ];
-        const mB = [
-          [F.G5,1],[F.A5,0.5],[F.G5,0.5],[F.F5,1],[F.E5,1],
-          [F.D5,1],[F.E5,1],[F.F5,2],
-          [F.E5,1],[F.D5,1],[F.C5,1],[F.D5,1],
-          [F.E5,3],[null,1],
-          [F.A5,1],[F.G5,0.5],[F.F5,0.5],[F.E5,1],[F.D5,1],
-          [F.C5,1],[F.D5,1],[F.E5,2],
-          [F.F5,1],[F.E5,1],[F.D5,1],[F.C5,1],
-          [F.G4,3],[null,1],
-        ];
-        const mC = [ // ブリッジ: 少し動き多め
-          [F.E5,0.5],[F.F5,0.5],[F.G5,0.5],[F.A5,0.5],[F.G5,1],[F.F5,1],
-          [F.E5,1],[F.D5,1],[F.C5,2],
-          [F.F5,0.5],[F.G5,0.5],[F.A5,0.5],[F.B5,0.5],[F.A5,1],[F.G5,1],
-          [F.E5,2],[F.D5,2],
-          [F.C6,1],[F.B5,1],[F.A5,1],[F.G5,1],
-          [F.F5,1],[F.E5,1],[F.D5,1],[F.C5,1],
-          [F.G5,1],[F.F5,1],[F.E5,1],[F.D5,1],
-          [F.C5,3],[null,1],
-        ];
-
-        // A→B→C→A (108拍)
-        let t = startT;
-        seq(mA, b, t, 'square', 0.4); t += 32*b;
-        seq(mB, b, t, 'square', 0.4); t += 32*b;
-        seq(mC, b, t, 'square', 0.42); t += 32*b;
-        seq(mA, b, t, 'square', 0.38); // fade
-
-        // ハーモニー
-        const hm = [[F.C4,2],[F.F4,2],[F.G4,2],[F.C4,2]];
-        for(let r=0;r<27;r++) seq(hm, b, startT+r*4*b, 'sine', 0.16);
-
-        // アルペジオ装飾 (sine)
-        const arp = [[F.C5,0.5],[F.E5,0.5],[F.G5,0.5],[F.E5,0.5]];
-        for(let r=0;r<27;r++) seq(arp, b, startT+r*2*b, 'sine', 0.1);
-
-        // ベース
-        const bs = [[F.C3,1],[F.G3,0.5],[F.G3,0.5],[F.F3,1],[F.C3,1]];
-        for(let r=0;r<21;r++) seq(bs, b, startT+r*4*b, 'triangle', 0.25);  // 4拍ずつ = 3拍バスに調整
-
-        // ドラム (ゆったり)
-        drums(b, startT, 108, {
-          len:8,
-          kick: [0,4],
-          snare:[2,6],
-          hh:   [0,2,4,6],
-          ohh:  [1,3,5,7],
-        });
-
-        return totalB;
-      }
-    },
-
-    // ────────────────────────────────────────────────────────
-    // ⭐ きらきらアドベンチャー  BPM=148  Gメジャー・元気
-    // ────────────────────────────────────────────────────────
-    adventure: {
-      label: '⭐ きらきらアドベンチャー',
-      build(startT) {
-        const bpm = 148, b = 60/bpm;
-        const totalB = b * 128; // ≈ 109秒 + フェード
-
-        const mA = [
-          [F.G5,0.5],[F.G5,0.25],[F.A5,0.25],[F.G5,0.5],[F.E5,0.5],
-          [F.E5,0.5],[F.G5,0.5],[F.A5,1],
-          [F.B5,0.5],[F.A5,0.5],[F.G5,0.5],[F.A5,0.5],
-          [F.G5,2],
-          [F.D6,0.5],[F.D6,0.25],[F.E6,0.25],[F.D6,0.5],[F.B5,0.5],
-          [F.B5,0.5],[F.D6,0.5],[F.E6,1],
-          [F.G6,0.5],[F.E6,0.5],[F.D6,0.5],[F.B5,0.5],
-          [F.G5,2],
-        ];
-        const mB = [
-          [F.A5,0.5],[F.B5,0.5],[F.A5,0.5],[F.G5,0.5],
-          [F.Fs5,1],[F.G5,1],
-          [F.A5,0.5],[F.G5,0.5],[F.E5,1],
-          [F.D5,2],
-          [F.E5,0.5],[F.Fs5,0.5],[F.G5,0.5],[F.A5,0.5],
-          [F.B5,1],[F.A5,0.5],[F.G5,0.5],
-          [F.Fs5,0.5],[F.G5,0.5],[F.A5,0.5],[F.B5,0.5],
-          [F.G5,2],
-        ];
-        const mC = [  // サビ高め
-          [F.B5,0.5],[F.D6,0.5],[F.G6,1],[F.E6,1],
-          [F.D6,0.5],[F.E6,0.5],[F.D6,1],[F.B5,1],
-          [F.A5,0.5],[F.B5,0.5],[F.A5,0.5],[F.G5,0.5],[F.Fs5,1],
-          [F.G5,2],
-          [F.E6,0.5],[F.D6,0.5],[F.B5,1],[F.G5,1],
-          [F.A5,0.5],[F.B5,0.5],[F.A5,1],[F.G5,1],
-          [F.Fs5,0.5],[F.G5,0.5],[F.A5,0.5],[F.B5,0.5],[F.G5,1],
-          [F.G5,2],
-        ];
-
-        // A→A→B→C→A→B (128拍)
-        let t = startT;
-        seq(mA, b, t, 'square', 0.44); t += 16*b;
-        seq(mA, b, t, 'square', 0.44); t += 16*b;
-        seq(mB, b, t, 'square', 0.44); t += 16*b;
-        seq(mC, b, t, 'square', 0.46); t += 16*b;
-        seq(mA, b, t, 'square', 0.44); t += 16*b;
-        seq(mA, b, t, 'square', 0.44); t += 16*b;
-        seq(mB, b, t, 'square', 0.44); t += 16*b;
-        seq(mC, b, t, 'square', 0.44); t += 16*b;
-
-        // ハーモニー (2声)
-        const hm1 = [[F.G4,1],[F.C5,1],[F.D5,1],[F.G4,1]];
-        const hm2 = [[F.D4,1],[F.G4,1],[F.A4,1],[F.D4,1]];
-        for(let r=0;r<32;r++){
-          seq(hm1, b, startT+r*4*b, 'sine', 0.16);
-          seq(hm2, b, startT+r*4*b, 'sine', 0.1);
-        }
-
-        // ベース
-        const bs = [[F.G3,0.5],[F.G3,0.5],[F.C4,0.5],[F.C4,0.5]];
-        for(let r=0;r<64;r++) seq(bs, b, startT+r*2*b, 'triangle', 0.28);
-
-        // ドラム (元気)
-        drums(b, startT, 128, {
-          len:8,
-          kick: [0,0.5,3,4,4.5,7],
-          snare:[2,6],
-          hh:   [0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,6.5,7,7.5],
-        });
-
-        return totalB;
-      }
-    },
-
-    // ────────────────────────────────────────────────────────
-    // 🌙 夜風のワルツ  BPM=112  Aマイナー・しっとり3拍子
-    // ────────────────────────────────────────────────────────
-    waltz: {
-      label: '🌙 夜風のワルツ',
-      build(startT) {
-        const bpm = 112, b = 60/bpm;
-        const totalB = b * 120; // 120拍(3拍子×40小節) ≈ 107秒
-
-        const mA = [
-          [F.A5,1],[F.G5,0.5],[F.F5,0.5],[F.E5,1],
-          [F.C5,1.5],[F.D5,0.5],[F.E5,1],
-          [F.F5,1],[F.E5,0.5],[F.D5,0.5],[F.C5,1],
-          [F.A4,3],
-          [F.E5,1],[F.F5,0.5],[F.G5,0.5],[F.A5,1],
-          [F.A5,1.5],[F.G5,0.5],[F.F5,1],
-          [F.G5,1],[F.F5,0.5],[F.E5,0.5],[F.D5,1],
-          [F.C5,3],
-        ];
-        const mB = [
-          [F.C6,1],[F.B5,0.5],[F.A5,0.5],[F.G5,1],
-          [F.F5,1.5],[F.G5,0.5],[F.A5,1],
-          [F.B5,1],[F.A5,0.5],[F.G5,0.5],[F.F5,1],
-          [F.E5,3],
-          [F.F5,1],[F.G5,0.5],[F.A5,0.5],[F.B5,1],
-          [F.C6,1.5],[F.B5,0.5],[F.A5,1],
-          [F.G5,1],[F.F5,0.5],[F.E5,0.5],[F.D5,1],
-          [F.E5,3],
-        ];
-        const mC = [ // ブリッジ: 半音多め
-          [F.A5,1.5],[F.Gs5,0.5],[F.A5,1],
-          [F.F5,1],[F.E5,1],[F.F5,1],
-          [F.G5,1.5],[F.Fs5,0.5],[F.G5,1],
-          [F.E5,3],
-          [F.D5,1],[F.E5,1],[F.F5,1],
-          [F.E5,1],[F.D5,1],[F.C5,1],
-          [F.B4,1],[F.C5,1],[F.D5,1],
-          [F.E5,3],
-        ];
-
-        // A×2→B→C→A×2→B (120拍=40小節×3拍)
-        let t = startT;
-        seq(mA, b, t, 'sine', 0.38); t += 24*b;
-        seq(mA, b, t, 'sine', 0.38); t += 24*b;
-        seq(mB, b, t, 'sine', 0.40); t += 24*b;
-        seq(mC, b, t, 'sine', 0.40); t += 24*b;
-        seq(mA, b, t, 'sine', 0.36); t += 24*b;
-
-        // 対旋律 (square 低め)
-        const cnt = [[F.C5,1.5],[F.E5,1.5],[F.A4,1.5],[F.C5,1.5]];
-        for(let r=0;r<30;r++) seq(cnt, b, startT+r*6*b, 'square', 0.12);
-
-        // ハーモニー (ワルツ伴奏: 1拍目だけ)
-        const hmNotes = [F.A3,F.A3,F.F3,F.G3, F.A3,F.A3,F.F3,F.G3,
-                         F.A3,F.C4,F.F3,F.E3, F.A3,F.A3,F.G3,F.E3,
-                         F.A3,F.A3,F.F3,F.G3, F.A3,F.A3,F.F3,F.G3,
-                         F.A3,F.C4,F.F3,F.E3, F.A3,F.A3,F.G3,F.E3,
-                         F.A3,F.A3,F.F3,F.G3, F.A3,F.A3];
-        hmNotes.forEach((f,i) => {
-          note(f, startT+i*3*b, b*2.5, 'triangle', 0.22);
-        });
-
-        // ドラム (ワルツ: 1拍目キック、2-3拍目スネア弱)
-        for(let bar=0;bar<40;bar++){
-          const base = startT+bar*3*b;
-          kick(base);
-          snare(base+b);
-          snare(base+2*b);
-        }
-
-        return totalB;
-      }
-    },
-
-    // ────────────────────────────────────────────────────────
-    // 🎮 ゲームボーイ  BPM=144  Cメジャー・クラシック8bit
-    // ────────────────────────────────────────────────────────
-    gameboy: {
-      label: '🎮 ゲームボーイ',
-      build(startT) {
-        const bpm = 144, b = 60/bpm;
-        const totalB = b * 128; // ≈ 106秒
-
-        // 4声 8bitサウンド
-        const mA = [
-          [F.C6,0.25],[F.B5,0.25],[F.A5,0.25],[F.G5,0.25],[F.F5,0.5],[F.G5,0.5],
-          [F.A5,0.5],[F.C6,0.5],[F.B5,0.5],[F.A5,0.5],
-          [F.G5,0.25],[F.A5,0.25],[F.B5,0.25],[F.C6,0.25],[F.D6,0.5],[F.C6,0.5],
-          [F.B5,2],
-          [F.E6,0.5],[F.D6,0.5],[F.C6,0.5],[F.B5,0.5],
-          [F.A5,0.5],[F.G5,0.5],[F.F5,0.5],[F.E5,0.5],
-          [F.F5,0.5],[F.G5,0.5],[F.A5,0.5],[F.B5,0.5],
-          [F.C6,2],
-        ];
-        const mB = [
-          [F.G6,0.5],[F.F6,0.5],[F.E6,0.5],[F.D6,0.5],
-          [F.E6,0.5],[F.F6,0.5],[F.G6,0.5],[F.E6,0.5],
-          [F.F6,0.5],[F.G6,0.5],[F.A6,0.5],[F.G6,0.5],
-          [F.F6,2],
-          [F.E6,0.25],[F.D6,0.25],[F.C6,0.25],[F.B5,0.25],[F.C6,0.5],[F.D6,0.5],
-          [F.E6,0.5],[F.D6,0.5],[F.C6,0.5],[F.B5,0.5],
-          [F.A5,0.5],[F.B5,0.5],[F.C6,0.5],[F.D6,0.5],
-          [F.C6,2],
-        ];
-
-        // A→A→B→A→A→B→(A short×2)
-        let t = startT;
-        seq(mA, b, t, 'square', 0.44); t += 16*b;
-        seq(mA, b, t, 'square', 0.44); t += 16*b;
-        seq(mB, b, t, 'square', 0.46); t += 16*b;
-        seq(mA, b, t, 'square', 0.44); t += 16*b;
-        seq(mA, b, t, 'square', 0.44); t += 16*b;
-        seq(mB, b, t, 'square', 0.46); t += 16*b;
-        seq(mA, b, t, 'square', 0.42); t += 16*b;
-        seq(mA, b, t, 'square', 0.40); t += 16*b;
-
-        // 対旋律 (パルス波)
-        const ctr = [
-          [F.C5,0.5],[F.G4,0.5],[F.C5,0.5],[F.G4,0.5],
-          [F.A4,0.5],[F.E4,0.5],[F.A4,0.5],[F.E4,0.5],
-        ];
-        for(let r=0;r<32;r++) seq(ctr, b, startT+r*4*b, 'square', 0.14);
-
-        // ベース (8bit風: 16分音符刻み)
-        const bsA = [[F.C3,0.25],[F.C3,0.25],[F.C4,0.25],[F.C3,0.25]];
-        const bsAm= [[F.A2,0.25],[F.A2,0.25],[F.A3,0.25],[F.A2,0.25]];
-        const bsF = [[F.F2,0.25],[F.F2,0.25],[F.F3,0.25],[F.F2,0.25]];
-        const bsG = [[F.G2,0.25],[F.G2,0.25],[F.G3,0.25],[F.G2,0.25]];
-        const bsProg = [bsA,bsA,bsAm,bsAm,bsF,bsF,bsG,bsG];
-        for(let r=0;r<32;r++) {
-          const p = bsProg[r%bsProg.length];
-          seq(p, b, startT+r*b, 'triangle', 0.30);
-        }
-
-        // ドラム (4つ打ち)
-        drums(b, startT, 128, {
-          len:4,
-          kick: [0,2],
-          snare:[1,3],
-          hh:   [0,0.5,1,1.5,2,2.5,3,3.5],
-        });
-
-        return totalB;
-      }
-    },
-
-  };
-
-  // ── スケジューラ ─────────────────────────────────────────
-  function scheduleTrack(trackKey, startT) {
-    const track = TRACKS[trackKey];
-    if (!track) return 4;
-    return track.build(startT);
-  }
-
-  function stopAll() {
-    if (loopTimer) { clearTimeout(loopTimer); loopTimer = null; }
-    currentNodes.forEach(n => { try { n.stop?.(); n.disconnect?.(); } catch(e){} });
-    currentNodes = [];
-  }
-
-  function playLoop(trackKey) {
-    stopAll();
-    if (!trackKey || trackKey === 'none') { isPlaying = false; return; }
-    isPlaying = true;
-    currentTrack = trackKey;
-    ac();
-    if (masterGain) masterGain.gain.value = vol;
-
-    const doLoop = () => {
-      if (!isPlaying || currentTrack !== trackKey) return;
-      stopAll();
-      const t = ac().currentTime + 0.05;
-      const dur = scheduleTrack(trackKey, t);
-      loopTimer = setTimeout(doLoop, (dur - 0.5) * 1000);
-    };
-    doLoop();
-  }
+  
+  let currentAudio = null;
+  let currentKey = null;
+  let volume = 0.14;
 
   return {
-    tracks: TRACKS,
+    play(key) {
+      if (key === 'none') {
+        this.stop();
+        return;
+      }
+      if (currentKey === key && currentAudio && !currentAudio.paused) return;
+      
+      this.stop();
+      const url = tracks[key];
+      if (!url) return;
+
+      currentAudio = new Audio(url);
+      currentAudio.loop = true;
+      currentAudio.volume = volume;
+      currentKey = key;
+      currentAudio.play().catch(e => console.log("BGM play failed:", e));
+    },
+    stop() {
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+      }
+      currentKey = null;
+    },
     setVol(v) {
-      vol = v;
-      if (masterGain) masterGain.gain.value = v;
+      volume = v;
+      if (currentAudio) currentAudio.volume = v;
     },
-    play(trackKey) { playLoop(trackKey); },
-    stop() { stopAll(); isPlaying = false; currentTrack = null; },
     fadeOut(cb) {
-      if (!masterGain) { cb?.(); return; }
-      const start = masterGain.gain.value;
+      if (!currentAudio) { cb?.(); return; }
+      const startVol = currentAudio.volume;
       let i = 0;
       const timer = setInterval(() => {
         i++;
-        if (masterGain) masterGain.gain.value = Math.max(0, start * (1 - i/20));
-        if (i >= 20) { clearInterval(timer); stopAll(); isPlaying = false; currentTrack = null; cb?.(); }
+        if (currentAudio) currentAudio.volume = Math.max(0, startVol * (1 - i/20));
+        if (i >= 20) {
+          clearInterval(timer);
+          this.stop();
+          cb?.();
+        }
       }, 30);
     },
-    fadeIn(trackKey) {
-      if (masterGain) masterGain.gain.value = 0;
-      playLoop(trackKey);
-      let i = 0;
-      const timer = setInterval(() => {
-        i++;
-        if (masterGain) masterGain.gain.value = vol * (i/20);
-        if (i >= 20) clearInterval(timer);
-      }, 30);
+    fadeIn(key) {
+      this.play(key);
+      if (currentAudio) {
+        currentAudio.volume = 0;
+        let i = 0;
+        const timer = setInterval(() => {
+          i++;
+          if (currentAudio) currentAudio.volume = volume * (i/20);
+          if (i >= 20) clearInterval(timer);
+        }, 30);
+      }
     },
-    get currentTrack() { return currentTrack; },
-    get isPlaying() { return isPlaying; },
+    get currentTrack() { return currentKey; },
+    get isPlaying() { return currentAudio && !currentAudio.paused; }
   };
 })();
 
 // ── BGM遷移ヘルパー ────────────────────────────────────────
-let _titleBgmKey = 'sakura';
-let _gameBgmKey  = 'adventure';
+let _titleBgmKey = 'yourself';
+let _gameBgmKey  = 'thinking';
 
 function bgmToTitle() {
   BGM.fadeOut(() => BGM.fadeIn(_titleBgmKey));
@@ -3554,28 +3070,50 @@ function _doPromoteToHost(disconnectedPidx){
     NET.peer.on('connection', conn=>{
       if(NET.conns.length >= 2){ conn.close(); return; }
       NET.conns.push(conn);
+      
+      // ★修正: 再接続時は msg.originalIdx が届くまで playerIdx を確定させない
+      // ただし、既存のロジックとの互換性のため、一旦仮のインデックスを振っておく
       const assignedIdx = NET.conns.length;
       conn._playerIdx = assignedIdx;
+
       if(conn.peer) peerRegistryAdd(conn.peer, assignedIdx, conn);
       conn.on('open', ()=>{ if(conn.peer) peerRegistryAdd(conn.peer, conn._playerIdx, conn); });
+
+      const finalizeConnection = (pidx) => {
+        conn._playerIdx = pidx;
+        const pr = NET.peerRegistry.find(p=>p.conn===conn);
+        if(pr) pr.playerIdx = pidx;
+        
+        // インデックス確定後に joined を送る
+        conn.send({type:'joined', myIdx:pidx, abilityMode:true, members:numPlayers});
+        if(NET.online) broadcastState();
+        addLog(`✅ プレイヤー${pidx}が再接続しました`,'log-new');
+      };
+
+      let finalized = false;
       conn.on('data', msg=>{
         if(msg.type==='reconnect' && msg.originalIdx !== undefined){
-          conn._playerIdx = msg.originalIdx;
-          const pr = NET.peerRegistry.find(p=>p.conn===conn);
-          if(pr) pr.playerIdx = msg.originalIdx;
+          finalized = true;
+          finalizeConnection(msg.originalIdx);
         }
+        // reconnect 以外のメッセージでも、もし未確定ならその時の index で処理
         onNetData(msg, conn._playerIdx);
       });
+
       conn.on('close', ()=>{
         if(conn.peer && NET.online) onPeerDisconnected(conn.peer);
         _handleGuestDisconnect(conn, conn._playerIdx);
       });
       conn.on('error', e=>{ setOnlineStatus('通信エラー: '+e.message); });
-      const onOpen = ()=>{
-        conn.send({type:'joined', myIdx:conn._playerIdx, abilityMode:true, members:numPlayers});
-        if(NET.online) broadcastState();
-      };
-      if(conn.open){ onOpen(); } else { conn.on('open', onOpen); }
+
+      // ★修正: open 時には joined を送らず、reconnect メッセージを待つ
+      // 5秒待っても reconnect が来ない場合は、仮のインデックスで確定させる
+      setTimeout(() => {
+        if(!finalized && conn.open) {
+          finalized = true;
+          finalizeConnection(conn._playerIdx);
+        }
+      }, 2000);
     });
   }
 
