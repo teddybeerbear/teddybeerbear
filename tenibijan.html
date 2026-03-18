@@ -1273,23 +1273,23 @@ body::before{
       <div style="display:flex;flex-direction:column;gap:10px;">
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:.65rem;color:#5a7a6a;width:60px;">🎵 SE</span>
-          <input type="range" min="0" max="1" step="0.05" value="0.14" style="flex:1;accent-color:var(--gold);"
-            oninput="SFX.setVol(+this.value)">
+          <input id="sliderSE" type="range" min="0" max="0.07" step="0.005" value="0.035" style="flex:1;accent-color:var(--gold);"
+            oninput="SFX.setVol(+this.value); saveSettings();">
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:.65rem;color:#5a7a6a;width:60px;">🀇 引く/捨て</span>
-          <input type="range" min="0" max="1" step="0.05" value="0.14" style="flex:1;accent-color:var(--gold);"
-            oninput="SFX.setSeVol(+this.value)">
+          <input id="sliderSE2" type="range" min="0" max="0.84" step="0.01" value="0.42" style="flex:1;accent-color:var(--gold);"
+            oninput="SFX.setSeVol(+this.value); saveSettings();">
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:.65rem;color:#5a7a6a;width:60px;">🎶 BGM</span>
-          <input type="range" min="0" max="0.5" step="0.02" value="0.07" style="flex:1;accent-color:var(--gold);"
-            oninput="BGM.setVol(+this.value)">
+          <input id="sliderBGM" type="range" min="0" max="0.07" step="0.005" value="0.035" style="flex:1;accent-color:var(--gold);"
+            oninput="BGM.setVol(+this.value); saveSettings();">
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:.65rem;color:#5a7a6a;width:60px;">タイトル曲</span>
           <select id="titleBgmSel" style="flex:1;background:#030a10;color:var(--gold);border:1px solid #1a3a2a;border-radius:5px;font-size:.62rem;padding:3px 6px;"
-            onchange="_titleBgmKey=this.value; BGM.fadeOut(()=>BGM.fadeIn(_titleBgmKey));">
+            onchange="_titleBgmKey=this.value; BGM.fadeOut(()=>BGM.fadeIn(_titleBgmKey)); saveSettings();">
             <option value="yourself">yourself</option>
             <option value="thinking">シンキング</option>
             <option value="firststep">ファーストステップ</option>
@@ -1301,7 +1301,7 @@ body::before{
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:.65rem;color:#5a7a6a;width:60px;">対局曲</span>
           <select id="gameBgmSel" style="flex:1;background:#030a10;color:var(--gold);border:1px solid #1a3a2a;border-radius:5px;font-size:.62rem;padding:3px 6px;"
-            onchange="_gameBgmKey=this.value;">
+            onchange="_gameBgmKey=this.value; saveSettings();">
             <option value="thinking">シンキング</option>
             <option value="yourself">yourself</option>
             <option value="firststep">ファーストステップ</option>
@@ -1654,18 +1654,18 @@ body::before{
         <div style="border-top:1px solid #1a2a1a;margin:2px 0;"></div>
         <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
           <span>🎵 SE</span>
-          <input type="range" min="0" max="1" step="0.05" value="0.14" style="flex:1;accent-color:var(--gold);"
-            oninput="SFX.setVol(+this.value)">
+          <input id="sliderSEhdr" type="range" min="0" max="0.07" step="0.005" value="0.035" style="flex:1;accent-color:var(--gold);"
+            oninput="SFX.setVol(+this.value); _syncSliders('se',+this.value); saveSettings();">
         </div>
         <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
           <span>🀇 引く/捨て</span>
-          <input type="range" min="0" max="1" step="0.05" value="0.14" style="flex:1;accent-color:var(--gold);"
-            oninput="SFX.setSeVol(+this.value)">
+          <input id="sliderSE2hdr" type="range" min="0" max="0.84" step="0.01" value="0.42" style="flex:1;accent-color:var(--gold);"
+            oninput="SFX.setSeVol(+this.value); _syncSliders('se2',+this.value); saveSettings();">
         </div>
         <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
           <span>🎶 BGM</span>
-          <input type="range" min="0" max="0.5" step="0.02" value="0.07" style="flex:1;accent-color:var(--gold);"
-            oninput="BGM.setVol(+this.value)">
+          <input id="sliderBGMhdr" type="range" min="0" max="0.07" step="0.005" value="0.035" style="flex:1;accent-color:var(--gold);"
+            oninput="BGM.setVol(+this.value); _syncSliders('bgm',+this.value); saveSettings();">
         </div>
         <select id="gameBgmSelHdr" style="background:#030a10;color:var(--gold);border:1px solid #1a3a2a;border-radius:4px;font-size:.5rem;padding:2px 3px;"
           onchange="_gameBgmKey=this.value; BGM.fadeOut(()=>BGM.fadeIn(_gameBgmKey)); document.getElementById('gameBgmSel')&&(document.getElementById('gameBgmSel').value=this.value);">
@@ -1787,8 +1787,8 @@ body::before{
 // ============================================================
 const SFX = (() => {
   let ctx = null;
-  let vol   = 0.14; // Web Audio API SE の音量
-  let seVol = 0.14; // MP3 SE（引く・捨てる）の音量
+  let vol   = 0.035; // Web Audio API SE の音量
+  let seVol = 0.42; // MP3 SE（引く・捨てる）の音量
 
   function ac() {
     if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -2035,7 +2035,7 @@ const BGM = (() => {
   
   let currentAudio = null;
   let currentKey = null;
-  let volume = 0.07;
+  let volume = 0.035;
 
   return {
     play(key) {
@@ -2106,6 +2106,80 @@ function bgmToTitle() {
 }
 function bgmToGame() {
   BGM.fadeOut(() => BGM.fadeIn(_gameBgmKey));
+}
+
+// ── 設定保存・復元 ───────────────────────────────────────────
+const SETTINGS_KEY = 'mjSettings';
+
+function saveSettings(){
+  try{
+    const data = {
+      seVol:      document.getElementById('sliderSE')?.value   ?? '0.035',
+      se2Vol:     document.getElementById('sliderSE2')?.value  ?? '0.42',
+      bgmVol:     document.getElementById('sliderBGM')?.value  ?? '0.035',
+      titleBgm:   _titleBgmKey,
+      gameBgm:    _gameBgmKey,
+    };
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(data));
+  }catch(e){}
+}
+
+function loadSettings(){
+  try{
+    const s = localStorage.getItem(SETTINGS_KEY);
+    if(!s) return;
+    const data = JSON.parse(s);
+
+    // SE
+    if(data.seVol != null){
+      const v = +data.seVol;
+      SFX.setVol(v);
+      ['sliderSE','sliderSEhdr'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.value=v;
+      });
+    }
+    // SE2（引く/捨て）
+    if(data.se2Vol != null){
+      const v = +data.se2Vol;
+      SFX.setSeVol(v);
+      ['sliderSE2','sliderSE2hdr'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.value=v;
+      });
+    }
+    // BGM
+    if(data.bgmVol != null){
+      const v = +data.bgmVol;
+      BGM.setVol(v);
+      ['sliderBGM','sliderBGMhdr'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.value=v;
+      });
+    }
+    // タイトルBGMキー
+    if(data.titleBgm){
+      _titleBgmKey = data.titleBgm;
+      const sel = document.getElementById('titleBgmSel');
+      if(sel) sel.value = data.titleBgm;
+    }
+    // ゲームBGMキー
+    if(data.gameBgm){
+      _gameBgmKey = data.gameBgm;
+      const sel = document.getElementById('gameBgmSel');
+      if(sel) sel.value = data.gameBgm;
+      const selHdr = document.getElementById('gameBgmSelHdr');
+      if(selHdr) selHdr.value = data.gameBgm;
+    }
+  }catch(e){}
+}
+
+// タイトル画面とゲームヘッダーのスライダーを相互同期する
+function _syncSliders(type, val){
+  if(type==='se'){
+    const el=document.getElementById('sliderSE'); if(el) el.value=val;
+  } else if(type==='se2'){
+    const el=document.getElementById('sliderSE2'); if(el) el.value=val;
+  } else if(type==='bgm'){
+    const el=document.getElementById('sliderBGM'); if(el) el.value=val;
+  }
 }
 
 // ── 復帰セッション管理 ───────────────────────────────────────
@@ -8402,6 +8476,7 @@ function _shopToast(msg){
 // Show profile on first load if no name saved
 (function(){
   loadProfile();
+  loadSettings(); // ★ 音量・BGM設定を復元
   if(!localStorage.getItem('mjProfile')){
     // First visit: open profile screen right away
     setTimeout(()=>{
