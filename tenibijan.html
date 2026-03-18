@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>手にビまーじゃんABC</title>
+<title>手にビまーじゃん444</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 function _centerHandSeats(table){ /* CSS固定値で処理 */ }
@@ -3262,16 +3262,31 @@ function promoteGuestToHost(disconnectedPidx = 0){
 }
 
 // 新ホスト(元guest1)への再接続
-function _reconnectToNewHost(newHostPeerId, disconnectedPidx = 0){
+function _reconnectToNewHost(newHostPeerId){
   if(NET.isHost) return;
   if(NET.conn){ try{ NET.conn.close(); }catch(e){} NET.conn=null; }
+
+  // 接続先（新ホスト）のプレイヤーインデックスを今のうちに特定しておく
+  // conn.close 時に conn._playerIdx が未設定でも正しく特定できる
+  let newHostIdx = NET.guestPeerIds.indexOf(newHostPeerId);
+  if(newHostIdx >= 0) newHostIdx = newHostIdx + 1; // guestPeerIds は idx1以降
+  else {
+    // G.players の peerId から検索
+    if(G && G.players){
+      const byPeer = G.players.findIndex(p => p.peerId === newHostPeerId);
+      newHostIdx = byPeer >= 0 ? byPeer : 1; // デフォルト P1
+    } else {
+      newHostIdx = 1;
+    }
+  }
+
   const myOriginalIdx = NET.myIdx;
   const conn = NET.peer.connect(newHostPeerId, {reliable:true});
   NET.conn = conn;
   conn.on('open', ()=>{
     NET.online = true;
     NET._promotingToHost = false;
-    if(conn.peer) peerRegistryAdd(conn.peer, 0, conn);
+    if(conn.peer) peerRegistryAdd(conn.peer, newHostIdx, conn);
     conn.send({type:'reconnect', originalIdx: myOriginalIdx, peerId: NET.peer?.id||''});
     conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',peerId:NET.peer?.id||''});
     addLog('✅ 新ホストに再接続しました','log-new');
@@ -3281,17 +3296,17 @@ function _reconnectToNewHost(newHostPeerId, disconnectedPidx = 0){
   conn.on('close', ()=>{
     if(!NET.isHost){
       NET._promotingToHost = false;
-      const disconnectedIdx = getPlayerIdxByConn(conn);
-      promoteGuestToHost(disconnectedIdx);
+      // ★ newHostIdx（接続先 = 切断した新ホスト）を確実に CPU 扱いにする
+      promoteGuestToHost(newHostIdx);
     }
   });
   conn.on('error', ()=>{
     addLog('⚠️ 再接続失敗。自分がホスト昇格します','log-new');
     NET._promotingToHost = false;
-    _doPromoteToHost(disconnectedPidx);
+    _doPromoteToHost(newHostIdx);
   });
   setTimeout(()=>{
-    if(!NET.online && !NET.isHost){ NET._promotingToHost=false; _doPromoteToHost(disconnectedPidx); }
+    if(!NET.online && !NET.isHost){ NET._promotingToHost=false; _doPromoteToHost(newHostIdx); }
   }, 5000);
 }
 
