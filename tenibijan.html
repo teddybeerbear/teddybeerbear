@@ -1271,6 +1271,11 @@ body::before{
             oninput="SFX.setVol(+this.value)">
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:.65rem;color:#5a7a6a;width:60px;">🀇 引く/捨て</span>
+          <input type="range" min="0" max="1" step="0.05" value="0.14" style="flex:1;accent-color:var(--gold);"
+            oninput="SFX.setSeVol(+this.value)">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:.65rem;color:#5a7a6a;width:60px;">🎶 BGM</span>
           <input type="range" min="0" max="0.5" step="0.02" value="0.07" style="flex:1;accent-color:var(--gold);"
             oninput="BGM.setVol(+this.value)">
@@ -1647,6 +1652,11 @@ body::before{
             oninput="SFX.setVol(+this.value)">
         </div>
         <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
+          <span>🀇 引く/捨て</span>
+          <input type="range" min="0" max="1" step="0.05" value="0.14" style="flex:1;accent-color:var(--gold);"
+            oninput="SFX.setSeVol(+this.value)">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
           <span>🎶 BGM</span>
           <input type="range" min="0" max="0.5" step="0.02" value="0.07" style="flex:1;accent-color:var(--gold);"
             oninput="BGM.setVol(+this.value)">
@@ -1771,7 +1781,8 @@ body::before{
 // ============================================================
 const SFX = (() => {
   let ctx = null;
-  let vol = 0.14; // 控えめ master volume
+  let vol   = 0.14; // Web Audio API SE の音量
+  let seVol = 0.14; // MP3 SE（引く・捨てる）の音量
 
   function ac() {
     if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1840,20 +1851,21 @@ const SFX = (() => {
   }
 
   return {
-    setVol(v) { vol = v; },
+    setVol(v)   { vol   = v; },
+    setSeVol(v) { seVol = v; },
 
-    // ── 牌を引く: 短いカチッ ──────────────────────────────
+    // ── 牌を引く: MP3 ─────────────────────────────────────
     draw() {
-      const c = ac(), t = c.currentTime;
-      noise(0.04, 0.5, 1800, t);
-      beep(480, 0.04, 0.12, t);
+      const a = new Audio('https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/SE/hiku.mp3');
+      a.volume = seVol;
+      a.play().catch(()=>{});
     },
 
-    // ── 牌を捨てる: コツン ───────────────────────────────
+    // ── 牌を捨てる: MP3 ──────────────────────────────────
     discard() {
-      const c = ac(), t = c.currentTime;
-      noise(0.05, 0.4, 700, t);
-      beep(280, 0.05, 0.15, t);
+      const a = new Audio('https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/SE/sute.mp3');
+      a.volume = seVol;
+      a.play().catch(()=>{});
     },
 
     // ── リーチ: ビシッ（上昇スイープ） ───────────────────
