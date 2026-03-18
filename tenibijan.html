@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>手にビまーじゃんvar001</title>
+<title>手にビまーじゃんvar002</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 function _centerHandSeats(table){ /* CSS固定値で処理 */ }
@@ -2754,6 +2754,7 @@ let playerAFK=false;
 let noMeldEnabled=false;          // 離席モード
 let numPlayers=3;
 let pendingAction=null;
+let _cpuActionGen = 0; // 世代カウンタ: ホスト昇格時にインクリメントし古いsetTimeoutを無効化
 
 // Online state
 let NET={
@@ -3294,6 +3295,7 @@ function _doPromoteToHost(disconnectedPidx){
   NET.isHost = true;
   NET.online = true;
   NET._promotingToHost = false;
+  _cpuActionGen++; // ★ 旧ホストの stale setTimeout(cpuAction) を全て無効化
 
   // ★古い接続をクリア（ゲスト時代の接続が残ると isOnlineGuestIdx が誤判定する）
   NET.conn = null;
@@ -3840,7 +3842,7 @@ function resumeGameAfterHostLost(disconnectedPidx){
   }
 
   // CPU（切断者含む）のターン
-  setTimeout(cpuAction, 500);
+  scheduleCpuAction(500);
 }
 
 // ── Send/receive ──────────────────────────────────────────────
@@ -4553,9 +4555,9 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; timerSt
   broadcastState();
   // 親が自分ならタイマー起動（nextTurnを経由しないため）
   if(G.current===NET.myIdx) timerOnMyTurn();
-  if(!NET.online&&G.current!==0)setTimeout(cpuAction,900);
+  if(!NET.online&&G.current!==0)scheduleCpuAction(900);
   // オンラインホスト: ゲストの番ならCPUを呼ばない
-  if(NET.online&&amIHost()&&G.current!==NET.myIdx&&!isOnlineGuestIdx(G.current))setTimeout(cpuAction,900);
+  if(NET.online&&amIHost()&&G.current!==NET.myIdx&&!isOnlineGuestIdx(G.current))scheduleCpuAction(900);
 }
 
 // ============================================================
@@ -4761,8 +4763,8 @@ function handleKakan(pidx, handIdx){
   }
   renderAll();broadcastState();
   // オンラインホスト: ゲストの番ならCPUを呼ばない
-  if(!NET.online&&pidx!==0)setTimeout(cpuAction,700);
-  if(NET.online&&amIHost()&&pidx!==NET.myIdx&&!isOnlineGuestIdx(pidx))setTimeout(cpuAction,700);
+  if(!NET.online&&pidx!==0)scheduleCpuAction(700);
+  if(NET.online&&amIHost()&&pidx!==NET.myIdx&&!isOnlineGuestIdx(pidx))scheduleCpuAction(700);
 }
 
 function humanKakan(handIdx){
@@ -4832,8 +4834,8 @@ function handleAnkan(pidx, tileKey){
   }
   renderAll();broadcastState();
   // オンラインホスト: ゲストの番ならCPUを呼ばない
-  if(!NET.online&&pidx!==NET.myIdx)setTimeout(cpuAction,700);
-  if(NET.online&&amIHost()&&pidx!==NET.myIdx&&!isOnlineGuestIdx(pidx))setTimeout(cpuAction,700);
+  if(!NET.online&&pidx!==NET.myIdx)scheduleCpuAction(700);
+  if(NET.online&&amIHost()&&pidx!==NET.myIdx&&!isOnlineGuestIdx(pidx))scheduleCpuAction(700);
 }
 
 function humanAnkan(tileKey){
@@ -4876,8 +4878,8 @@ function handlePon(pidx,tile,fromPidx){
   G.current=pidx;G.phase='discard';renderAll();broadcastState();
   if(pidx===NET.myIdx){ timerOnMyTurn(); }
   // オンラインホスト: ゲストの番ならCPUを呼ばない
-  if(!NET.online&&pidx!==0)setTimeout(cpuAction,700);
-  if(NET.online&&amIHost()&&pidx!==NET.myIdx&&!isOnlineGuestIdx(pidx))setTimeout(cpuAction,700);
+  if(!NET.online&&pidx!==0)scheduleCpuAction(700);
+  if(NET.online&&amIHost()&&pidx!==NET.myIdx&&!isOnlineGuestIdx(pidx))scheduleCpuAction(700);
 }
 
 // ── ゲーム状態の整合性修正 ────────────────────────────────────
@@ -4935,7 +4937,7 @@ function _resumeCurrentPhase(){
     } else {
       G.phase = phase;
       broadcastState();
-      setTimeout(cpuAction, 700);
+      scheduleCpuAction(700);
     }
   };
 
@@ -4964,10 +4966,10 @@ function nextTurn(pidx){
   if(NET.online&&amIHost()){
     // ★修正: 旧コードは `&& !amIHost()` が常に false でゲスト待機が完全な死コードだった
     if(isOnlineGuestIdx(pidx)){broadcastState();return;} // ゲストの番 → state push して待つ
-    if(pidx!==NET.myIdx){setTimeout(cpuAction,700);return;} // CPUの番
+    if(pidx!==NET.myIdx){scheduleCpuAction(700);return;} // CPUの番
     // 自分(ホスト)の番はそのまま下へ
   }
-  if(!NET.online&&pidx!==0){setTimeout(cpuAction,700);return;}
+  if(!NET.online&&pidx!==0){scheduleCpuAction(700);return;}
 
   // Human draw — show wall for selection
   const myIdx=NET.myIdx;
@@ -5463,8 +5465,18 @@ function handleRon(widx,tile,fromidx){
 // ============================================================
 // CPU AI
 // ============================================================
+// setTimeout(cpuAction) の代わりにこれを使う。
+// ホスト昇格時に _cpuActionGen がインクリメントされるため、
+// 旧ホストが登録した stale な setTimeout が新ホストで発火しても弾かれる。
+function scheduleCpuAction(delay){
+  const gen = _cpuActionGen;
+  setTimeout(()=>{ if(_cpuActionGen===gen) cpuAction(); }, delay);
+}
+
 function cpuAction(){
   if(NET.online&&!amIHost())return; // guests never run cpu
+  // ★ 自分のターンなのに cpuAction が呼ばれたら無視（stale setTimeout 対策）
+  if(NET.online && G.current === NET.myIdx) return;
   const idx=G.current;const p=G.players[idx];
   if(['end','win','idle'].includes(G.phase))return;
   if(G.phase==='draw'){
