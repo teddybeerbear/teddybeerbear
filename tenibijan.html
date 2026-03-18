@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>手にビまーじゃんaaa</title>
+<title>手にビまーじゃんABC</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 function _centerHandSeats(table){ /* CSS固定値で処理 */ }
@@ -2876,31 +2876,27 @@ function stopSyncBroadcast(){
   Object.keys(_pingTimers).forEach(k=>{ clearTimeout(_pingTimers[k]); delete _pingTimers[k]; });
 }
 
+// 接続オブジェクトからプレイヤーインデックスを特定する
+function getPlayerIdxByConn(conn){
+  if(!conn) return 0;
+  // PeerID で G.players を検索（最も信頼性が高い）
+  if(conn.peer && G && G.players){
+    const byPeer = G.players.findIndex(p => p.peerId === conn.peer);
+    if(byPeer >= 0) return byPeer;
+  }
+  // conn._playerIdx が設定されていれば使う
+  if(conn._playerIdx !== undefined) return conn._playerIdx;
+  // guestPeerIds からフォールバック
+  if(conn.peer && NET.guestPeerIds){
+    const slot = NET.guestPeerIds.indexOf(conn.peer);
+    if(slot >= 0) return slot + 1;
+  }
+  return 0;
+}
+
 // ── ピア切断時のホスト再選出 ─────────────────────────────
 function onPeerDisconnected(peerId){
   peerRegistryRemove(peerId);
-  // ★ G.players の peerId で切断者を特定（guestPeerIds 配列ズレに依存しない）
-  let disconnectedPlayerIdx = 0; // default: 元ホスト
-  if(G && G.players){
-    const byPeer = G.players.findIndex(p => p.peerId === peerId);
-    if(byPeer >= 0){
-      disconnectedPlayerIdx = byPeer;
-    } else {
-      // fallback: guestPeerIds から
-      const guestSlot = NET.guestPeerIds.indexOf(peerId);
-      if(guestSlot >= 0) disconnectedPlayerIdx = guestSlot + 1;
-    }
-  }
-
-  if(!NET.isHost){
-    // ★修正: 切断者インデックスを渡してホスト昇格後に正しく isDisconnected を設定できるようにする
-    promoteGuestToHost(disconnectedPlayerIdx);
-  } else {
-    // 現ホスト: 切断したゲストをCPU扱いにする
-    if(G && G.players && G.players[disconnectedPlayerIdx]){
-      G.players[disconnectedPlayerIdx].isDisconnected = true;
-    }
-  }
 }
 
 // ヘルパー: 指定インデックスがオンラインゲストかどうか（ホスト視点で使用）
@@ -2910,7 +2906,7 @@ function isOnlineGuestIdx(pidx){
   // 自分自身はゲストではない
   if(pidx === NET.myIdx) return false;
   // 切断済みはCPU扱い
-  if(G.players[pidx].isDisconnected) return false;
+  if(G.players[pidx].isCpu) return false;
   // ★修正: ホスト昇格直後は NET.conns=[] のため、接続済みチェックだけでは全員 false になる。
   // peerId が設定されていて isDisconnected でない = 元々オンラインで参加していたゲスト。
   // 再接続中（NET.conns 未登録）でもオンラインゲストとして扱い、CPU を走らせない。
@@ -3242,28 +3238,19 @@ function _rankGuestConnect(hostPeerId, attempt){
 }
 
 // ゲストがホストに昇格する関数
-// disconnectedPidx: 切断したプレイヤーのインデックス（省略時は 0 = 元ホスト）
 function promoteGuestToHost(disconnectedPidx = 0){
   if(NET.isHost) return;
-  // 競合防止: 複数ゲストが同時に呼んでも1回だけ実行
   if(NET._promotingToHost) return;
   NET._promotingToHost = true;
 
-  // 切断者を即座に isDisconnected にする（CPU代打を開始できるようにする）
-  if(G && G.players && G.players[disconnectedPidx]){
-    G.players[disconnectedPidx].isDisconnected = true;
-  }
-
   if(NET.myIdx > 1){
-    // P2以上: まず guestPeerIds[0]（P1）が新ホストになったか試みる
-    // ただし P1 が既に切断済みの場合は guestPeerIds[0] が P1 の PeerID のまま残っている可能性がある
-    // → 接続失敗したら自分がホスト昇格する（_reconnectToNewHost のエラーハンドラで処理）
     const newHostPeerId = NET.guestPeerIds[0];
+    // 新ホスト候補が切断者本人でなければ再接続を試みる
     if(newHostPeerId && newHostPeerId !== G.players[disconnectedPidx]?.peerId){
       addLog('🔄 新しいホストに再接続中…','log-new');
       if(NET.conn){ try{ NET.conn.close(); }catch(e){} NET.conn=null; }
       NET.online = false;
-      setTimeout(()=>_reconnectToNewHost(newHostPeerId, disconnectedPidx), 800);
+      setTimeout(()=>_reconnectToNewHost(newHostPeerId), 800);
     } else {
       addLog('⚠️ 新ホストPeerID不明のため自分がホスト昇格します','log-new');
       _doPromoteToHost(disconnectedPidx);
@@ -3271,7 +3258,6 @@ function promoteGuestToHost(disconnectedPidx = 0){
     return;
   }
 
-  // myIdx=1のゲストがホスト昇格
   _doPromoteToHost(disconnectedPidx);
 }
 
@@ -3295,10 +3281,8 @@ function _reconnectToNewHost(newHostPeerId, disconnectedPidx = 0){
   conn.on('close', ()=>{
     if(!NET.isHost){
       NET._promotingToHost = false;
-      // ★修正: キャプチャした disconnectedPidx（P0のインデックス）ではなく
-      // onPeerDisconnected で動的に切断者を特定する（P1が切断した場合に正しく機能する）
-      if(conn.peer && NET.online) onPeerDisconnected(conn.peer);
-      else promoteGuestToHost(); // peerId不明の場合のフォールバック
+      const disconnectedIdx = getPlayerIdxByConn(conn);
+      promoteGuestToHost(disconnectedIdx);
     }
   });
   conn.on('error', ()=>{
@@ -3311,23 +3295,28 @@ function _reconnectToNewHost(newHostPeerId, disconnectedPidx = 0){
   }, 5000);
 }
 
-// 実際のホスト昇格処理（disconnectedPidx: 切断した元ホストのプレイヤーインデックス）
+// 実際のホスト昇格処理
 function _doPromoteToHost(disconnectedPidx){
   if(NET.isHost) return;
 
   NET.isHost = true;
   NET.online = true;
   NET._promotingToHost = false;
-  _cpuActionGen++; // ★ 旧ホストの stale setTimeout(cpuAction) を全て無効化
+  _cpuActionGen++; // 旧ホストの stale setTimeout を全て無効化
 
-  // ★古い接続をクリア（ゲスト時代の接続が残ると isOnlineGuestIdx が誤判定する）
+  // 古い接続をクリア
   NET.conn = null;
   NET.conns = NET.conns.filter(c => c && c.open);
 
+  // 切断プレイヤーを CPU 扱いにする
   if(G && G.players && G.players[disconnectedPidx]){
-    G.players[disconnectedPidx].isDisconnected = true;
-    addLog(`🔄 ${G.players[disconnectedPidx].name}が切断しました。ホスト昇格しました。`,'log-new');
+    G.players[disconnectedPidx].isCpu = true;
+    addLog(`🔄 ${G.players[disconnectedPidx].name}が切断。ホスト昇格しました。`,'log-new');
   }
+
+  // 宙ぶらりんアクションを破棄して状態を正規化
+  pendingAction = null;
+  _normalizeState();
 
   if(NET.peer){
     NET.peer.off('connection');
@@ -3349,7 +3338,7 @@ function _doPromoteToHost(disconnectedPidx){
         
         // 切断フラグを解除
         if(G && G.players && G.players[pidx]){
-          G.players[pidx].isDisconnected = false;
+          G.players[pidx].isCpu = false;
         }
 
         // インデックス確定後に joined を送る
@@ -3732,35 +3721,26 @@ function setupConn(conn, guestIdx){
     onNetData(msg, senderIdx);
   });
   conn.on('close', ()=>{
-    // ★ onPeerDisconnected の中で promoteGuestToHost → _doPromoteToHost が呼ばれると
-    // NET.isHost が true になる。この後 amIHost() を評価すると true になるため
-    // _handleGuestDisconnect → resumeGameAfterHostLost が呼ばれ cpuAction が二重に
-    // スケジュールされてしまう。昇格前のフラグを保持して分岐を正しく行う。
-    const wasHost = NET.isHost;
-
-    // peerRegistry から除外 → ホスト再選出
     if(conn.peer && NET.online) onPeerDisconnected(conn.peer);
 
     if(NET.online){
+      const wasHost = NET.isHost; // onPeerDisconnected の前に取得済み
       if(wasHost){
-        // 昇格前からホストだった → ゲストが切断した通常ケース
-        _handleGuestDisconnect(conn, guestIdx);
+        // 現ホスト: ゲストが切断
+        const disconnectedIdx = getPlayerIdxByConn(conn);
+        _handleGuestDisconnect(conn, disconnectedIdx);
       } else {
-        // ゲストだった（切断検知時点）→ ホスト側切断への対応
-        // onPeerDisconnected の中で promoteGuestToHost が呼ばれ NET.isHost が変わる場合がある
+        // ゲスト: ホストが切断
         saveRejoinSession();
-        // ★修正: 既にホスト昇格済み（myIdx=1が同期的に昇格）ならオーバーレイ不要
+        const disconnectedIdx = getPlayerIdxByConn(conn);
         if(!NET.isHost){
-          // myIdx>1 の場合は昇格処理中: オーバーレイは出さずに自動昇格を待つ
-          // （_reconnectToNewHost が失敗したら _doPromoteToHost が呼ばれる）
-          hideReconnectOverlay();
+          promoteGuestToHost(disconnectedIdx);
         } else {
-          // 昇格済み: オーバーレイを閉じてゲームを継続
           hideReconnectOverlay();
         }
       }
     } else {
-      NET.online=false;
+      NET.online = false;
     }
   });
   conn.on('error', e=>{ setOnlineStatus('通信エラー: '+e.message); });
@@ -3818,7 +3798,7 @@ function _handleRejoin(conn, msg){
     if(originalIdx >= 1) NET.guestPeerIds[originalIdx-1] = msg.peerId;
   }
   if(msg.iconId) p.iconId = msg.iconId;
-  p.isDisconnected = false;
+  p.isCpu = false;
 
   addLog(`🔄 ${p.name} が対局に復帰しました！`,'log-new');
 
@@ -3848,7 +3828,7 @@ function resumeGameAfterHostLost(disconnectedPidx){
 
   // 切断者を離席状態に設定
   if(G.players[disconnectedPidx]){
-    G.players[disconnectedPidx].isDisconnected = true;
+    G.players[disconnectedPidx].isCpu = true;
   }
 
   const cur = G.current;
@@ -4032,7 +4012,7 @@ function handleGuestAction(msg, senderIdx){
           if(pr) pr.playerIdx = msg.originalIdx;
         }
         if(G && G.players && G.players[msg.originalIdx]){
-          G.players[msg.originalIdx].isDisconnected = false;
+          G.players[msg.originalIdx].isCpu = false;
           addLog(`✅ ${G.players[msg.originalIdx].name}が再接続しました。`,'log-new');
           broadcastState();
           renderAll();
@@ -4499,6 +4479,7 @@ function makePlayer(id,dealer){
 
   return{id,name:pname,iconId:pIconId,
     peerId:'', // 接続PeerID（オンライン時に設定）
+    isCpu: false, // 切断してCPU代打中
     wind:WINDS[id],hand:[],melds:[],discards:[],kitaTiles:[],kitaCount:0,
     score:0,isDealer:dealer,riichi:false,doubleRiichi:false,openRiichi:false,
     ippatsu:false,isTenhou:false,isChiihou:false,isRenhou:false,
@@ -4954,12 +4935,6 @@ function _normalizeState(){
 // ホスト昇格後に現在のフェーズをそのまま再開する。
 function _resumeCurrentPhase(){
   if(!G || !G.players) return;
-
-  // ① 進行中の宙ぶらりんアクションを破棄
-  pendingAction = null;
-
-  // ② state 整合性を正規化
-  _normalizeState();
 
   const pidx = G.current;
   const p    = G.players[pidx];
@@ -7106,7 +7081,7 @@ function renderTable(){
     ].join('');
 
     const riichiStick=p.riichi?`<span class="riichi-stick">リーチ</span>`:''; 
-    const afkBadge=((isHuman&&playerAFK)||p.isDisconnected)?`<span class="badge" style="background:#1a0000;border:1px solid #cc3333;color:#ff6666;">離席</span>`:'';
+    const afkBadge=((isHuman&&playerAFK)||p.isCpu)?`<span class="badge" style="background:#1a0000;border:1px solid #cc3333;color:#ff6666;">離席</span>`:'';
 
     const abilityLabels2={'':'','mine':'💣 地雷','light':'☀️ 光','yami':'🌑 闇','haku':'🀆 白','sanctuary':'🏛️ 聖域','pinzu':'🔵 ピンズー教','steal':'🃏 スチール','pen':'🖊️ ペン'};
     const abilityBadge = (G_ABILITY_MODE && p.ability) ? `<span class="ability-badge">${abilityLabels2[p.ability]||p.ability}</span>` : '';
@@ -7184,7 +7159,7 @@ function renderTable(){
     }
 
     // ── 離席: 手牌の左上に絶対配置 ──
-    if((isHuman && playerAFK) || p.isDisconnected){
+    if((isHuman && playerAFK) || p.isCpu){
       const afkEl=document.createElement('div');
       afkEl.style.cssText='position:absolute;top:-22px;left:228px;font-size:.75rem;color:#ff6666;background:#1a0000;border:1px solid #cc3333;border-radius:4px;padding:2px 7px;z-index:5;pointer-events:none;font-weight:700;';
       afkEl.textContent='離席';
