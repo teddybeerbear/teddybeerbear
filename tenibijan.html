@@ -1854,16 +1854,18 @@ const SFX = (() => {
     setVol(v)   { vol   = v; },
     setSeVol(v) { seVol = v; },
 
-    // ── 牌を引く: MP3 ─────────────────────────────────────
+    // ── 牌を引く: hiku1〜5 ランダム ─────────────────────
     draw() {
-      const a = new Audio('https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/SE/hiku.mp3');
+      const n = Math.ceil(Math.random() * 5);
+      const a = new Audio(`https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/SE/hiku${n}.mp3`);
       a.volume = seVol;
       a.play().catch(()=>{});
     },
 
-    // ── 牌を捨てる: MP3 ──────────────────────────────────
+    // ── 牌を捨てる: sute1〜5 ランダム ───────────────────
     discard() {
-      const a = new Audio('https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/SE/sute.mp3');
+      const n = Math.ceil(Math.random() * 5);
+      const a = new Audio(`https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/SE/sute${n}.mp3`);
       a.volume = seVol;
       a.play().catch(()=>{});
     },
