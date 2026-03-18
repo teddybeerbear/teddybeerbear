@@ -2671,14 +2671,19 @@ function onPeerDisconnected(peerId){
 function isOnlineGuestIdx(pidx){
   if(!NET.online || !amIHost()) return false;
   if(!G || !G.players || !G.players[pidx]) return false;
+  // 自分自身はゲストではない
+  if(pidx === NET.myIdx) return false;
   // 切断済みはCPU扱い
   if(G.players[pidx].isDisconnected) return false;
-  // ★ PeerIDベースで判定（インデックスズレに依存しない）
+  // ★修正: ホスト昇格直後は NET.conns=[] のため、接続済みチェックだけでは全員 false になる。
+  // peerId が設定されていて isDisconnected でない = 元々オンラインで参加していたゲスト。
+  // 再接続中（NET.conns 未登録）でもオンラインゲストとして扱い、CPU を走らせない。
+  // 接続が確立済みかどうかは broadcastState の送達で自然に同期される。
   const playerPeerId = G.players[pidx].peerId;
   if(playerPeerId){
-    return NET.conns.some(c => c && c.open && c.peer === playerPeerId);
+    return true; // peerId 既知 + 非切断 = オンラインゲスト（再接続中も含む）
   }
-  // fallback: 自分自身でなく conns に存在するか
+  // peerId 未設定の場合は conns を確認（フォールバック）
   return NET.conns.some(c => c && c.open && c._playerIdx === pidx);
 }
 
@@ -3090,10 +3095,21 @@ function _doPromoteToHost(disconnectedPidx){
         const pr = NET.peerRegistry.find(p=>p.conn===conn);
         if(pr) pr.playerIdx = pidx;
         
+        // 切断フラグを解除
+        if(G && G.players && G.players[pidx]){
+          G.players[pidx].isDisconnected = false;
+        }
+
         // インデックス確定後に joined を送る
         conn.send({type:'joined', myIdx:pidx, abilityMode:true, members:numPlayers});
         if(NET.online) broadcastState();
         addLog(`✅ プレイヤー${pidx}が再接続しました`,'log-new');
+
+        // ★ そのゲストのターンで止まっていた場合は nextTurn を再トリガー
+        // （ホスト昇格直後に nextTurn を呼んだ時点ではまだ未接続だったケースに対応）
+        if(G && G.current === pidx && (G.phase === 'draw' || G.phase === 'draw_wait')){
+          setTimeout(()=>{ if(G.current===pidx) broadcastState(); }, 300);
+        }
       };
 
       let finalized = false;
@@ -3479,7 +3495,7 @@ function resumeGameAfterHostLost(disconnectedPidx){
   }
 
   // 他のオンラインゲストのターン
-  if(isOnlineGuestIdx(cur) && !amIHost()){
+  if(isOnlineGuestIdx(cur)){
     broadcastState();
     return;
   }
@@ -4513,9 +4529,10 @@ function nextTurn(pidx){
   // Online: ホスト（amIHost()）だけがCPU/ドロー進行。ゲストはstate pushを待つ
   if(NET.online&&!amIHost()){broadcastState();return;}
   if(NET.online&&amIHost()){
-    if(isOnlineGuestIdx(pidx) && !amIHost()){/* guest's turn – wait for guest action */broadcastState();return;}
-    if(pidx!==NET.myIdx){setTimeout(cpuAction,700);return;} // CPU's turn
-    // host's own turn falls through
+    // ★修正: 旧コードは `&& !amIHost()` が常に false でゲスト待機が完全な死コードだった
+    if(isOnlineGuestIdx(pidx)){broadcastState();return;} // ゲストの番 → state push して待つ
+    if(pidx!==NET.myIdx){setTimeout(cpuAction,700);return;} // CPUの番
+    // 自分(ホスト)の番はそのまま下へ
   }
   if(!NET.online&&pidx!==0){setTimeout(cpuAction,700);return;}
 
