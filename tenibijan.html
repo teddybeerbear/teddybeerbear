@@ -300,6 +300,12 @@ body::before{
 .tile.drawn{border-color:transparent;box-shadow:none;}
 .tile.riichi-discard{transform:rotate(90deg);margin:0 5px;}
 .tile-dora{position:absolute;top:1px;left:1px;width:7px;height:7px;background:#cc4400;border-radius:50%;font-size:.3rem;color:#fff;display:flex;align-items:center;justify-content:center;}
+/* 同種牌ハイライト */
+.tile.same-highlight{
+  border-color:#55ddff !important;
+  box-shadow:0 0 8px #55ddff88 !important;
+  background:linear-gradient(160deg,#e8faff,#d0f4ff) !important;
+}
 
 /* Hand area */
 .hand-wrap{
@@ -6090,6 +6096,51 @@ function renderAll(){
   renderCornerAbilityBtns();
 }
 
+// ── 同種牌ハイライト ─────────────────────────────────────────
+// テーブル全体にイベント委譲で登録（renderAll後のDOM再生成にも対応）
+(function(){
+  let _active = null; // 現在ホバー中の {suit, num}
+
+  function _highlight(suit, num, on){
+    if(!suit) return;
+    document.querySelectorAll('.tile[data-suit]').forEach(el=>{
+      // back（伏せ牌）・yami-hidden はスキップ
+      if(el.classList.contains('back') || el.classList.contains('yami-hidden')) return;
+      if(el.dataset.suit === suit && String(el.dataset.num) === String(num)){
+        el.classList.toggle('same-highlight', on);
+      }
+    });
+  }
+
+  document.addEventListener('mouseover', e=>{
+    const tile = e.target.closest('.tile[data-suit]');
+    if(!tile || tile.classList.contains('back') || tile.classList.contains('yami-hidden')) {
+      if(_active){ _highlight(_active.suit, _active.num, false); _active=null; }
+      return;
+    }
+    const suit = tile.dataset.suit;
+    const num  = tile.dataset.num;
+    if(_active && (_active.suit !== suit || _active.num !== num)){
+      _highlight(_active.suit, _active.num, false);
+    }
+    _active = {suit, num};
+    _highlight(suit, num, true);
+  }, true);
+
+  document.addEventListener('mouseout', e=>{
+    const tile = e.target.closest('.tile[data-suit]');
+    if(!tile) return;
+    // relatedTarget が同じタイルの子要素なら無視
+    if(tile.contains(e.relatedTarget)) return;
+    const suit = tile.dataset.suit;
+    const num  = tile.dataset.num;
+    if(_active && _active.suit === suit && _active.num === num){
+      _highlight(suit, num, false);
+      _active = null;
+    }
+  }, true);
+})();
+
 function renderHeader(){
   document.getElementById('hRound').textContent=`${G.roundWind}${G.roundNum}局`;
   document.getElementById('hHonba').textContent=`${G.honba}本場`;
@@ -7168,6 +7219,8 @@ function renderTable(){
         const tileEl=document.createElement('div');
         tileEl.className=cls;
         tileEl.dataset.idx=i;
+        tileEl.dataset.suit=t.suit;
+        tileEl.dataset.num=String(t.num);
         if(isDimmed)tileEl.style.opacity='0.32', tileEl.style.cursor='not-allowed';
         // オープンリーチ中の闇牌: 本物は見えるが薄暗く（裏向きになることを示す）
         tileEl.innerHTML=(isYamiOpenHide?'🌑':'')+(isDimmed?'':emj(t))+(isDora&&!isDimmed?'<div class="tile-dora"></div>':'');
@@ -7281,7 +7334,7 @@ function renderTable(){
       }
       const isStealTarget = G.stealMode && pidx!==NET.myIdx && !t._yami;
       const isDoraDiscard = getDoras().some(d=>teq(d,t));
-      return`<div class="tile ${tc(t)}${isLast?' last-discard':''}${isRiichiTile?' riichi-discard':''}${isStealTarget?' steal-target':''}" ${isStealTarget?`onclick="humanSteal(${pidx},${di})"`:''} style="position:relative;">${emj(t)}${isDoraDiscard?'<div class="tile-dora"></div>':''}</div>`;
+      return`<div class="tile ${tc(t)}${isLast?' last-discard':''}${isRiichiTile?' riichi-discard':''}${isStealTarget?' steal-target':''}" data-suit="${t.suit}" data-num="${t.num}" ${isStealTarget?`onclick="humanSteal(${pidx},${di})"`:''} style="position:relative;">${emj(t)}${isDoraDiscard?'<div class="tile-dora"></div>':''}</div>`;
     }).join('');
     dw.appendChild(dg);
     // ドラ山は doraPileFixed に固定表示（seat-innerには追加しない）
