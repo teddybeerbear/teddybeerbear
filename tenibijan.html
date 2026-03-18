@@ -1269,7 +1269,7 @@ body::before{
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:.65rem;color:#5a7a6a;width:60px;">🎶 BGM</span>
-          <input type="range" min="0" max="0.5" step="0.02" value="0.022" style="flex:1;accent-color:var(--gold);"
+          <input type="range" min="0" max="0.5" step="0.02" value="0.07" style="flex:1;accent-color:var(--gold);"
             oninput="BGM.setVol(+this.value)">
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
@@ -1280,7 +1280,7 @@ body::before{
             <option value="thinking">シンキング</option>
             <option value="firststep">ファーストステップ</option>
             <option value="puzzle">思考のパズル</option>
-            <option value="akizuki">秋月の夜</option>
+            <option value="akizuki" selected>秋月の夜</option>
             <option value="none">🔇 なし</option>
           </select>
         </div>
@@ -1645,16 +1645,16 @@ body::before{
         </div>
         <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
           <span>🎶 BGM</span>
-          <input type="range" min="0" max="0.5" step="0.02" value="0.022" style="flex:1;accent-color:var(--gold);"
+          <input type="range" min="0" max="0.5" step="0.02" value="0.07" style="flex:1;accent-color:var(--gold);"
             oninput="BGM.setVol(+this.value)">
         </div>
         <select id="gameBgmSelHdr" style="background:#030a10;color:var(--gold);border:1px solid #1a3a2a;border-radius:4px;font-size:.5rem;padding:2px 3px;"
           onchange="_gameBgmKey=this.value; BGM.fadeOut(()=>BGM.fadeIn(_gameBgmKey)); document.getElementById('gameBgmSel')&&(document.getElementById('gameBgmSel').value=this.value);">
-          <option value="adventure">⭐ アドベンチャー</option>
-          <option value="sakura">🌸 さくらポップ</option>
-          <option value="teatime">🍵 ティータイム</option>
-          <option value="waltz">🌙 夜風のワルツ</option>
-          <option value="gameboy">🎮 ゲームボーイ</option>
+          <option value="yourself">yourself</option>
+          <option value="thinking" selected>シンキング</option>
+          <option value="firststep">ファーストステップ</option>
+          <option value="puzzle">思考のパズル</option>
+          <option value="akizuki">秋月の夜</option>
           <option value="none">🔇 なし</option>
         </select>
       </div>
@@ -2000,7 +2000,7 @@ const BGM = (() => {
   
   let currentAudio = null;
   let currentKey = null;
-  let volume = 0.14;
+  let volume = 0.07;
 
   return {
     play(key) {
@@ -2063,7 +2063,7 @@ const BGM = (() => {
 })();
 
 // ── BGM遷移ヘルパー ────────────────────────────────────────
-let _titleBgmKey = 'yourself';
+let _titleBgmKey = 'akizuki';
 let _gameBgmKey  = 'thinking';
 
 function bgmToTitle() {
@@ -4795,15 +4795,38 @@ function _resumeCurrentPhase(){
       break;
 
     case 'discard':
-      // 既に牌を引いており捨て待ち
-      if(pidx === NET.myIdx){
-        timerOnMyTurn();
-        broadcastState();
-      } else if(isOnlineGuestIdx(pidx)){
-        broadcastState();
+      // ★修正: discard フェーズなのに drawnTile が null の場合、
+      // ホストが drawTile 直後に broadcastState する前に切断した古い state を
+      // 引き継いでいる可能性がある。draw フェーズに修正して再実行する。
+      // （枚数計算ではなく drawnTile で判定: この変数は drawTile 実行後に必ずセットされ
+      //   discardAction 実行後にクリアされる。null ＝ まだ引いていない）
+      if(!p.drawnTile){
+        // ツモがまだ state に反映されていない → draw に戻して再実行
+        if(pidx === NET.myIdx){
+          G.phase = 'draw_wait';
+          timerOnMyTurn();
+          if(autoDrawEnabled){ broadcastState(); setTimeout(autoPickWall, 200); return; }
+          addLog('山牌を選んでクリックしてください','log-new');
+          broadcastState();
+        } else if(isOnlineGuestIdx(pidx)){
+          G.phase = 'draw';
+          broadcastState();
+        } else {
+          G.phase = 'draw';
+          broadcastState();
+          setTimeout(cpuAction, 700);
+        }
       } else {
-        broadcastState();
-        setTimeout(cpuAction, 700);
+        // 正常な discard 状態（既に牌を引いている）
+        if(pidx === NET.myIdx){
+          timerOnMyTurn();
+          broadcastState();
+        } else if(isOnlineGuestIdx(pidx)){
+          broadcastState();
+        } else {
+          broadcastState();
+          setTimeout(cpuAction, 700);
+        }
       }
       break;
 
@@ -5353,6 +5376,9 @@ function cpuAction(){
       return;
     }
     G.phase='discard';
+    // ★ drawTile直後に即broadcastState: ここで切断されてもゲストはdiscard状態を保持できる
+    // これ以降の setTimeout(cpuDiscard) までの約550ms間にホストが落ちても二重ツモが起きない
+    broadcastState();
     if(canWin(p.hand)){setTimeout(()=>handleWin(idx,tile,true,-1),400);return;}
     const isKita=tile.suit==='honor'&&tile.num==='北';
     if(isKita&&!p.riichi){cpuPullKita(idx);return;}
