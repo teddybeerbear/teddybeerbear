@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>手にビまーじゃん</title>
+<title>手にビまーじゃんarut</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 function _centerHandSeats(table){ /* CSS固定値で処理 */ }
@@ -1204,7 +1204,7 @@ body::before{
     <div id="abilityPopup" style="display:none;background:#030a10;border:1px solid #1a3a2a;border-radius:10px;padding:8px;margin-bottom:10px;max-height:260px;overflow-y:auto;">
       <div class="popup-ability-opt" data-ability="" onclick="pickAbility('')">
   <span style="font-size:1.4rem;margin-right:8px;">🚫</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">能力なし</span><br><span style="font-size:.55rem;color:#5a7a6a;">���殊能力なし</span></span>
+  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">能力なし</span><br><span style="font-size:.55rem;color:#5a7a6a;">   殊能力なし</span></span>
   
 </div><div class="popup-ability-opt" data-ability="mine" onclick="pickAbility('mine')">
   <span style="font-size:1.4rem;margin-right:8px;">💣</span>
@@ -1796,7 +1796,7 @@ const SFX = (() => {
     return ctx;
   }
 
-  // 矩形波の���いビー���
+  // 矩形波の   いビー   
   function beep(freq, dur, v, t0) {
     const c = ac(), t = t0 ?? c.currentTime;
     const o = c.createOscillator();
@@ -2118,7 +2118,7 @@ function saveRejoinSession(){
   if(!NET.online || !NET.roomCode || !G || !G.players) return;
   // 現在接続中のホストのPeerIDを保存（ホスト引き継ぎ後も正しい接続先を知るため）
   // ホスト自身の場合は null（自分が落ちた時は guestPeerIds[0] を新ホストとして使う）
-  const currentHostPeerId = NET.isHost ? null : (NET.currentHostPeerId || NET.conn?.peer || null);
+  const currentHostPeerId = NET.isHost ? null : (NET.conn?.peer || null);
   const session = {
     code:        NET.roomCode,
     myIdx:       NET.myIdx,
@@ -2254,9 +2254,17 @@ async function attemptRejoin(){
       }
     });
 
-    attachConnHandlers(conn, ()=>{
-      saveRejoinSession();
-      return NET.myIdx; // 自分自身の切断なので myIdx
+    conn.on('close', ()=>{
+      if(NET.online){
+        // 復帰後に再切断 → セッション保存してホスト昇格へ
+        saveRejoinSession();
+        promoteGuestToHost();
+      } else {
+        setOnlineStatus('接続できませんでした');
+      }
+    });
+    conn.on('error', ()=>{
+      setOnlineStatus('ホストに接続できませんでした');
     });
   });
   NET.peer.on('error', ()=>{
@@ -2359,7 +2367,7 @@ let _tileIdSeq=0;
 function mt(suit,num){return{suit,num,_id:_tileIdSeq++};}
 function sortTiles(tiles){
   const so={man:0,pin:1,sou:2,honor:3};
-  const ho={'東':0,'南':1,'西':2,'��':3,'白':4,'発':5,'中':6};
+  const ho={'東':0,'南':1,'西':2,'  ':3,'白':4,'発':5,'中':6};
   return[...tiles].sort((a,b)=>{
     if(so[a.suit]!==so[b.suit])return so[a.suit]-so[b.suit];
     const an=typeof a.num==='number'?a.num:ho[a.num];
@@ -2779,7 +2787,6 @@ let NET={
   peerRegistry:[],  // [{peerId, playerIdx, conn}] 全接続ピアの一覧（全員が持つ）
   _syncTimer:null,  // 定期sync用タイマー
   _lastActionId:0,  // 最後に処理したactionId
-  currentHostPeerId: null, // 現在のホストのPeerID（ホスト引き継ぎ後も追従）
 };
 
 // ── ピアレジストリ操作 ──────────────────────────────────────
@@ -2888,53 +2895,8 @@ function getPlayerIdxByConn(conn){
 }
 
 // ── ピア切断時のホスト再選出 ─────────────────────────────
-function onPeerDisconnected(pidx){
-  // isCpu 未設定なら確定させる
-  if(G && G.players && G.players[pidx] && !G.players[pidx].isCpu){
-    G.players[pidx].isCpu = true;
-  }
-  peerRegistryRemove(G?.players?.[pidx]?.peerId);
-
-  if(NET.isHost){
-    // 自分がホスト → CPU化して resumeGame で代打
-    if(G && G.players && G.players[pidx]){
-      G.players[pidx].isCpu = true;
-    }
-    // 切断したゲストを NET.conns から除去
-    NET.conns = NET.conns.filter(c => c && c.open);
-    NET.peerRegistry = NET.peerRegistry.filter(p => p.conn && p.conn.open);
-    // 該当プレイヤーのターンなら CPU を起動
-    if(G && G.current === pidx){
-      broadcastState();
-      scheduleCpuAction(500);
-    } else {
-      broadcastState();
-    }
-  } else {
-    // 自分が次ホスト候補 → 昇格
-    saveRejoinSession();
-    promoteGuestToHost(pidx);
-  }
-}
-
-// 全接続に close/error ハンドラを統一的に設定する
-// pidxResolver: 切断時に動的にプレイヤーインデックスを取得する関数
-function attachConnHandlers(conn, pidxResolver){
-  const getIdx = typeof pidxResolver === 'function'
-    ? pidxResolver
-    : () => (typeof pidxResolver === 'number' ? pidxResolver : getPlayerIdxByConn(conn));
-
-  conn.on('close', ()=>{
-    if(!NET.online) return;
-    const pidx = getIdx();
-    onPeerDisconnected(pidx);
-  });
-
-  conn.on('error', ()=>{
-    if(!NET.online) return;
-    const pidx = getIdx();
-    onPeerDisconnected(pidx);
-  });
+function onPeerDisconnected(peerId){
+  peerRegistryRemove(peerId);
 }
 
 // ヘルパー: 指定インデックスがオンラインゲストかどうか（ホスト視点で使用）
@@ -3192,7 +3154,11 @@ function _onRankMatched(data){
       NET.conns.push(conn);
       if(guestIdx===1) NET.conn = conn;
       conn.on('data', msg=>onNetData(msg, guestIdx));
-      attachConnHandlers(conn, guestIdx);
+      conn.on('close', ()=>{
+        if(conn.peer && NET.online) onPeerDisconnected(conn.peer);
+        _handleGuestDisconnect(conn, guestIdx);
+      });
+      conn.on('error', e=>{ setOnlineStatus('通信エラー: '+e.message); });
       const onOpen = ()=>{
         if(conn.peer) peerRegistryAdd(conn.peer, guestIdx, conn);
         conn.send({type:'joined', myIdx:guestIdx, abilityMode:true, members:3});
@@ -3251,7 +3217,15 @@ function _rankGuestConnect(hostPeerId, attempt){
       setRankStatus('ホストに接続しました！ゲーム開始を待っています…');
     });
     conn.on('data', msg=>onNetData(msg, null));
-    attachConnHandlers(conn, ()=>getPlayerIdxByConn(conn));
+    conn.on('close', ()=>{ 
+      if(NET.online){ 
+        // ホスト切断時は自動的にホストに昇格
+        promoteGuestToHost();
+      } 
+    });
+    conn.on('error', ()=>{
+      if(!opened && !NET.online) _rankGuestConnect(hostPeerId, attempt+1);
+    });
 
     // 接続タイムアウト: openされない場合はリトライ
     setTimeout(()=>{
@@ -3267,10 +3241,8 @@ function promoteGuestToHost(disconnectedPidx = 0){
   NET._promotingToHost = true;
 
   if(NET.myIdx > 1){
-    // currentHostPeerId が更新されていればそちらを優先（newHost 通知で追従している）
-    const newHostPeerId = NET.currentHostPeerId
-      || NET.guestPeerIds[0];
-    // 接続先が切断者と同じでなければ再接続を試みる
+    const newHostPeerId = NET.guestPeerIds[0];
+    // 新ホスト候補が切断者本人でなければ再接続を試みる
     if(newHostPeerId && newHostPeerId !== G.players[disconnectedPidx]?.peerId){
       addLog('🔄 新しいホストに再接続中…','log-new');
       if(NET.conn){ try{ NET.conn.close(); }catch(e){} NET.conn=null; }
@@ -3318,49 +3290,36 @@ function _reconnectToNewHost(newHostPeerId){
     hideReconnectOverlay();
   });
   conn.on('data', msg=>onNetData(msg, null));
-  attachConnHandlers(conn, newHostIdx);
-}
-
-// 全接続済みピアに新ホストの PeerID を通知する
-function broadcastNewHost(){
-  if(!NET.peer) return;
-  NET.currentHostPeerId = NET.peer.id;
-  netBroadcastAll({ type:'newHost', peerId: NET.peer.id });
+  conn.on('close', ()=>{
+    if(!NET.isHost){
+      NET._promotingToHost = false;
+      // ★ newHostIdx（接続先 = 切断した新ホスト）を確実に CPU 扱いにする
+      promoteGuestToHost(newHostIdx);
+    }
+  });
+  conn.on('error', ()=>{
+    addLog('⚠️ 再接続失敗。自分がホスト昇格します','log-new');
+    NET._promotingToHost = false;
+    _doPromoteToHost(newHostIdx);
+  });
+  setTimeout(()=>{
+    if(!NET.online && !NET.isHost){ NET._promotingToHost=false; _doPromoteToHost(newHostIdx); }
+  }, 5000);
 }
 
 // 実際のホスト昇格処理
 function _doPromoteToHost(disconnectedPidx){
-  // ガードを削除: 重複呼び出しは NET._promotingToHost と _cpuActionGen で管理
+  if(NET.isHost) return;
+
   NET.isHost = true;
   NET.online = true;
   NET._promotingToHost = false;
   _cpuActionGen++; // 旧ホストの stale setTimeout を全て無効化
 
-  // 🔥 切断者を CPU 化
   if(G && G.players && G.players[disconnectedPidx]){
-    G.players[disconnectedPidx].isCpu = true;
     addLog(`🔄 ${G.players[disconnectedPidx].name}が切断。ホスト昇格しました。`,'log-new');
   }
 
-  // 🔥 接続整理
-  cleanupDisconnectedPeers();
-
-  // 🔥 状態リセット
-  pendingAction = null;
-  selIdx = -1;
-
-  // 🔥 フェーズ修正
-  if(G && G.players){
-    const p = G.players[G.current];
-    if(p && G.phase === 'discard' && !p.drawnTile) G.phase = 'draw';
-    if(p && (G.phase === 'draw' || G.phase === 'draw_wait') && p.drawnTile) G.phase = 'discard';
-    if((G.phase === 'pending_ron' || G.phase === 'pending_pon') && !pendingAction){
-      G.phase = 'draw';
-      if(p) p.drawnTile = null;
-    }
-  }
-
-  // 新接続を受け付けるリスナーを再設定
   if(NET.peer){
     NET.peer.off('connection');
     NET.peer.on('connection', conn=>{
@@ -3446,30 +3405,51 @@ function _doPromoteToHost(disconnectedPidx){
       });
 
       conn.on('close', ()=>{
+        if(conn.peer && NET.online) onPeerDisconnected(conn.peer);
         _handleGuestDisconnect(conn, conn._playerIdx);
       });
-      attachConnHandlers(conn, ()=>conn._playerIdx ?? getPlayerIdxByConn(conn));
+      conn.on('error', e=>{ setOnlineStatus('通信エラー: '+e.message); });
     });
   }
 
   startSyncBroadcast();
-  broadcastNewHost();
-
-  // 🔥 再開
-  setTimeout(()=>{
-    renderAll();
-    resumeGame();
-  }, 100);
+  onPromoted(disconnectedPidx);
 
   addLog('✅ ホスト昇格完了。ゲーム続行します。','log-new');
   hideReconnectOverlay();
 }
 
-// ── ホスト昇格後のゲーム状態復元 ────────────────────────────
+// ── ホスト昇格後のゲーム状態復元（提示コードに沿って整理）────────
 function cleanupDisconnectedPeers(){
   NET.conn = null;
   NET.conns = NET.conns.filter(c => c && c.open);
   NET.peerRegistry = NET.peerRegistry.filter(p => p.conn && p.conn.open);
+}
+
+function resetUIState(){
+  pendingAction = null;
+  selIdx = -1;
+  // 再接続オーバーレイを閉じる
+  hideReconnectOverlay();
+}
+
+function fixPhase(){
+  if(!G || !G.players) return;
+  const p = G.players[G.current];
+  if(!p) return;
+  // discard フェーズなのに drawnTile が null → ツモ前に切断 → draw に巻き戻す
+  if(G.phase === 'discard' && !p.drawnTile){
+    G.phase = 'draw';
+  }
+  // draw フェーズなのに drawnTile が存在 → discard に修正
+  if((G.phase === 'draw' || G.phase === 'draw_wait') && p.drawnTile){
+    G.phase = 'discard';
+  }
+  // pending_ron/pon で pendingAction が null → draw に戻す
+  if((G.phase === 'pending_ron' || G.phase === 'pending_pon') && !pendingAction){
+    G.phase = 'draw';
+    p.drawnTile = null;
+  }
 }
 
 function resumeGame(){
@@ -3478,8 +3458,8 @@ function resumeGame(){
   const p = G.players[pidx];
   if(!p) return;
 
-  // 自分のターン
   if(pidx === NET.myIdx){
+    // 自分のターン → UI を解放してツモ/捨て待ちへ
     if(G.phase === 'draw'){
       G.phase = 'draw_wait';
       timerOnMyTurn();
@@ -3489,24 +3469,38 @@ function resumeGame(){
       timerOnMyTurn();
     }
     broadcastState();
-    return;
-  }
-  // CPU ターン
-  if(p.isCpu){
+  } else if(p.isCpu){
+    // CPU → 代打を動かす
     broadcastState();
     scheduleCpuAction(500);
-    return;
-  }
-  // 接続なし → CPU 化して動かす
-  if(!isOnlineGuestIdx(pidx)){
+  } else if(isOnlineGuestIdx(pidx)){
+    // 接続中のゲストのターン → state push して待つ
+    if(G.phase === 'draw' || G.phase === 'draw_wait') G.phase = 'draw';
+    broadcastState();
+  } else {
+    // 接続が確認できない → isCpu にして CPU 代打
     p.isCpu = true;
     broadcastState();
     scheduleCpuAction(500);
-    return;
   }
-  // 接続中ゲストのターン → state push して待つ
-  if(G.phase === 'draw' || G.phase === 'draw_wait') G.phase = 'draw';
-  broadcastState();
+}
+
+function onPromoted(disconnectedPidx){
+  // ① 切断済みピアを掃除
+  cleanupDisconnectedPeers();
+  // ② 切断プレイヤーを CPU 扱い
+  if(G && G.players && G.players[disconnectedPidx]){
+    G.players[disconnectedPidx].isCpu = true;
+  }
+  // ③ UI・アクション状態をリセット
+  resetUIState();
+  // ④ フェーズ整合性チェック
+  fixPhase();
+  // ⑤ ゲーム再開（100ms 遅延で DOM 安定後に実行）
+  setTimeout(()=>{
+    renderAll();
+    resumeGame();
+  }, 100);
 }
 
 
@@ -3547,7 +3541,6 @@ async function createRoom(){
     }
     document.getElementById('roomCodeBox').style.display='';
     document.getElementById('roomCodeDisplay').textContent=code;
-    NET.currentHostPeerId = NET.peer.id; // 初期ホストのPeerIDを記録
     setOnlineStatus('');
     updateRoomMemberList();
     showRoomLobby();
@@ -3801,11 +3794,36 @@ function setupConn(conn, guestIdx){
   conn.on('data', msg=>{
     // rejoin は createRoom の connection ハンドラで処理済みのためスキップ
     if(msg.type === 'rejoin') return;
+    // ★修正: guestIdx 固定キャプチャではなく conn._playerIdx を動的参照する。
+    // _handleRejoin が conn._playerIdx を originalIdx に更新した後も
+    // 正しいインデックスでアクションが処理される。
     const senderIdx = (conn._playerIdx !== undefined) ? conn._playerIdx : guestIdx;
     onNetData(msg, senderIdx);
   });
-  // 統一ハンドラ: 切断時のプレイヤーを動的に特定
-  attachConnHandlers(conn, ()=>getPlayerIdxByConn(conn));
+  conn.on('close', ()=>{
+    if(conn.peer && NET.online) onPeerDisconnected(conn.peer);
+
+    if(NET.online){
+      const wasHost = NET.isHost; // onPeerDisconnected の前に取得済み
+      if(wasHost){
+        // 現ホスト: ゲストが切断
+        const disconnectedIdx = getPlayerIdxByConn(conn);
+        _handleGuestDisconnect(conn, disconnectedIdx);
+      } else {
+        // ゲスト: ホストが切断
+        saveRejoinSession();
+        const disconnectedIdx = getPlayerIdxByConn(conn);
+        if(!NET.isHost){
+          promoteGuestToHost(disconnectedIdx);
+        } else {
+          hideReconnectOverlay();
+        }
+      }
+    } else {
+      NET.online = false;
+    }
+  });
+  conn.on('error', e=>{ setOnlineStatus('通信エラー: '+e.message); });
 }
 
 // ホスト側でゲストが切断したときの共通処理
@@ -3819,7 +3837,7 @@ function _handleGuestDisconnect(conn, guestIdx){
     if(byPeer >= 0) pidx = byPeer;
   }
   if(G && G.players && G.players[pidx]){
-    addLog(`🔄 ${G.players[pidx].name}が切断しました。離席状態にします。`,'log-new');
+    addLog(`🔄 ${G.players[pidx].name}が切断しました。CPU代打にします。`,'log-new');
     resumeGameAfterHostLost(pidx);
   }
 }
@@ -3888,7 +3906,7 @@ function resumeGameAfterHostLost(disconnectedPidx){
   if(!G || !G.players) return;
   if(['end','win','idle'].includes(G.phase)) return;
 
-  // 切断者を離席状態に設定
+  // 切断者をCPU代打に設定
   if(G.players[disconnectedPidx]){
     G.players[disconnectedPidx].isCpu = true;
   }
@@ -3988,10 +4006,6 @@ function onNetData(msg, senderIdx){
     } else if(msg.type==='hostDisconnect'){
       // ホストが明示的に切断を通知 → 即座にホスト昇格処理
       promoteGuestToHost();
-    } else if(msg.type==='newHost'){
-      // 新ホストのPeerIDを記録（次の切断時の再接続先として使う）
-      NET.currentHostPeerId = msg.peerId;
-      addLog('🔄 ホストが引き継がれました','log-new');
     } else if(msg.type==='ping'){
       // keepalive pong を返す
       if(NET.conn&&NET.conn.open) NET.conn.send({type:'pong'});
@@ -4943,7 +4957,7 @@ function checkPon(fromPidx,tile){
   for(let i=0;i<numPlayers;i++){
     if(i===fromPidx)continue;
     const p=G.players[i];
-    if(p.riichi)continue; // リー��中はポン不可
+    if(p.riichi)continue; // リー  中はポン不可
     const cnt=cntMap(p.hand);
     if((cnt[tk(tile)]||0)>=2){
       // オンライン: 自分自身か、ホストが管理しているゲストか判定
@@ -5259,7 +5273,7 @@ function humanHakuAuto(){
   const p=G.players[myIdx];
   if(!G_ABILITY_MODE||PROFILE.ability!=='haku'||p.abilityUsed)return;
   if(!p||p.riichi||G.phase!=='discard')return;
-  // cpuWorstTileIdxと同じロジックで孤立牌���自動選択
+  // cpuWorstTileIdxと同じロジックで孤立牌   自動選択
   const idx=cpuWorstTileIdx(p);
   if(idx<0)return;
   const t=p.hand[idx];
@@ -6259,12 +6273,12 @@ function renderCornerAbilityBtns(){
     }
   }
 
-  // ── 闇 🌑 ───────────────────────────���───────────────────
+  // ── 闇 🌑 ───────────────────────────   ───────────────────
   if(ab==='yami'&&!p.abilityUsed&&(phase==='discard')&&isMyTurn){
     if(!G.yamiSelectMode){
       const yamiSet=p.yamiTileIdx>=0&&p.yamiTileIdx<p.hand.length;
       if(!yamiSet)
-        add('🌑 闇','#cc99ff','#7744aa',()=>{G.yamiSelectMode=true;renderAll();},'捨て牌を裏向��に');
+        add('🌑 闇','#cc99ff','#7744aa',()=>{G.yamiSelectMode=true;renderAll();},'捨て牌を裏向  に');
     }
   }
 }
@@ -7071,11 +7085,12 @@ function renderTable(){
         :p.riichi&&p.openRiichi?`<span class="badge" style="background:#1a0020;border:1px solid #8844cc;color:#cc88ff;letter-spacing:-.02em;">オープンリーチ</span>`
         :p.riichi?`<span class="badge badge-riichi">リーチ</span>`:'',
       (p.tenpai&&!p.riichi&&pidx===NET.myIdx)?`<span class="badge badge-tenpai">テンパイ</span>`:'',
-      p.kitaCount>0?`<span class="badge badge-dora">���×${p.kitaCount}</span>`:'',
+      p.kitaCount>0?`<span class="badge badge-dora">   ×${p.kitaCount}</span>`:'',
     ].join('');
 
     const riichiStick=p.riichi?`<span class="riichi-stick">リーチ</span>`:''; 
-    const afkBadge=((isHuman&&playerAFK)||p.isCpu)?`<span class="badge" style="background:#1a0000;border:1px solid #cc3333;color:#ff6666;">離席</span>`:'';
+    const afkBadge=(isHuman&&playerAFK)?`<span class="badge" style="background:#1a0000;border:1px solid #cc3333;color:#ff6666;">離席</span>`:'';
+    const cpuBadge=p.isCpu?`<span class="badge" style="background:#001a1a;border:1px solid #3399cc;color:#66ccff;">CPU</span>`:'';
 
     const abilityLabels2={'':'','mine':'💣 地雷','light':'☀️ 光','yami':'🌑 闇','haku':'🀆 白','sanctuary':'🏛️ 聖域','pinzu':'🔵 ピンズー教','steal':'🃏 スチール','pen':'🖊️ ペン'};
     const abilityBadge = (G_ABILITY_MODE && p.ability) ? `<span class="ability-badge">${abilityLabels2[p.ability]||p.ability}</span>` : '';
@@ -7085,7 +7100,7 @@ function renderTable(){
         ${abilityBadge}
       </div>
       ${riichiStick}
-      <div class="p-badges">${badges}${afkBadge}</div>
+      <div class="p-badges">${badges}${afkBadge}${cpuBadge}</div>
       ${p.iconId ? `<img src="${gachaIconUrl(p.iconId)}" alt="" style="width:24px;height:24px;border-radius:3px;" onerror="console.error('アイコン画像読み込みエラー:', '${p.iconId}');">` : `<!-- アイコンなし: pidx=${pidx}, myIdx=${NET.myIdx}, iconId=${p.iconId} -->`}
       <span class="p-name">${p.name}</span>
       <span class="p-score">${p.score.toLocaleString()}点</span>
@@ -7152,12 +7167,17 @@ function renderTable(){
       handOuter.appendChild(rLabel);
     }
 
-    // ── 離席: 手牌の左上に絶対配置 ──
-    if((isHuman && playerAFK) || p.isCpu){
+    // ── 離席 / CPU代打: 手牌の左上に絶対配置 ──
+    if(isHuman && playerAFK){
       const afkEl=document.createElement('div');
       afkEl.style.cssText='position:absolute;top:-22px;left:228px;font-size:.75rem;color:#ff6666;background:#1a0000;border:1px solid #cc3333;border-radius:4px;padding:2px 7px;z-index:5;pointer-events:none;font-weight:700;';
       afkEl.textContent='離席';
       handOuter.appendChild(afkEl);
+    } else if(p.isCpu){
+      const cpuEl=document.createElement('div');
+      cpuEl.style.cssText='position:absolute;top:-22px;left:228px;font-size:.75rem;color:#66ccff;background:#001a1a;border:1px solid #3399cc;border-radius:4px;padding:2px 7px;z-index:5;pointer-events:none;font-weight:700;';
+      cpuEl.textContent='CPU';
+      handOuter.appendChild(cpuEl);
     }
 
     // ── 左: wind orb + 名前（牌1.5倍サイズ・牌3個分=120px離す） ──
@@ -7393,7 +7413,7 @@ function renderTable(){
     dw.classList.add('discard-abs','discard-abs-'+_sideName);
     dw.dataset.discardSide=_si;
     if(_si===1||_si===3){
-      // left/right: table-center の子として position:absolute で外側��定
+      // left/right: table-center の子として position:absolute で外側  定
       const tcEl2=document.getElementById('tableCenter');
       tcEl2.querySelectorAll('.discard-abs-'+_sideName).forEach(el=>el.remove());
       tcEl2.appendChild(dw);
@@ -7501,7 +7521,7 @@ function _positionDiscards(table){
   const GRID_W=314; // 捨て牌外枠幅 left/right（8列, padding+border込み）
 
   // 右: rotate(-90deg) origin(0,0)
-  // top=GRID_W → 回��後の上端=top-GRID_W=0 → tc上端に揃う
+  // top=GRID_W → 回  後の上端=top-GRID_W=0 → tc上端に揃う
   // left=tcW+GAP → tc右辺外にぴったり
   tc.querySelectorAll('.discard-abs-right').forEach(dw=>{
     dw.style.left=(tcW+GAP)+'px';
@@ -7574,12 +7594,12 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
       }
       // 白・闇: セレクトモード中のヒント+キャンセルのみ（ボタン本体はcornerBtns）
       if(G_ABILITY_MODE&&PROFILE.ability==='haku'&&G.hakuSelectMode){
-        html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変���る手牌をクリック！</span>`;
+        html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変   る手牌をクリック！</span>`;
         html+=`<button class="btn btn-danger" onclick="G.hakuSelectMode=false;renderAll();">キャンセル</button>`;
       }
       if(G_ABILITY_MODE&&PROFILE.ability==='yami'&&G.yamiSelectMode){
         html+=`<span class="action-hint" style="color:#cc99ff;">🌑 闇にする手牌をクリック！</span>`;
-        html+=`<button class="btn btn-danger" onclick="G.yamiSelectMode=false;renderAll();">キャ���セル</button>`;
+        html+=`<button class="btn btn-danger" onclick="G.yamiSelectMode=false;renderAll();">キャ   セル</button>`;
       }
       // 加槓チェック(右下ボタンへ移動済み): ポン済み牌と同じ牌が手牌にある
       for(let ki=0;ki<p.hand.length;ki++){
@@ -7867,7 +7887,7 @@ function pickAbility(ability){
     'yami':['🌑','闇','オープンリーチ時に牌を裏向きに'],
     'haku':['🀆','白','手牌1枚を白に変換'],
     'sanctuary':['🏛️','聖域','親番中、失点を受けない'],
-    'steal':['🃏','スチール','捨て牌���ら1枚盗む'],
+    'steal':['🃏','スチール','捨て牌   ら1枚盗む'],
     'pen':['🖊️','ペン','山牌に絵を描く'],
     'pinzu':['🔵','ピンズー教','筒子の位置が見える'],
   };
