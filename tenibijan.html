@@ -3288,10 +3288,11 @@ function _doPromoteToHost(disconnectedPidx){
 
   startSyncBroadcast();
 
-  // ★ nextTurn で再起動（resumeGameAfterHostLost より確実）
+  // ★修正: nextTurn(G.current) はフェーズをリセットしてしまうため使わない。
+  // 現在のフェーズを正しく引き継いで再開する。
   setTimeout(()=>{
     renderAll();
-    nextTurn(G.current);
+    _resumeCurrentPhase();
   }, 100);
 
   addLog('✅ ホスト昇格完了。ゲーム続行します。','log-new');
@@ -4758,6 +4759,65 @@ function handlePon(pidx,tile,fromPidx){
   // オンラインホスト: ゲストの番ならCPUを呼ばない
   if(!NET.online&&pidx!==0)setTimeout(cpuAction,700);
   if(NET.online&&amIHost()&&pidx!==NET.myIdx&&!isOnlineGuestIdx(pidx))setTimeout(cpuAction,700);
+}
+
+// ホスト昇格後に現在のフェーズをそのまま再開する。
+// nextTurn() は「次のプレイヤーへ移行する」関数であり
+// G.phase='draw'/G.firstRound=false を強制リセットしてしまうため、
+// ホスト切断→昇格の際には使えない。
+function _resumeCurrentPhase(){
+  if(!G || !G.players) return;
+  const pidx = G.current;
+  const p    = G.players[pidx];
+  if(!p) return;
+
+  switch(G.phase){
+    case 'draw':
+    case 'draw_wait':
+      // まだ牌を引いていないターン
+      if(pidx === NET.myIdx){
+        // 自分のターン → draw_wait に遷移して山牌選択を待つ
+        G.phase = 'draw_wait';
+        timerOnMyTurn();
+        if(autoDrawEnabled){ broadcastState(); setTimeout(autoPickWall, 200); return; }
+        addLog('山牌を選んでクリックしてください','log-new');
+        broadcastState();
+      } else if(isOnlineGuestIdx(pidx)){
+        // オンラインゲストのターン → draw フェーズのまま state を push して待つ
+        G.phase = 'draw';
+        broadcastState();
+      } else {
+        // CPU（または切断者）→ cpuAction に任せる
+        G.phase = 'draw';
+        broadcastState();
+        setTimeout(cpuAction, 700);
+      }
+      break;
+
+    case 'discard':
+      // 既に牌を引いており捨て待ち
+      if(pidx === NET.myIdx){
+        timerOnMyTurn();
+        broadcastState();
+      } else if(isOnlineGuestIdx(pidx)){
+        broadcastState();
+      } else {
+        broadcastState();
+        setTimeout(cpuAction, 700);
+      }
+      break;
+
+    case 'pending_ron':
+    case 'pending_pon':
+      // ロン/ポン待機中 → そのまま state を push して各クライアントに判断させる
+      broadcastState();
+      break;
+
+    default:
+      // その他（idle, end 等）は何もしない
+      broadcastState();
+      break;
+  }
 }
 
 function nextTurn(pidx){
