@@ -2912,20 +2912,18 @@ function onPeerDisconnected(pidx){
   peerRegistryRemove(G?.players?.[pidx]?.peerId);
 
   if(NET.isHost){
-    // 自分がホスト → CPU化して resumeGame で代打
+    // 自分がホスト → CPU化して resumeGameAfterHostLost で包括的に処理
     if(G && G.players && G.players[pidx]){
       G.players[pidx].isCpu = true;
     }
-    // 切断したゲストを NET.conns から除去
+    // 切断したゲストを NET.conns / peerRegistry から除去
     NET.conns = NET.conns.filter(c => c && c.open);
     NET.peerRegistry = NET.peerRegistry.filter(p => p.conn && p.conn.open);
-    // 該当プレイヤーのターンなら CPU を起動
-    if(G && G.current === pidx){
-      broadcastState();
-      scheduleCpuAction(500);
-    } else {
-      broadcastState();
-    }
+    // ★修正: 旧コードは G.current===pidx の場合のみ CPU をスケジュールしていたが、
+    // draw_wait→draw 変換・pending_ron/pon フェーズ・3人以上での複雑な局面など
+    // あらゆるフェーズに正しく対応するため resumeGameAfterHostLost に統一する。
+    // 「引く前に切断した場合でも CPU が引き継がない」バグの修正。
+    resumeGameAfterHostLost(pidx);
   } else {
     // 自分が次ホスト候補 → 昇格
     saveRejoinSession();
@@ -3949,7 +3947,9 @@ function resumeGameAfterHostLost(disconnectedPidx){
     return;
   }
 
-  // CPU（切断者含む）のターン
+  // ★ 切断者が現在のターンプレイヤーだった場合も含め、CPU（切断者含む）のターン
+  // isCpu=true かつ phase='draw' のままになるケース（引く前に切断）を確実に処理する
+  broadcastState();
   scheduleCpuAction(500);
 }
 
