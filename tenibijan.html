@@ -2081,11 +2081,16 @@ const REJOIN_TTL = 30 * 60 * 1000; // 30分
 
 function saveRejoinSession(){
   if(!NET.online || !NET.roomCode || !G || !G.players) return;
+  // 現在接続中のホストのPeerIDを保存（ホスト引き継ぎ後も正しい接続先を知るため）
+  // ホスト自身の場合は null（自分が落ちた時は guestPeerIds[0] を新ホストとして使う）
+  const currentHostPeerId = NET.isHost ? null : (NET.conn?.peer || null);
   const session = {
-    code:    NET.roomCode,
-    myIdx:   NET.myIdx,
-    name:    (G.players[NET.myIdx]||{}).name || PROFILE.name || 'プレイヤー',
-    savedAt: Date.now(),
+    code:        NET.roomCode,
+    myIdx:       NET.myIdx,
+    name:        (G.players[NET.myIdx]||{}).name || PROFILE.name || 'プレイヤー',
+    savedAt:     Date.now(),
+    hostPeerId:  currentHostPeerId,
+    guestPeerIds: NET.guestPeerIds.slice(), // 元ホストが落ちた場合の次ホスト候補
   };
   try{ localStorage.setItem(REJOIN_KEY, JSON.stringify(session)); }catch(e){}
 }
@@ -2126,22 +2131,24 @@ async function attemptRejoin(){
   if(!session){ clearRejoinSession(); return; }
 
   setOnlineStatus('復帰中…');
-  NET.isHost = false;
-  NET.myIdx  = session.myIdx;
+  NET.isHost   = false;
+  NET.myIdx    = session.myIdx;
   NET.roomCode = session.code;
-  NET.conns  = [];
+  NET.conns    = [];
+  NET.online   = false;
 
-  // ホストの PeerID はルームコードから固定で決まる
-  const hostPeerId = 'mj-' + session.code;
+  const hostPeerId =
+    session.hostPeerId                            // 保存済み現ホストPeerID（ホスト引き継ぎ後も正確）
+    || (session.myIdx === 0 && session.guestPeerIds?.[0])  // 自分がホストだった場合は guest1 が新ホスト
+    || 'mj-' + session.code;                      // フォールバック: 元ホスト固定PeerID
 
-  // 新しい PeerID で接続（切断前と変わってもよい）
   if(NET.peer){ try{ NET.peer.destroy(); }catch(e){} NET.peer=null; }
   NET.peer = new Peer('mj-guest-' + Date.now(), {debug:0});
   NET.peer.on('open', ()=>{
     const conn = NET.peer.connect(hostPeerId, {reliable:true});
     NET.conn = conn;
+
     conn.on('open', ()=>{
-      // 復帰専用メッセージを送信（通常の joined フローと区別する）
       conn.send({type:'rejoin',
         originalIdx: session.myIdx,
         name:        session.name,
@@ -2151,31 +2158,47 @@ async function attemptRejoin(){
       });
       setOnlineStatus('復帰リクエスト送信中…');
     });
+
     conn.on('data', msg=>{
       if(msg.type === 'rejoinAck'){
-        // ホストが復帰を承認した
-        NET.myIdx   = msg.myIdx;
-        NET.online  = true;
+        NET.myIdx      = msg.myIdx;
+        NET.online     = true;
         G_ABILITY_MODE = msg.abilityMode ?? true;
-        clearRejoinSession(); // 復帰成功したらセッションを消す
-        bgmToGame();
-        hideRoomLobby();
-        document.getElementById('lobby').style.display='none';
-        document.getElementById('gameScreen').classList.add('active');
-        scaleTable();
-        setOnlineStatus('');
-        addLog('✅ 対局に復帰しました','log-new');
+        clearRejoinSession();
+        setOnlineStatus('状態を同期中…');
+        // ★ 画面遷移は state 受信後に行う（G が確定してから表示）
       } else if(msg.type === 'rejoinDenied'){
         setOnlineStatus('復帰できませんでした: ' + (msg.reason||'対局が終了しています'));
         clearRejoinSession();
+        NET.online = false;
         if(NET.peer){ try{NET.peer.destroy();}catch(e){} NET.peer=null; }
+      } else if(msg.type === 'state' || msg.type === 'sync'){
+        // ★ state を受け取った後にゲーム画面に切り替える
+        const wasOnline = NET.online;
+        onNetData(msg, null); // applyHostState が G を更新・renderAll する
+        if(wasOnline && !document.getElementById('gameScreen').classList.contains('active')){
+          bgmToGame();
+          hideRoomLobby();
+          document.getElementById('lobby').style.display='none';
+          document.getElementById('gameScreen').classList.add('active');
+          scaleTable();
+          setOnlineStatus('');
+          addLog('✅ 対局に復帰しました','log-new');
+          _refreshRejoinSession(); // 復帰成功後も次の切断に備えてセッション保持
+        }
       } else {
-        // rejoinAck 後の通常メッセージ（state update等）
         onNetData(msg, null);
       }
     });
+
     conn.on('close', ()=>{
-      if(!NET.online) setOnlineStatus('接続できませんでした');
+      if(NET.online){
+        // 復帰後に再切断 → セッション保存してホスト昇格へ
+        saveRejoinSession();
+        promoteGuestToHost();
+      } else {
+        setOnlineStatus('接続できませんでした');
+      }
     });
     conn.on('error', ()=>{
       setOnlineStatus('ホストに接続できませんでした');
@@ -3589,7 +3612,11 @@ function setupConn(conn, guestIdx){
   conn.on('data', msg=>{
     // rejoin は createRoom の connection ハンドラで処理済みのためスキップ
     if(msg.type === 'rejoin') return;
-    onNetData(msg, guestIdx);
+    // ★修正: guestIdx 固定キャプチャではなく conn._playerIdx を動的参照する。
+    // _handleRejoin が conn._playerIdx を originalIdx に更新した後も
+    // 正しいインデックスでアクションが処理される。
+    const senderIdx = (conn._playerIdx !== undefined) ? conn._playerIdx : guestIdx;
+    onNetData(msg, senderIdx);
   });
   conn.on('close', ()=>{
     // peerRegistry から除外 → ホスト再選出
@@ -3671,10 +3698,18 @@ function _handleRejoin(conn, msg){
   broadcastState();
   renderAll();
 
-  // そのプレイヤーのターンで止まっていた場合は再トリガー
-  if(G.current === originalIdx && (G.phase === 'draw' || G.phase === 'draw_wait')){
-    setTimeout(()=>{ if(G.current===originalIdx) broadcastState(); }, 500);
-  }
+  // ★ そのプレイヤーのターンで止まっていた / CPU代打中の場合は re-trigger
+  // 少し遅延させて rejoinAck + state がクライアントに届いてから処理
+  setTimeout(()=>{
+    if(!G || !G.players) return;
+    if(G.current === originalIdx){
+      // 自分のターンで待機中ならフェーズを再評価して正しい状態に戻す
+      _resumeCurrentPhase();
+    } else {
+      // 他プレイヤーのターン中でも state を再送して確実に同期
+      broadcastState();
+    }
+  }, 600);
 }
 
 function resumeGameAfterHostLost(disconnectedPidx){
@@ -4099,6 +4134,10 @@ function applyHostState(msg){
         return;
       }
       addLog('山牌を選んでクリックしてください','log-new');
+    }
+    // ゲスト: 自分のターンでdiscardフェーズ（ツモ済み）の場合もタイマーを起動
+    if(G.phase==='discard' && G.current===NET.myIdx){
+      timerOnMyTurn();
     }
     renderAll();
     if(s.winModal){
