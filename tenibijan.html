@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>手にビまーじゃんもく</title>
+<title>手にビまーじゃん</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 function _centerHandSeats(table){ /* CSS固定値で処理 */ }
@@ -1204,7 +1204,7 @@ body::before{
     <div id="abilityPopup" style="display:none;background:#030a10;border:1px solid #1a3a2a;border-radius:10px;padding:8px;margin-bottom:10px;max-height:260px;overflow-y:auto;">
       <div class="popup-ability-opt" data-ability="" onclick="pickAbility('')">
   <span style="font-size:1.4rem;margin-right:8px;">🚫</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">能力なし</span><br><span style="font-size:.55rem;color:#5a7a6a;">   殊能力なし</span></span>
+  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">能力なし</span><br><span style="font-size:.55rem;color:#5a7a6a;">���殊能力なし</span></span>
   
 </div><div class="popup-ability-opt" data-ability="mine" onclick="pickAbility('mine')">
   <span style="font-size:1.4rem;margin-right:8px;">💣</span>
@@ -1796,7 +1796,7 @@ const SFX = (() => {
     return ctx;
   }
 
-  // 矩形波の   いビー   
+  // 矩形波の���いビー���
   function beep(freq, dur, v, t0) {
     const c = ac(), t = t0 ?? c.currentTime;
     const o = c.createOscillator();
@@ -2267,7 +2267,18 @@ async function attemptRejoin(){
       setOnlineStatus('ホストに接続できませんでした');
     });
   });
-  NET.peer.on('error', ()=>{ setOnlineStatus('接続エラー。ホストが既に退出した可能性があります'); });
+  NET.peer.on('error', ()=>{
+    // 接続先が存在しない場合、自分がゲームの最後のプレイヤーかもしれない
+    // ゲームが進行中なら自分がホストに昇格して続行する
+    if(G && G.players && G.players.length > 0 && NET.roomCode){
+      addLog('⚠️ 復帰先が見つかりません。ホスト昇格を試みます','log-new');
+      NET.isHost = false;
+      NET._promotingToHost = false;
+      _doPromoteToHost(0);
+    } else {
+      setOnlineStatus('接続エラー。ホストが既に退出した可能性があります');
+    }
+  });
 }
 
 // ── ロビーBGM自動再生 ───────────────────────────────────────
@@ -2356,7 +2367,7 @@ let _tileIdSeq=0;
 function mt(suit,num){return{suit,num,_id:_tileIdSeq++};}
 function sortTiles(tiles){
   const so={man:0,pin:1,sou:2,honor:3};
-  const ho={'東':0,'南':1,'西':2,'  ':3,'白':4,'発':5,'中':6};
+  const ho={'東':0,'南':1,'西':2,'��':3,'白':4,'発':5,'中':6};
   return[...tiles].sort((a,b)=>{
     if(so[a.suit]!==so[b.suit])return so[a.suit]-so[b.suit];
     const an=typeof a.num==='number'?a.num:ho[a.num];
@@ -2881,11 +2892,9 @@ function onPeerDisconnected(peerId){
     }
   }
 
-  // ★修正: ホスト昇格の判断は NET.isHost フラグを使う
-  // （getHostPeerId()のpeerRegistryベース判定は廃止）
   if(!NET.isHost){
-    // ゲストは promoteGuestToHost() に任せる（競合防止ロジック内蔵）
-    promoteGuestToHost();
+    // ★修正: 切断者インデックスを渡してホスト昇格後に正しく isDisconnected を設定できるようにする
+    promoteGuestToHost(disconnectedPlayerIdx);
   } else {
     // 現ホスト: 切断したゲストをCPU扱いにする
     if(G && G.players && G.players[disconnectedPlayerIdx]){
@@ -3233,33 +3242,41 @@ function _rankGuestConnect(hostPeerId, attempt){
 }
 
 // ゲストがホストに昇格する関数
-function promoteGuestToHost(){
+// disconnectedPidx: 切断したプレイヤーのインデックス（省略時は 0 = 元ホスト）
+function promoteGuestToHost(disconnectedPidx = 0){
   if(NET.isHost) return;
   // 競合防止: 複数ゲストが同時に呼んでも1回だけ実行
   if(NET._promotingToHost) return;
   NET._promotingToHost = true;
 
+  // 切断者を即座に isDisconnected にする（CPU代打を開始できるようにする）
+  if(G && G.players && G.players[disconnectedPidx]){
+    G.players[disconnectedPidx].isDisconnected = true;
+  }
+
   if(NET.myIdx > 1){
+    // P2以上: まず guestPeerIds[0]（P1）が新ホストになったか試みる
+    // ただし P1 が既に切断済みの場合は guestPeerIds[0] が P1 の PeerID のまま残っている可能性がある
+    // → 接続失敗したら自分がホスト昇格する（_reconnectToNewHost のエラーハンドラで処理）
     const newHostPeerId = NET.guestPeerIds[0];
-    if(newHostPeerId){
+    if(newHostPeerId && newHostPeerId !== G.players[disconnectedPidx]?.peerId){
       addLog('🔄 新しいホストに再接続中…','log-new');
       if(NET.conn){ try{ NET.conn.close(); }catch(e){} NET.conn=null; }
-      NET.online = false; // 再接続中は一時的にfalseにする
-      setTimeout(()=>_reconnectToNewHost(newHostPeerId), 800);
+      NET.online = false;
+      setTimeout(()=>_reconnectToNewHost(newHostPeerId, disconnectedPidx), 800);
     } else {
       addLog('⚠️ 新ホストPeerID不明のため自分がホスト昇格します','log-new');
-      _doPromoteToHost(0);
+      _doPromoteToHost(disconnectedPidx);
     }
     return;
   }
 
   // myIdx=1のゲストがホスト昇格
-  _doPromoteToHost(0);
+  _doPromoteToHost(disconnectedPidx);
 }
 
 // 新ホスト(元guest1)への再接続
-function _reconnectToNewHost(newHostPeerId){
-  // Bug修正: NET.onlineのガードを除去（ゲーム中の再接続を許可）
+function _reconnectToNewHost(newHostPeerId, disconnectedPidx = 0){
   if(NET.isHost) return;
   if(NET.conn){ try{ NET.conn.close(); }catch(e){} NET.conn=null; }
   const myOriginalIdx = NET.myIdx;
@@ -3268,23 +3285,21 @@ function _reconnectToNewHost(newHostPeerId){
   conn.on('open', ()=>{
     NET.online = true;
     NET._promotingToHost = false;
-    // ★修正: 新ホストのPeerIDをpeerRegistryに登録
-    // （amIHost()の判定に使われないが、切断検知のために保持）
     if(conn.peer) peerRegistryAdd(conn.peer, 0, conn);
     conn.send({type:'reconnect', originalIdx: myOriginalIdx, peerId: NET.peer?.id||''});
     conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',peerId:NET.peer?.id||''});
     addLog('✅ 新ホストに再接続しました','log-new');
-    hideReconnectOverlay(); // 再接続成功 → オーバーレイを閉じる
+    hideReconnectOverlay();
   });
   conn.on('data', msg=>onNetData(msg, null));
-  conn.on('close', ()=>{ if(!NET.isHost){ NET._promotingToHost=false; promoteGuestToHost(); } });
+  conn.on('close', ()=>{ if(!NET.isHost){ NET._promotingToHost=false; promoteGuestToHost(disconnectedPidx); } });
   conn.on('error', ()=>{
     addLog('⚠️ 再接続失敗。自分がホスト昇格します','log-new');
     NET._promotingToHost = false;
-    _doPromoteToHost(0);
+    _doPromoteToHost(disconnectedPidx);
   });
   setTimeout(()=>{
-    if(!NET.online && !NET.isHost){ NET._promotingToHost=false; _doPromoteToHost(0); }
+    if(!NET.online && !NET.isHost){ NET._promotingToHost=false; _doPromoteToHost(disconnectedPidx); }
   }, 5000);
 }
 
@@ -3727,13 +3742,12 @@ function setupConn(conn, guestIdx){
         // onPeerDisconnected の中で promoteGuestToHost が呼ばれ NET.isHost が変わる場合がある
         saveRejoinSession();
         // ★修正: 既にホスト昇格済み（myIdx=1が同期的に昇格）ならオーバーレイ不要
-        // オーバーレイを出すと画面を覆って操作できなくなる
         if(!NET.isHost){
-          showReconnectOverlay('ホストとの接続が切断されました。');
-          // myIdx>1 で新ホストへの再接続が必要な場合
-          promoteGuestToHost();
+          // myIdx>1 の場合は昇格処理中: オーバーレイは出さずに自動昇格を待つ
+          // （_reconnectToNewHost が失敗したら _doPromoteToHost が呼ばれる）
+          hideReconnectOverlay();
         } else {
-          // 昇格済み: _resumeCurrentPhase が既にスケジュールされているので何もしない
+          // 昇格済み: オーバーレイを閉じてゲームを継続
           hideReconnectOverlay();
         }
       }
@@ -4874,7 +4888,7 @@ function checkPon(fromPidx,tile){
   for(let i=0;i<numPlayers;i++){
     if(i===fromPidx)continue;
     const p=G.players[i];
-    if(p.riichi)continue; // リー  中はポン不可
+    if(p.riichi)continue; // リー��中はポン不可
     const cnt=cntMap(p.hand);
     if((cnt[tk(tile)]||0)>=2){
       // オンライン: 自分自身か、ホストが管理しているゲストか判定
@@ -5268,7 +5282,7 @@ function humanHakuAuto(){
   const p=G.players[myIdx];
   if(!G_ABILITY_MODE||PROFILE.ability!=='haku'||p.abilityUsed)return;
   if(!p||p.riichi||G.phase!=='discard')return;
-  // cpuWorstTileIdxと同じロジックで孤立牌   自動選択
+  // cpuWorstTileIdxと同じロジックで孤立牌���自動選択
   const idx=cpuWorstTileIdx(p);
   if(idx<0)return;
   const t=p.hand[idx];
@@ -6268,12 +6282,12 @@ function renderCornerAbilityBtns(){
     }
   }
 
-  // ── 闇 🌑 ───────────────────────────   ───────────────────
+  // ── 闇 🌑 ───────────────────────────���───────────────────
   if(ab==='yami'&&!p.abilityUsed&&(phase==='discard')&&isMyTurn){
     if(!G.yamiSelectMode){
       const yamiSet=p.yamiTileIdx>=0&&p.yamiTileIdx<p.hand.length;
       if(!yamiSet)
-        add('🌑 闇','#cc99ff','#7744aa',()=>{G.yamiSelectMode=true;renderAll();},'捨て牌を裏向  に');
+        add('🌑 闇','#cc99ff','#7744aa',()=>{G.yamiSelectMode=true;renderAll();},'捨て牌を裏向��に');
     }
   }
 }
@@ -7080,7 +7094,7 @@ function renderTable(){
         :p.riichi&&p.openRiichi?`<span class="badge" style="background:#1a0020;border:1px solid #8844cc;color:#cc88ff;letter-spacing:-.02em;">オープンリーチ</span>`
         :p.riichi?`<span class="badge badge-riichi">リーチ</span>`:'',
       (p.tenpai&&!p.riichi&&pidx===NET.myIdx)?`<span class="badge badge-tenpai">テンパイ</span>`:'',
-      p.kitaCount>0?`<span class="badge badge-dora">   ×${p.kitaCount}</span>`:'',
+      p.kitaCount>0?`<span class="badge badge-dora">���×${p.kitaCount}</span>`:'',
     ].join('');
 
     const riichiStick=p.riichi?`<span class="riichi-stick">リーチ</span>`:''; 
@@ -7402,7 +7416,7 @@ function renderTable(){
     dw.classList.add('discard-abs','discard-abs-'+_sideName);
     dw.dataset.discardSide=_si;
     if(_si===1||_si===3){
-      // left/right: table-center の子として position:absolute で外側  定
+      // left/right: table-center の子として position:absolute で外側��定
       const tcEl2=document.getElementById('tableCenter');
       tcEl2.querySelectorAll('.discard-abs-'+_sideName).forEach(el=>el.remove());
       tcEl2.appendChild(dw);
@@ -7510,7 +7524,7 @@ function _positionDiscards(table){
   const GRID_W=314; // 捨て牌外枠幅 left/right（8列, padding+border込み）
 
   // 右: rotate(-90deg) origin(0,0)
-  // top=GRID_W → 回  後の上端=top-GRID_W=0 → tc上端に揃う
+  // top=GRID_W → 回��後の上端=top-GRID_W=0 → tc上端に揃う
   // left=tcW+GAP → tc右辺外にぴったり
   tc.querySelectorAll('.discard-abs-right').forEach(dw=>{
     dw.style.left=(tcW+GAP)+'px';
@@ -7583,12 +7597,12 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
       }
       // 白・闇: セレクトモード中のヒント+キャンセルのみ（ボタン本体はcornerBtns）
       if(G_ABILITY_MODE&&PROFILE.ability==='haku'&&G.hakuSelectMode){
-        html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変   る手牌をクリック！</span>`;
+        html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変���る手牌をクリック！</span>`;
         html+=`<button class="btn btn-danger" onclick="G.hakuSelectMode=false;renderAll();">キャンセル</button>`;
       }
       if(G_ABILITY_MODE&&PROFILE.ability==='yami'&&G.yamiSelectMode){
         html+=`<span class="action-hint" style="color:#cc99ff;">🌑 闇にする手牌をクリック！</span>`;
-        html+=`<button class="btn btn-danger" onclick="G.yamiSelectMode=false;renderAll();">キャ   セル</button>`;
+        html+=`<button class="btn btn-danger" onclick="G.yamiSelectMode=false;renderAll();">キャ���セル</button>`;
       }
       // 加槓チェック(右下ボタンへ移動済み): ポン済み牌と同じ牌が手牌にある
       for(let ki=0;ki<p.hand.length;ki++){
@@ -7876,7 +7890,7 @@ function pickAbility(ability){
     'yami':['🌑','闇','オープンリーチ時に牌を裏向きに'],
     'haku':['🀆','白','手牌1枚を白に変換'],
     'sanctuary':['🏛️','聖域','親番中、失点を受けない'],
-    'steal':['🃏','スチール','捨て牌   ら1枚盗む'],
+    'steal':['🃏','スチール','捨て牌���ら1枚盗む'],
     'pen':['🖊️','ペン','山牌に絵を描く'],
     'pinzu':['🔵','ピンズー教','筒子の位置が見える'],
   };
