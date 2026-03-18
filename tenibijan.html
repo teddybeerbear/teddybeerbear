@@ -1402,6 +1402,16 @@ body::before{
     <h3>ルームマッチ（最大4人）</h3>
     <div id="onlineStatus" style="font-size:.65rem;color:#4a7a5a;text-align:center;margin-bottom:10px;min-height:1.4em;"></div>
 
+    <!-- 復帰パネル（切断後に自動表示） -->
+    <div id="rejoinPanel" style="display:none;margin-bottom:12px;background:#0a1a0a;border:1.5px solid #c9a84c55;border-radius:10px;padding:10px 14px;">
+      <div style="font-size:.6rem;color:var(--gold);font-weight:700;margin-bottom:4px;">⚠️ 前の対局が中断されています</div>
+      <div id="rejoinInfo" style="font-size:.58rem;color:#5a8a6a;margin-bottom:8px;line-height:1.6;"></div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-primary" onclick="attemptRejoin()" style="flex:1;font-size:.75rem;padding:8px;">🔄 対局に復帰する</button>
+        <button class="btn btn-danger" onclick="clearRejoinSession()" style="font-size:.7rem;padding:8px 10px;">✕</button>
+      </div>
+    </div>
+
     <!-- Host panel -->
     <div id="hostPanel">
       <!-- 能力あり/なし -->
@@ -2063,6 +2073,136 @@ function bgmToGame() {
   BGM.fadeOut(() => BGM.fadeIn(_gameBgmKey));
 }
 
+// ── 復帰セッション管理 ───────────────────────────────────────
+// ゲーム中に切断した場合、復帰用の情報を localStorage に保存する。
+// 保存内容: { code, myIdx, name, savedAt }
+const REJOIN_KEY = 'mjRejoinSession';
+const REJOIN_TTL = 30 * 60 * 1000; // 30分
+
+function saveRejoinSession(){
+  if(!NET.online || !NET.roomCode || !G || !G.players) return;
+  const session = {
+    code:    NET.roomCode,
+    myIdx:   NET.myIdx,
+    name:    (G.players[NET.myIdx]||{}).name || PROFILE.name || 'プレイヤー',
+    savedAt: Date.now(),
+  };
+  try{ localStorage.setItem(REJOIN_KEY, JSON.stringify(session)); }catch(e){}
+}
+
+function clearRejoinSession(){
+  try{ localStorage.removeItem(REJOIN_KEY); }catch(e){}
+  const p = document.getElementById('rejoinPanel');
+  if(p) p.style.display = 'none';
+}
+
+function loadRejoinSession(){
+  try{
+    const s = localStorage.getItem(REJOIN_KEY);
+    if(!s) return null;
+    const session = JSON.parse(s);
+    if(Date.now() - session.savedAt > REJOIN_TTL){
+      clearRejoinSession();
+      return null;
+    }
+    return session;
+  }catch(e){ return null; }
+}
+
+function showRejoinPanel(){
+  const session = loadRejoinSession();
+  const panel = document.getElementById('rejoinPanel');
+  if(!panel) return;
+  if(!session){ panel.style.display='none'; return; }
+  const info = document.getElementById('rejoinInfo');
+  if(info) info.innerHTML =
+    `部屋番号: <strong style="color:var(--gold)">${session.code}</strong>　` +
+    `プレイヤー: <strong style="color:var(--gold)">${session.name}</strong>`;
+  panel.style.display = '';
+}
+
+async function attemptRejoin(){
+  const session = loadRejoinSession();
+  if(!session){ clearRejoinSession(); return; }
+
+  setOnlineStatus('復帰中…');
+  NET.isHost = false;
+  NET.myIdx  = session.myIdx;
+  NET.roomCode = session.code;
+  NET.conns  = [];
+
+  // ホストの PeerID はルームコードから固定で決まる
+  const hostPeerId = 'mj-' + session.code;
+
+  // 新しい PeerID で接続（切断前と変わってもよい）
+  if(NET.peer){ try{ NET.peer.destroy(); }catch(e){} NET.peer=null; }
+  NET.peer = new Peer('mj-guest-' + Date.now(), {debug:0});
+  NET.peer.on('open', ()=>{
+    const conn = NET.peer.connect(hostPeerId, {reliable:true});
+    NET.conn = conn;
+    conn.on('open', ()=>{
+      // 復帰専用メッセージを送信（通常の joined フローと区別する）
+      conn.send({type:'rejoin',
+        originalIdx: session.myIdx,
+        name:        session.name,
+        ability:     PROFILE.ability||'',
+        iconId:      PROFILE.iconId||'',
+        peerId:      NET.peer?.id||''
+      });
+      setOnlineStatus('復帰リクエスト送信中…');
+    });
+    conn.on('data', msg=>{
+      if(msg.type === 'rejoinAck'){
+        // ホストが復帰を承認した
+        NET.myIdx   = msg.myIdx;
+        NET.online  = true;
+        G_ABILITY_MODE = msg.abilityMode ?? true;
+        clearRejoinSession(); // 復帰成功したらセッションを消す
+        bgmToGame();
+        hideRoomLobby();
+        document.getElementById('lobby').style.display='none';
+        document.getElementById('gameScreen').classList.add('active');
+        scaleTable();
+        setOnlineStatus('');
+        addLog('✅ 対局に復帰しました','log-new');
+      } else if(msg.type === 'rejoinDenied'){
+        setOnlineStatus('復帰できませんでした: ' + (msg.reason||'対局が終了しています'));
+        clearRejoinSession();
+        if(NET.peer){ try{NET.peer.destroy();}catch(e){} NET.peer=null; }
+      } else {
+        // rejoinAck 後の通常メッセージ（state update等）
+        onNetData(msg, null);
+      }
+    });
+    conn.on('close', ()=>{
+      if(!NET.online) setOnlineStatus('接続できませんでした');
+    });
+    conn.on('error', ()=>{
+      setOnlineStatus('ホストに接続できませんでした');
+    });
+  });
+  NET.peer.on('error', ()=>{ setOnlineStatus('接続エラー。ホストが既に退出した可能性があります'); });
+}
+
+// ── ロビーBGM自動再生 ───────────────────────────────────────
+// ブラウザの自動再生ポリシーにより、ユーザー操作前は Audio.play() がブロックされる。
+// 最初のクリック/タッチを検知してBGMを開始し、以降は解除しない（一度だけ発火）。
+(function(){
+  let _unlocked = false;
+  function _unlock(){
+    if(_unlocked) return;
+    _unlocked = true;
+    document.removeEventListener('click', _unlock, true);
+    document.removeEventListener('touchstart', _unlock, true);
+    // ゲーム画面が出ていない＝ロビー表示中のみBGMを開始
+    if(!document.getElementById('gameScreen')?.classList.contains('active')){
+      BGM.fadeIn(_titleBgmKey);
+    }
+  }
+  document.addEventListener('click', _unlock, true);
+  document.addEventListener('touchstart', _unlock, true);
+})();
+
 // ============================================================
 // TILE SYSTEM
 // ============================================================
@@ -2701,6 +2841,7 @@ function showOnline(){
   document.getElementById('lobbyRank').style.display='none';
   cancelRankQueue();
   document.querySelectorAll('#lobbyMode .pcnt-btn').forEach((b,i)=>b.classList.toggle('active',i===1));
+  showRejoinPanel(); // 復帰セッションがあれば表示
 }
 function showRank(){
   document.getElementById('lobbySolo').style.display='none';
@@ -3199,20 +3340,47 @@ async function createRoom(){
     showRoomLobby();
   });
   NET.peer.on('connection', conn=>{
-    if(NET.conns.length>=3){conn.close();return;} // 最大4人(ホスト+3)
+    // ★ ゲーム中の復帰接続は満員でも受け入れる（rejoinメッセージで判断）
+    const isGameActive = NET.online && G && G.players && G.players.length > 0;
+    if(NET.conns.length>=3 && !isGameActive){conn.close();return;}
+
     const guestIdx = NET.conns.length+1;
     conn.metadata = {idx:guestIdx};
     conn._playerIdx = guestIdx;
     NET.conns.push(conn);
     NET.conn = conn;
+
+    // ★ rejoin の場合は即時インデックス確定せずメッセージ待ち
+    let _rejoinHandled = false;
+
     setupConn(conn, guestIdx);
     // peerRegistry に登録（open後にpeerIdが確定する）
     conn.on('open',()=>{
       if(conn.peer) peerRegistryAdd(conn.peer, guestIdx, conn);
-      const md = _buildMemberData();
-      conn.send({type:'joined',myIdx:guestIdx,abilityMode:NET.roomAbilityMode,
-        members:NET.conns.length+1, memberData:md});
-      _broadcastMemberUpdate();
+      if(!isGameActive){
+        // ロビー中の通常参加
+        const md = _buildMemberData();
+        conn.send({type:'joined',myIdx:guestIdx,abilityMode:NET.roomAbilityMode,
+          members:NET.conns.length+1, memberData:md});
+        _broadcastMemberUpdate();
+      }
+      // ゲーム中の接続は rejoin メッセージを待つ（タイムアウト付き）
+      if(isGameActive){
+        setTimeout(()=>{
+          if(!_rejoinHandled && conn.open){
+            // rejoinが届かなければ通常の新規参加として閉じる
+            conn.close();
+          }
+        }, 5000);
+      }
+    });
+
+    // ★ rejoin メッセージを先行して監視（setupConnより前に登録）
+    conn.on('data', msg=>{
+      if(msg.type === 'rejoin' && !_rejoinHandled){
+        _rejoinHandled = true;
+        _handleRejoin(conn, msg);
+      }
     });
   });
   NET.peer.on('error', e=>{setOnlineStatus('エラー: '+e.message);});
@@ -3417,7 +3585,11 @@ function setupConn(conn, guestIdx){
     // peerRegistry に登録（peerId が取れるタイミングで）
     if(conn.peer) peerRegistryAdd(conn.peer, guestIdx, conn);
   });
-  conn.on('data', msg=>onNetData(msg, guestIdx));
+  conn.on('data', msg=>{
+    // rejoin は createRoom の connection ハンドラで処理済みのためスキップ
+    if(msg.type === 'rejoin') return;
+    onNetData(msg, guestIdx);
+  });
   conn.on('close', ()=>{
     // peerRegistry から除外 → ホスト再選出
     if(conn.peer && NET.online) onPeerDisconnected(conn.peer);
@@ -3426,6 +3598,8 @@ function setupConn(conn, guestIdx){
       if(amIHost()){
         _handleGuestDisconnect(conn, guestIdx);
       } else {
+        // ★ ゲストが切断を検知: 復帰用セッションを保存してからホスト昇格処理
+        saveRejoinSession();
         promoteGuestToHost();
       }
     } else {
@@ -3448,6 +3622,57 @@ function _handleGuestDisconnect(conn, guestIdx){
   if(G && G.players && G.players[pidx]){
     addLog(`🔄 ${G.players[pidx].name}が切断しました。離席状態にします。`,'log-new');
     resumeGameAfterHostLost(pidx);
+  }
+}
+
+// ゲストが切断後に復帰してきた時のホスト側処理
+function _handleRejoin(conn, msg){
+  const originalIdx = msg.originalIdx;
+
+  // 検証: ゲームが進行中か
+  if(!NET.online || !G || !G.players){
+    conn.send({type:'rejoinDenied', reason:'ゲームが進行していません'});
+    return;
+  }
+  if(G.phase === 'end' || G.phase === 'idle'){
+    conn.send({type:'rejoinDenied', reason:'対局は終了しています'});
+    return;
+  }
+  // 検証: originalIdx が有効か
+  const p = G.players[originalIdx];
+  if(!p){
+    conn.send({type:'rejoinDenied', reason:'プレイヤーが見つかりません'});
+    return;
+  }
+  // 名前照合（スプーフィング防止）
+  if(msg.name && p.name && msg.name !== p.name){
+    conn.send({type:'rejoinDenied', reason:'名前が一致しません'});
+    return;
+  }
+
+  // 復帰処理
+  conn._playerIdx = originalIdx;
+  const pr = NET.peerRegistry.find(r=>r.conn===conn);
+  if(pr) pr.playerIdx = originalIdx;
+  if(msg.peerId){
+    if(conn.peer) peerRegistryAdd(conn.peer, originalIdx, conn);
+    p.peerId = msg.peerId;
+    NET.guestPeerIds[originalIdx-1] = msg.peerId;
+  }
+  if(msg.iconId) p.iconId = msg.iconId;
+  p.isDisconnected = false;
+
+  addLog(`🔄 ${p.name} が対局に復帰しました！`,'log-new');
+
+  // 承認メッセージを送信
+  conn.send({type:'rejoinAck', myIdx:originalIdx, abilityMode:G_ABILITY_MODE});
+  // 最新ゲーム状態を送信（手牌含む全state）
+  broadcastState();
+  renderAll();
+
+  // そのプレイヤーのターンで止まっていた場合は再トリガー
+  if(G.current === originalIdx && (G.phase === 'draw' || G.phase === 'draw_wait')){
+    setTimeout(()=>{ if(G.current===originalIdx) broadcastState(); }, 500);
   }
 }
 
@@ -3597,6 +3822,8 @@ function onNetData(msg, senderIdx){
       document.getElementById('lobby').style.display='none';
       document.getElementById('gameScreen').classList.add('active');
       scaleTable();
+      // ゲーム開始時点で復帰セッションを保存
+      setTimeout(saveRejoinSession, 600);
       // ゲスト: ホストに自分のアイコン情報とPeerIDを送信（makePlayer後に反映させるため）
       setTimeout(()=>{
         if(NET.conn&&NET.conn.open) NET.conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',peerId:NET.peer?.id||''});
@@ -3885,6 +4112,7 @@ function applyHostState(msg){
       }
     }
     if(s.finalResult)showFinalResultData(s.finalResult);
+    _refreshRejoinSession();
   }
 }
 
@@ -3908,6 +4136,14 @@ function _buildStateSnapshot(extra={}){
 function broadcastState(extra={}){
   if(!NET.online||!amIHost()||NET.conns.length===0)return;
   netSend({type:'state',state:_buildStateSnapshot(extra)});
+}
+
+// ゲスト側: state を受信するたびに復帰セッションを更新しておく
+// （ホストが broadcastState するたびに呼ばれる applyHostState の末尾で使用）
+function _refreshRejoinSession(){
+  if(NET.online && !NET.isHost && NET.roomCode && G && G.players && G.players.length > 0){
+    saveRejoinSession();
+  }
 }
 
 // Remote action handlers (host only)
@@ -5509,6 +5745,7 @@ function checkEnd(){
   return false;
 }
 function showFinalResult(){
+  clearRejoinSession(); // 対局正常終了 → 復帰セッション不要
   const sorted=[...G.players].sort((a,b)=>b.score-a.score);
   document.getElementById('resultTable').innerHTML=sorted.map((p,i)=>
     `<tr class="${i===0?'result-winner':''}"><td>${i+1}位 ${p.name}</td><td>${p.wind}</td><td>${p.score.toLocaleString()}点</td></tr>`
@@ -5595,6 +5832,7 @@ function backToLobby(){
   hideRoomLobby();
   document.getElementById('lobby').style.display='flex';
   bgmToTitle();
+  clearRejoinSession(); // 正常終了・離脱時はセッションを消す
   // ホストが部屋を持っていた場合はサーバーから削除する
   if(NET.isHost && NET.roomCode) fetch('/room/'+NET.roomCode, {method:'DELETE'}).catch(()=>{});
   if(NET.peer){try{NET.peer.destroy();}catch(e){} NET.peer=null;NET.conn=null;NET.conns=[];NET.online=false;}
