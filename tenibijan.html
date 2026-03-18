@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>手にビまーじゃん01</title>
+<title>手にビまーじゃん0033</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 function _centerHandSeats(table){ /* CSS固定値で処理 */ }
@@ -3701,13 +3701,18 @@ function setupConn(conn, guestIdx){
         _handleGuestDisconnect(conn, guestIdx);
       } else {
         // ゲストだった（切断検知時点）→ ホスト側切断への対応
-        // ★ onPeerDisconnected 内で既に promoteGuestToHost が呼ばれ
-        //    _resumeCurrentPhase がスケジュール済みなので、ここでは
-        //    UI表示とセッション保存のみ行い cpuAction を二重起動しない
+        // onPeerDisconnected の中で promoteGuestToHost が呼ばれ NET.isHost が変わる場合がある
         saveRejoinSession();
-        showReconnectOverlay('ホストとの接続が切断されました。');
-        // 昇格できなかった場合（myIdx>1で新ホストへ再接続中）はここで promoteGuestToHost を呼ぶ
-        if(!NET.isHost) promoteGuestToHost();
+        // ★修正: 既にホスト昇格済み（myIdx=1が同期的に昇格）ならオーバーレイ不要
+        // オーバーレイを出すと画面を覆って操作できなくなる
+        if(!NET.isHost){
+          showReconnectOverlay('ホストとの接続が切断されました。');
+          // myIdx>1 で新ホストへの再接続が必要な場合
+          promoteGuestToHost();
+        } else {
+          // 昇格済み: _resumeCurrentPhase が既にスケジュールされているので何もしない
+          hideReconnectOverlay();
+        }
       }
     } else {
       NET.online=false;
