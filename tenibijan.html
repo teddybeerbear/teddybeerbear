@@ -29,6 +29,8 @@ window.addEventListener('resize', scaleTable);
 // pagehide はモバイル含め最も信頼性が高い
 window.addEventListener('pagehide', ()=>{
   if(NET.peer){
+    // ゲーム中なら復帰セッションを保存（ホスト・ゲスト両方）
+    try{ if(typeof saveRejoinSession==='function') saveRejoinSession(); }catch(e){}
     // 全ゲストにdisconnectを明示送信
     try{ netBroadcastAll({type:'hostDisconnect'}); }catch(e){}
     try{ NET.peer.destroy(); }catch(e){}
@@ -37,6 +39,7 @@ window.addEventListener('pagehide', ()=>{
 // beforeunload はデスクトップブラウザ用の保険
 window.addEventListener('beforeunload', ()=>{
   if(NET.peer){
+    try{ if(typeof saveRejoinSession==='function') saveRejoinSession(); }catch(e){}
     try{ netBroadcastAll({type:'hostDisconnect'}); }catch(e){}
     try{ NET.peer.destroy(); }catch(e){}
   }
@@ -1718,6 +1721,18 @@ body::before{
   </div>
 </div>
 
+<!-- 切断・再接続オーバーレイ -->
+<div class="overlay" id="reconnectOverlay" style="z-index:300;">
+  <div class="modal" style="max-width:320px;text-align:center;">
+    <div class="modal-title" style="font-size:1rem;" id="reconnectTitle">⚠️ 接続が切断されました</div>
+    <div class="modal-sub" id="reconnectMsg" style="margin-bottom:16px;"></div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="btn btn-primary" id="reconnectBtn" onclick="attemptRejoinFromOverlay()" style="font-size:.8rem;padding:10px;">🔄 対局に復帰する</button>
+      <button class="btn btn-default" onclick="reconnectOverlayBack()" style="font-size:.75rem;padding:8px;">← タイトルに戻る</button>
+    </div>
+  </div>
+</div>
+
 <!-- WIN MODAL -->
 <div class="overlay" id="winOverlay">
   <div class="modal">
@@ -2124,6 +2139,34 @@ function showRejoinPanel(){
     `部屋番号: <strong style="color:var(--gold)">${session.code}</strong>　` +
     `プレイヤー: <strong style="color:var(--gold)">${session.name}</strong>`;
   panel.style.display = '';
+}
+
+// ── 再接続オーバーレイ制御 ────────────────────────────────────
+function showReconnectOverlay(msg){
+  const ov = document.getElementById('reconnectOverlay');
+  if(!ov) return;
+  const msgEl = document.getElementById('reconnectMsg');
+  const btn   = document.getElementById('reconnectBtn');
+  if(msgEl) msgEl.textContent = msg || 'ホストとの接続が失われました。';
+  // 復帰セッションがある場合のみ「復帰する」ボタンを表示
+  if(btn) btn.style.display = loadRejoinSession() ? '' : 'none';
+  ov.classList.add('show');
+}
+
+function hideReconnectOverlay(){
+  const ov = document.getElementById('reconnectOverlay');
+  if(ov) ov.classList.remove('show');
+}
+
+function reconnectOverlayBack(){
+  hideReconnectOverlay();
+  clearRejoinSession();
+  backToLobby();
+}
+
+async function attemptRejoinFromOverlay(){
+  hideReconnectOverlay();
+  await attemptRejoin();
 }
 
 async function attemptRejoin(){
@@ -3210,6 +3253,7 @@ function _reconnectToNewHost(newHostPeerId){
     conn.send({type:'reconnect', originalIdx: myOriginalIdx, peerId: NET.peer?.id||''});
     conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',peerId:NET.peer?.id||''});
     addLog('✅ 新ホストに再接続しました','log-new');
+    hideReconnectOverlay(); // 再接続成功 → オーバーレイを閉じる
   });
   conn.on('data', msg=>onNetData(msg, null));
   conn.on('close', ()=>{ if(!NET.isHost){ NET._promotingToHost=false; promoteGuestToHost(); } });
@@ -3319,6 +3363,7 @@ function _doPromoteToHost(disconnectedPidx){
   }, 100);
 
   addLog('✅ ホスト昇格完了。ゲーム続行します。','log-new');
+  hideReconnectOverlay(); // 昇格成功 → オーバーレイを閉じる
 }
 
 
@@ -3619,16 +3664,28 @@ function setupConn(conn, guestIdx){
     onNetData(msg, senderIdx);
   });
   conn.on('close', ()=>{
+    // ★ onPeerDisconnected の中で promoteGuestToHost → _doPromoteToHost が呼ばれると
+    // NET.isHost が true になる。この後 amIHost() を評価すると true になるため
+    // _handleGuestDisconnect → resumeGameAfterHostLost が呼ばれ cpuAction が二重に
+    // スケジュールされてしまう。昇格前のフラグを保持して分岐を正しく行う。
+    const wasHost = NET.isHost;
+
     // peerRegistry から除外 → ホスト再選出
     if(conn.peer && NET.online) onPeerDisconnected(conn.peer);
 
     if(NET.online){
-      if(amIHost()){
+      if(wasHost){
+        // 昇格前からホストだった → ゲストが切断した通常ケース
         _handleGuestDisconnect(conn, guestIdx);
       } else {
-        // ★ ゲストが切断を検知: 復帰用セッションを保存してからホスト昇格処理
+        // ゲストだった（切断検知時点）→ ホスト側切断への対応
+        // ★ onPeerDisconnected 内で既に promoteGuestToHost が呼ばれ
+        //    _resumeCurrentPhase がスケジュール済みなので、ここでは
+        //    UI表示とセッション保存のみ行い cpuAction を二重起動しない
         saveRejoinSession();
-        promoteGuestToHost();
+        showReconnectOverlay('ホストとの接続が切断されました。');
+        // 昇格できなかった場合（myIdx>1で新ホストへ再接続中）はここで promoteGuestToHost を呼ぶ
+        if(!NET.isHost) promoteGuestToHost();
       }
     } else {
       NET.online=false;
@@ -3685,7 +3742,8 @@ function _handleRejoin(conn, msg){
   if(msg.peerId){
     if(conn.peer) peerRegistryAdd(conn.peer, originalIdx, conn);
     p.peerId = msg.peerId;
-    NET.guestPeerIds[originalIdx-1] = msg.peerId;
+    // ★ originalIdx===0 は元ホスト。guestPeerIds は idx1以降が対象なのでガード
+    if(originalIdx >= 1) NET.guestPeerIds[originalIdx-1] = msg.peerId;
   }
   if(msg.iconId) p.iconId = msg.iconId;
   p.isDisconnected = false;
