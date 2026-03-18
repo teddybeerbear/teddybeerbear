@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>手にビまーじゃんvar002</title>
+<title>手にビまーじゃん</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 function _centerHandSeats(table){ /* CSS固定値で処理 */ }
@@ -1204,7 +1204,7 @@ body::before{
     <div id="abilityPopup" style="display:none;background:#030a10;border:1px solid #1a3a2a;border-radius:10px;padding:8px;margin-bottom:10px;max-height:260px;overflow-y:auto;">
       <div class="popup-ability-opt" data-ability="" onclick="pickAbility('')">
   <span style="font-size:1.4rem;margin-right:8px;">🚫</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">能力なし</span><br><span style="font-size:.55rem;color:#5a7a6a;">   殊能力なし</span></span>
+  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">能力なし</span><br><span style="font-size:.55rem;color:#5a7a6a;">���殊能力なし</span></span>
   
 </div><div class="popup-ability-opt" data-ability="mine" onclick="pickAbility('mine')">
   <span style="font-size:1.4rem;margin-right:8px;">💣</span>
@@ -1796,7 +1796,7 @@ const SFX = (() => {
     return ctx;
   }
 
-  // 矩形波の   いビー   
+  // 矩形波の���いビー���
   function beep(freq, dur, v, t0) {
     const c = ac(), t = t0 ?? c.currentTime;
     const o = c.createOscillator();
@@ -2356,7 +2356,7 @@ let _tileIdSeq=0;
 function mt(suit,num){return{suit,num,_id:_tileIdSeq++};}
 function sortTiles(tiles){
   const so={man:0,pin:1,sou:2,honor:3};
-  const ho={'東':0,'南':1,'西':2,'  ':3,'白':4,'発':5,'中':6};
+  const ho={'東':0,'南':1,'西':2,'��':3,'白':4,'発':5,'中':6};
   return[...tiles].sort((a,b)=>{
     if(so[a.suit]!==so[b.suit])return so[a.suit]-so[b.suit];
     const an=typeof a.num==='number'?a.num:ho[a.num];
@@ -4313,7 +4313,7 @@ function remoteWallPick(pidx,slotIdx){
   const drawnIsKita=tile.suit==='honor'&&tile.num==='北';
   if(p.riichi&&!drawnIsKita){
     addLog(`${emj(tile)} ツモ切り（リーチ中）`,'log-riichi');
-    setTimeout(()=>{discardAction(pidx,p.hand.length-1);broadcastState();},550);
+    scheduleForPlayer(pidx,550,()=>{discardAction(pidx,p.hand.length-1);broadcastState();});
   }else{
     addLog(`${emj(tile)} ツモ`,'log-new');
   }
@@ -4349,7 +4349,7 @@ function remoteKita(pidx){
   if(p.riichi){
     const repIsKita=rep.suit==='honor'&&rep.num==='北';
     if(!repIsKita){
-      setTimeout(()=>{discardAction(pidx,p.hand.length-1);broadcastState();},600);
+      scheduleForPlayer(pidx,600,()=>{discardAction(pidx,p.hand.length-1);broadcastState();});
     }
   }
   broadcastState();renderAll();
@@ -4830,7 +4830,7 @@ function handleAnkan(pidx, tileKey){
   }
   if(p.riichi){
     // リーチ中はツモ切り
-    setTimeout(()=>{discardAction(pidx,p.hand.length-1);broadcastState();},600);
+    scheduleForPlayer(pidx,600,()=>{discardAction(pidx,p.hand.length-1);broadcastState();});
   }
   renderAll();broadcastState();
   // オンラインホスト: ゲストの番ならCPUを呼ばない
@@ -4849,7 +4849,7 @@ function checkPon(fromPidx,tile){
   for(let i=0;i<numPlayers;i++){
     if(i===fromPidx)continue;
     const p=G.players[i];
-    if(p.riichi)continue; // リー  中はポン不可
+    if(p.riichi)continue; // リー��中はポン不可
     const cnt=cntMap(p.hand);
     if((cnt[tk(tile)]||0)>=2){
       // オンライン: 自分自身か、ホストが管理しているゲストか判定
@@ -5243,7 +5243,7 @@ function humanHakuAuto(){
   const p=G.players[myIdx];
   if(!G_ABILITY_MODE||PROFILE.ability!=='haku'||p.abilityUsed)return;
   if(!p||p.riichi||G.phase!=='discard')return;
-  // cpuWorstTileIdxと同じロジックで孤立牌   自動選択
+  // cpuWorstTileIdxと同じロジックで孤立牌���自動選択
   const idx=cpuWorstTileIdx(p);
   if(idx<0)return;
   const t=p.hand[idx];
@@ -5356,14 +5356,14 @@ function humanPickWall(slotIdx){
   }
 
   G.phase='discard';
-  // タイマーはdraw_wait開始時に起動済み → ここでは継  （restartしない）
+  // タイマーはdraw_wait開始時に起動済み → ここでは継��（restartしない）
   if(!p.isDealer&&G.firstRound&&canWin(p.hand))p.isChiihou=true;
   if(canWin(p.hand)){addLog(`${emj(tile)} ツモ！上がれます`,'log-tsumo');renderAll();broadcastState();return;}
   const drawnIsKita=tile.suit==='honor'&&tile.num==='北';
   if(p.riichi&&!drawnIsKita){
     addLog(`${emj(tile)} ツモ切り（リーチ中）`,'log-riichi');
     renderAll();broadcastState();
-    setTimeout(()=>{if(G.current===myIdx&&G.phase==='discard'&&G.players[myIdx].riichi){discardAction(myIdx,G.players[myIdx].hand.length-1);broadcastState();}},550);
+    scheduleForPlayer(myIdx,550,()=>{if(G.phase==='discard'&&G.players[myIdx]?.riichi){discardAction(myIdx,G.players[myIdx].hand.length-1);broadcastState();}});
     return;
   }
   updateTenpai(p);
@@ -5473,6 +5473,19 @@ function scheduleCpuAction(delay){
   setTimeout(()=>{ if(_cpuActionGen===gen) cpuAction(); }, delay);
 }
 
+// CPU の捨て・引き継ぎ等の deferred 処理を安全にスケジュールする。
+// 登録時の G.current と _cpuActionGen をキャプチャし、
+// 発火時に一致しない場合（別プレイヤーのターンに変わった等）は実行しない。
+function scheduleForPlayer(playerIdx, delay, fn){
+  const gen = _cpuActionGen;
+  const expectedPlayer = playerIdx;
+  setTimeout(()=>{
+    if(_cpuActionGen !== gen) return;      // ホスト昇格で世代が変わった
+    if(G.current !== expectedPlayer) return; // 別プレイヤーのターンになっている
+    fn();
+  }, delay);
+}
+
 function cpuAction(){
   if(NET.online&&!amIHost())return; // guests never run cpu
   // ★ 自分のターンなのに cpuAction が呼ばれたら無視（stale setTimeout 対策）
@@ -5498,34 +5511,32 @@ function cpuAction(){
       G.phase='discard';
       p.discards.push(tile);updateTenpai(p);
       renderAll();broadcastState();
-      setTimeout(()=>{if(!checkPon(idx,tile))nextTurn((idx+1)%numPlayers);broadcastState();},900);
+      scheduleForPlayer(idx,900,()=>{if(!checkPon(idx,tile))nextTurn((idx+1)%numPlayers);broadcastState();});
       return;
     }
     G.phase='discard';
-    // ★ drawTile直後に即broadcastState: ここで切断されてもゲストはdiscard状態を保持できる
-    // これ以降の setTimeout(cpuDiscard) までの約550ms間にホストが落ちても二重ツモが起きない
+    // ★ drawTile直後に即broadcastState
     broadcastState();
-    if(canWin(p.hand)){setTimeout(()=>handleWin(idx,tile,true,-1),400);return;}
+    if(canWin(p.hand)){scheduleForPlayer(idx,400,()=>handleWin(idx,tile,true,-1));return;}
     const isKita=tile.suit==='honor'&&tile.num==='北';
     if(isKita&&!p.riichi){cpuPullKita(idx);return;}
     // 暗槓チェック
     const cpuAnkans=canAnkan(idx);
     if(cpuAnkans.length>0){
-      // リーチ中は必ず暗槓、それ以外は50%
       if(p.riichi||Math.random()<0.5){
-        setTimeout(()=>{handleAnkan(idx,cpuAnkans[0].key);broadcastState();},600);return;
+        scheduleForPlayer(idx,600,()=>{handleAnkan(idx,cpuAnkans[0].key);broadcastState();});return;
       }
     }
-    if(p.riichi){setTimeout(()=>discardAction(idx,p.hand.length-1),600);return;}
+    if(p.riichi){scheduleForPlayer(idx,600,()=>discardAction(idx,p.hand.length-1));return;}
     if(!p.riichi&&p.tenpai&&p.melds.length===0){cpuDeclareRiichi(idx);return;}
     // CPU能力発動（discardフェーズ前）
     if(cpuTryAbility(idx)) return;
-    setTimeout(cpuDiscard,550);
+    scheduleForPlayer(idx,550,cpuDiscard);
   }else if(G.phase==='discard'){
-    if(p.riichi){setTimeout(()=>discardAction(idx,p.hand.length-1),600);return;}
+    if(p.riichi){scheduleForPlayer(idx,600,()=>discardAction(idx,p.hand.length-1));return;}
     // CPU能力発動（discardフェーズ）
     if(cpuTryAbility(idx)) return;
-    setTimeout(cpuDiscard,550);
+    scheduleForPlayer(idx,550,cpuDiscard);
   }
 }
 
@@ -5582,9 +5593,9 @@ function cpuPullKita(pidx){
   const rep=drawRinshanTile(pidx);if(!rep){handleExhausted();return;}
   // 北抜きはカンドラを開かない
   G.phase='discard';updateTenpai(p);renderAll();broadcastState();
-  if(p.riichi){setTimeout(()=>{discardAction(pidx,p.hand.length-1);broadcastState();},600);}
+  if(p.riichi){scheduleForPlayer(pidx,600,()=>{discardAction(pidx,p.hand.length-1);broadcastState();});}
   else if(canWin(p.hand)){setTimeout(()=>{p.isRinshanKaihou=true;handleWin(pidx,rep,true,-1);broadcastState();},400);}
-  else{setTimeout(cpuDiscard,550);}
+  else{scheduleForPlayer(pidx,550,cpuDiscard);}
 }
 
 function cpuDecideRon(pidx,tile){return true;}
@@ -5604,7 +5615,7 @@ function cpuDeclareRiichi(pidx){
   G.pendingRiichi=mode;
   G.riichiValidIdx=getRiichiDiscards(p.hand);
   commitRiichi(p);
-  setTimeout(cpuDiscard,550);
+  scheduleForPlayer(G.current,550,cpuDiscard);
 }
 
 function cpuDiscard(){
@@ -5823,7 +5834,7 @@ function humanKita(){
     addLog(`${emj(rep)} ツモ切り（リーチ中）`,'log-riichi');
     renderAll();broadcastState();
     if(!repIsKita){
-      setTimeout(()=>{if(G.current===myIdx&&G.phase==='discard'&&p.riichi){discardAction(myIdx,p.hand.length-1);broadcastState();}},550);
+      scheduleForPlayer(myIdx,550,()=>{if(G.phase==='discard'&&p.riichi){discardAction(myIdx,p.hand.length-1);broadcastState();}});
     }
   }else{
     if(p.tenpai)addLog(`${emj(rep)} ツモ。テンパイ中。`,'log-new');
@@ -6231,12 +6242,12 @@ function renderCornerAbilityBtns(){
     }
   }
 
-  // ── 闇 🌑 ───────────────────────────   ───────────────────
+  // ── 闇 🌑 ───────────────────────────���───────────────────
   if(ab==='yami'&&!p.abilityUsed&&(phase==='discard')&&isMyTurn){
     if(!G.yamiSelectMode){
       const yamiSet=p.yamiTileIdx>=0&&p.yamiTileIdx<p.hand.length;
       if(!yamiSet)
-        add('🌑 闇','#cc99ff','#7744aa',()=>{G.yamiSelectMode=true;renderAll();},'捨て牌を裏向  に');
+        add('🌑 闇','#cc99ff','#7744aa',()=>{G.yamiSelectMode=true;renderAll();},'捨て牌を裏向��に');
     }
   }
 }
@@ -7043,7 +7054,7 @@ function renderTable(){
         :p.riichi&&p.openRiichi?`<span class="badge" style="background:#1a0020;border:1px solid #8844cc;color:#cc88ff;letter-spacing:-.02em;">オープンリーチ</span>`
         :p.riichi?`<span class="badge badge-riichi">リーチ</span>`:'',
       (p.tenpai&&!p.riichi&&pidx===NET.myIdx)?`<span class="badge badge-tenpai">テンパイ</span>`:'',
-      p.kitaCount>0?`<span class="badge badge-dora">   ×${p.kitaCount}</span>`:'',
+      p.kitaCount>0?`<span class="badge badge-dora">���×${p.kitaCount}</span>`:'',
     ].join('');
 
     const riichiStick=p.riichi?`<span class="riichi-stick">リーチ</span>`:''; 
@@ -7365,7 +7376,7 @@ function renderTable(){
     dw.classList.add('discard-abs','discard-abs-'+_sideName);
     dw.dataset.discardSide=_si;
     if(_si===1||_si===3){
-      // left/right: table-center の子として position:absolute で外側  定
+      // left/right: table-center の子として position:absolute で外側��定
       const tcEl2=document.getElementById('tableCenter');
       tcEl2.querySelectorAll('.discard-abs-'+_sideName).forEach(el=>el.remove());
       tcEl2.appendChild(dw);
@@ -7473,7 +7484,7 @@ function _positionDiscards(table){
   const GRID_W=314; // 捨て牌外枠幅 left/right（8列, padding+border込み）
 
   // 右: rotate(-90deg) origin(0,0)
-  // top=GRID_W → 回  後の上端=top-GRID_W=0 → tc上端に揃う
+  // top=GRID_W → 回��後の上端=top-GRID_W=0 → tc上端に揃う
   // left=tcW+GAP → tc右辺外にぴったり
   tc.querySelectorAll('.discard-abs-right').forEach(dw=>{
     dw.style.left=(tcW+GAP)+'px';
@@ -7546,12 +7557,12 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
       }
       // 白・闇: セレクトモード中のヒント+キャンセルのみ（ボタン本体はcornerBtns）
       if(G_ABILITY_MODE&&PROFILE.ability==='haku'&&G.hakuSelectMode){
-        html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変   る手牌をクリック！</span>`;
+        html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変���る手牌をクリック！</span>`;
         html+=`<button class="btn btn-danger" onclick="G.hakuSelectMode=false;renderAll();">キャンセル</button>`;
       }
       if(G_ABILITY_MODE&&PROFILE.ability==='yami'&&G.yamiSelectMode){
         html+=`<span class="action-hint" style="color:#cc99ff;">🌑 闇にする手牌をクリック！</span>`;
-        html+=`<button class="btn btn-danger" onclick="G.yamiSelectMode=false;renderAll();">キャ   セル</button>`;
+        html+=`<button class="btn btn-danger" onclick="G.yamiSelectMode=false;renderAll();">キャ���セル</button>`;
       }
       // 加槓チェック(右下ボタンへ移動済み): ポン済み牌と同じ牌が手牌にある
       for(let ki=0;ki<p.hand.length;ki++){
@@ -7656,7 +7667,7 @@ function _doSteal(myIdx,fromPidx,discardIdx){
   renderAll();broadcastState();
   // CPUのスチール後: ターンを継続してcpuDiscardを呼ぶ
   const isCpu = !NET.online ? myIdx!==0 : (NET.isHost && myIdx!==NET.myIdx);
-  if(isCpu) setTimeout(cpuDiscard, 600);
+  if(isCpu) scheduleForPlayer(myIdx,600,cpuDiscard);
 }
 
 // ============================================================
@@ -7839,7 +7850,7 @@ function pickAbility(ability){
     'yami':['🌑','闇','オープンリーチ時に牌を裏向きに'],
     'haku':['🀆','白','手牌1枚を白に変換'],
     'sanctuary':['🏛️','聖域','親番中、失点を受けない'],
-    'steal':['🃏','スチール','捨て牌   ら1枚盗む'],
+    'steal':['🃏','スチール','捨て牌���ら1枚盗む'],
     'pen':['🖊️','ペン','山牌に絵を描く'],
     'pinzu':['🔵','ピンズー教','筒子の位置が見える'],
   };
