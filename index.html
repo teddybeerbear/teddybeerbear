@@ -1,718 +1,170 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>手にビまーじゃん</title>
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script>
-function _centerHandSeats(table){ /* CSS固定値で処理 */ }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>手にビールベア | Links</title>
+  <meta name="google-site-verification" content="7EpNL2Ox25dcl0iSus7bv8cBwU103otTBpq1uvkuJXs" />
 
-// ── テーブルスケール ──────────────────────────────
-const _TABLE_W=1400, _TABLE_H=933;
-function scaleTable(){
-  const w=document.getElementById('tableWrapper');
-  if(!w||!document.getElementById('gameScreen').classList.contains('active')) return;
-  const s=Math.min(window.innerWidth/_TABLE_W, window.innerHeight/_TABLE_H);
-  const ox=(window.innerWidth  - _TABLE_W*s)/2;
-  const oy=(window.innerHeight - _TABLE_H*s)/2;
-  w.style.cssText='position:fixed;left:'+ox+'px;top:'+oy+'px;width:'+_TABLE_W+'px;height:'+_TABLE_H+'px;transform:scale('+s+');transform-origin:0 0;';
-  if(typeof G!=='undefined'&&G&&G.players) requestAnimationFrame(()=>{
-    const t=document.getElementById('mahjongTable');
-    if(t&&typeof _positionDiscards==='function') _positionDiscards(t);
-  });
-}
-window.addEventListener('resize', scaleTable);
+  <style>
+    :root{
+      --radius: 20px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+      background: linear-gradient(180deg, #fbf7f6 0%, #fff 100%);
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:48px;
+      color:#4b3b34;
+    }
 
-// ── ブラウザ閉じ・タブ閉じ時にピアを確実に閉じる ──────────
-window.addEventListener('pagehide', ()=>{
-  if(typeof NET!=='undefined'&&NET.peer){
-    try{ netBroadcastAll({type:'hostDisconnect'}); }catch(e){}
-    try{ NET.peer.destroy(); }catch(e){}
-  }
-});
-window.addEventListener('beforeunload', ()=>{
-  if(typeof NET!=='undefined'&&NET.peer){
-    try{ netBroadcastAll({type:'hostDisconnect'}); }catch(e){}
-    try{ NET.peer.destroy(); }catch(e){}
-  }
-});
-</script>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+    .page{
+      display:flex;
+      align-items:center;
+      gap:48px;
+      width:100%;
+      max-width:1100px;
+    }
+
+    .avatar{
+      width:160px;
+      height:160px;
+      border-radius:50%;
+      overflow:hidden;
+      border:8px solid #fff;
+      box-shadow:0 12px 30px rgba(0,0,0,.12);
+      background:#fff;
+    }
+    .avatar img{width:100%;height:100%;object-fit:cover}
+
+    .card{
+      flex:1;
+      background:#fff;
+      border-radius:var(--radius);
+      padding:28px;
+      box-shadow:0 10px 30px rgba(0,0,0,.08);
+    }
+
+    .card-inner{
+      display:flex;
+      gap:28px;
+      align-items:center;
+    }
+
+    .left-col{
+      width:300px;
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+    }
+
+    h1{
+      margin:0;
+      font-size:28px;
+      color:#6b3f2b;
+    }
+
+    .links{
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+
+    .link-btn{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      padding:12px 16px;
+      border-radius:12px;
+      color:#fff;
+      text-decoration:none;
+      font-weight:700;
+      transition:.15s;
+    }
+    .link-btn:hover{transform:translateY(-3px)}
+
+    .btn-icon{
+      width:28px;
+      height:28px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    .youtube{background:#e84334}
+    .twitch{background:#6f42c1}
+    .x{background:#111}
+    .suzuri{background:#f05a28}
+
+    .line-stamp{
+      background:#fff;
+      border:2px solid #e6e6e6;
+      color:#333;
+    }
+    .line-stamp span{color:#333}
+    .line-stamp img{height:28px}
+
+    .mahjong{background:#2e7d32}
+
+    .right-col img{
+      max-width:560px;
+      width:100%;
+      border-radius:12px;
+    }
+
+    @media(max-width:900px){
+      .page{flex-direction:column}
+      .card-inner{flex-direction:column}
+      .left-col{width:100%}
+    }
+  </style>
 </head>
+
 <body>
-
-<!-- GACHA SCREEN -->
-<div id="gachaScreen" style="display:none">
-  <div style="width:100%;max-width:480px;">
-    <button onclick="closeGacha()" style="background:none;border:none;color:#5a7a6a;font-size:.75rem;cursor:pointer;padding:4px 0;margin-bottom:8px;">← ロビーへ戻る</button>
-    <div class="gacha-title">✨ ガチャ</div>
-    <div class="gacha-sub">LEGEND排出でランダムに能力が解放！</div>
-
-    <!-- レアリティ表 -->
-    <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;justify-content:center;">
-      <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#0a1a14;border:1px solid #2a4a3a;color:#5a8a7a;">NORMAL 89.9%</span>
-      <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#0a0a24;border:1px solid #3333aa;color:#8888ff;">RARE 10%</span>
-      <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#18081a;border:1px solid #8833aa;color:#cc66ff;">EPIC 1%</span>
-      <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#1a0e00;border:1px solid #ffd700;color:#ffd700;">LEGEND 0.1% → 能力</span>
+  <div class="page">
+    <div class="avatar">
+      <img src="icon.png" alt="手にビールベア">
     </div>
 
-    <!-- コイン残高 -->
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;justify-content:center;">
-      <span style="font-size:1.1rem;">🪙</span>
-      <span style="font-size:.85rem;font-weight:700;color:var(--gold);" id="gachaCoinDisplay">0</span>
-      <span style="font-size:.62rem;color:#5a7a6a;">手にビコイン</span>
-    </div>
-    <div class="gacha-btn-wrap">
-      <button class="gacha-pull-btn gacha-pull-10" onclick="doPull10()">🎰 10連ガチャ（🪙10枚）</button>
-    </div>
+    <div class="card">
+      <div class="card-inner">
 
-    <!-- 所持能力コレクション（非表示） -->
-    <div class="gacha-collection" style="display:none;">
-      <div class="gacha-col-title">⚡ 所持能力（タップで装備）</div>
-      <div class="gacha-col-grid" id="abilityCollection"></div>
-    </div>
+        <div class="left-col">
+          <h1>手にビールベア</h1>
 
-    <!-- 統計 -->
-    <div style="margin-top:12px;text-align:center;font-size:.55rem;color:#2a4a3a;" id="gachaStat"></div>
-  </div>
-</div>
+          <div class="links">
+            <a class="link-btn youtube" href="https://www.youtube.com/@teddybeerbear" target="_blank">YouTube</a>
+            <a class="link-btn twitch" href="https://www.twitch.tv/imteddybeerbear" target="_blank">Twitch</a>
+            <a class="link-btn x" href="https://x.com/T_BB_official" target="_blank">X</a>
 
-<!-- ガチャ演出オーバーレイ -->
-<div id="gachaAnim">
-  <div class="gacha-flash" id="gachaFlash"></div>
-  <div id="gachaResultInner"></div>
-  <button onclick="closeGachaAnim()" style="position:relative;z-index:3;margin-top:12px;
-    background:#030a10;border:1px solid #1a3a2a;border-radius:8px;
-    color:#5a7a6a;font-size:.75rem;padding:10px 24px;cursor:pointer;">閉じる</button>
-</div>
+            <a class="link-btn suzuri"
+               href="https://suzuri.jp/imteddybear?utm_source=others&utm_medium=social&utm_campaign=shop_share"
+               target="_blank">SUZURI グッズ</a>
 
-<!-- SHOP SCREEN -->
-<div id="shopScreen" style="display:none">
-  <div style="width:100%;max-width:480px;">
-    <button onclick="closeShop()" style="background:none;border:none;color:#5a7a6a;font-size:.75rem;cursor:pointer;padding:4px 0;margin-bottom:8px;">← ロビーへ戻る</button>
-    <div class="shop-title">🏪 ショップ</div>
-    <div class="shop-sub">手にビコインで購入できます</div>
+            <a class="link-btn line-stamp"
+               href="https://store.line.me/stickershop/author/873475/ja"
+               target="_blank">
+              <span class="btn-icon">
+                <img src="スタンプ.png" alt="LINEスタンプ">
+              </span>
+              <span>LINEスタンプ</span>
+            </a>
 
-    <!-- コイン残高 -->
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;justify-content:center;">
-      <span style="font-size:1.1rem;">🪙</span>
-      <span style="font-size:.85rem;font-weight:700;color:var(--gold);" id="shopCoinDisplay">0</span>
-      <span style="font-size:.62rem;color:#5a7a6a;">手にビコイン</span>
-    </div>
-
-    <div class="shop-section-title">🎁 デイリー</div>
-
-    <!-- デイリーギフト -->
-    <div class="shop-item">
-      <div class="shop-item-icon">🎁</div>
-      <div class="shop-item-info">
-        <div class="shop-item-name">デイリーギフト</div>
-        <div class="shop-item-desc">1日1回無料で受け取れます。毎日ログインボーナス！</div>
-      </div>
-      <div class="shop-item-price">
-        <button class="shop-buy-btn free" id="dailyBtn" onclick="claimDaily()">無料 🪙+5</button>
-      </div>
-    </div>
-
-    <div class="shop-section-title">⚡ 能力を購入</div>
-    <div style="font-size:.56rem;color:#4a6a5a;margin-bottom:8px;">所持していない能力を🪙100枚で解放できます。</div>
-    <div class="shop-ability-grid" id="shopAbilityGrid"></div>
-  </div>
-</div>
-
-<!-- PROFILE SCREEN -->
-<!-- ICON COLLECTION SCREEN -->
-<div id="iconCollectionScreen" style="display:none">
-  <div class="icon-col-header">
-    <button class="icon-col-back" onclick="closeIconCollection()">← 戻る</button>
-    <div class="icon-col-title">🖼️ アイコン図鑑</div>
-  </div>
-  <div id="iconCollectionContent" style="width:100%;max-width:520px;"></div>
-</div>
-
-<div id="profileScreen" style="display:none">
-  <div class="lobby-title">
-    <h1 style="font-size:clamp(1.4rem,4vw,2.2rem);">プロフィール</h1>
-    <p>名前と能力を設定してください</p>
-  </div>
-  <div class="profile-card">
-    <!-- アイコン選択 -->
-    <h3 style="margin-top:8px;">アイコン</h3>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
-      <div id="iconDisplay" onclick="openIconCollection()" style="width:72px;height:90px;display:flex;align-items:center;justify-content:center;border:2px solid #2a5a3a;border-radius:12px;cursor:pointer;background:#040c12;transition:border-color .15s;font-size:.55rem;color:#3a5a4a;" title="クリックで変更">未設定</div>
-      <span style="font-size:.6rem;color:#3a5a4a;">タップして図鑑へ</span>
-    </div>
-
-    <!-- 名前 -->
-    <h3>プレイヤー名</h3>
-    <input class="profile-input" id="profileName" type="text" maxlength="12" placeholder="プレイヤー名を入力">
-
-    <!-- 能力選択 -->
-    <h3 style="margin-top:12px;">能力</h3>
-    <div id="abilityDisplay" onclick="toggleAbilityPopup()" style="display:flex;align-items:center;gap:10px;background:#040c12;border:2px solid #2a5a3a;border-radius:10px;padding:10px 14px;cursor:pointer;margin-bottom:6px;transition:border-color .15s;">
-      <span id="abilityDisplayIcon" style="font-size:1.8rem;">🚫</span>
-      <div>
-        <div id="abilityDisplayName" style="font-size:.75rem;font-weight:700;color:#c0d8c0;">能力なし</div>
-        <div id="abilityDisplayDesc" style="font-size:.55rem;color:#5a7a6a;">特殊能力なし</div>
-      </div>
-      <span style="margin-left:auto;font-size:.55rem;color:#3a5a4a;">タップして変更</span>
-    </div>
-    <!-- hidden input for abilityList compatibility -->
-    <div id="abilityList" style="display:none;"></div>
-    <div id="abilityPopup" style="display:none;background:#030a10;border:1px solid #1a3a2a;border-radius:10px;padding:8px;margin-bottom:10px;max-height:260px;overflow-y:auto;">
-      <div class="popup-ability-opt" data-ability="" onclick="pickAbility('')">
-  <span style="font-size:1.4rem;margin-right:8px;">🚫</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">能力なし</span><br><span style="font-size:.55rem;color:#5a7a6a;">���殊能力なし</span></span>
-  
-</div><div class="popup-ability-opt" data-ability="mine" onclick="pickAbility('mine')">
-  <span style="font-size:1.4rem;margin-right:8px;">💣</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">地雷</span><br><span style="font-size:.55rem;color:#5a7a6a;">山牌に地雷を仕掛ける</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">妨害系</span>
-</div><div class="popup-ability-opt" data-ability="light" onclick="pickAbility('light')">
-  <span style="font-size:1.4rem;margin-right:8px;">☀️</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">光</span><br><span style="font-size:.55rem;color:#5a7a6a;">牌を1枚覗き見する</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">索敵系</span>
-</div><div class="popup-ability-opt" data-ability="yami" onclick="pickAbility('yami')">
-  <span style="font-size:1.4rem;margin-right:8px;">🌑</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">闇</span><br><span style="font-size:.55rem;color:#5a7a6a;">オープンリーチ時に牌を裏向きに</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">撹乱系</span>
-</div><div class="popup-ability-opt" data-ability="haku" onclick="pickAbility('haku')">
-  <span style="font-size:1.4rem;margin-right:8px;">🀆</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">白</span><br><span style="font-size:.55rem;color:#5a7a6a;">手牌1枚を白に変換</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">変換系</span>
-</div><div class="popup-ability-opt" data-ability="sanctuary" onclick="pickAbility('sanctuary')">
-  <span style="font-size:1.4rem;margin-right:8px;">🏛️</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">聖域</span><br><span style="font-size:.55rem;color:#5a7a6a;">親番中、失点を受けない</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">防御系</span>
-</div><div class="popup-ability-opt" data-ability="steal" onclick="pickAbility('steal')">
-  <span style="font-size:1.4rem;margin-right:8px;">🃏</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">スチール</span><br><span style="font-size:.55rem;color:#5a7a6a;">捨て牌から1枚盗む</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">奪取系</span>
-</div><div class="popup-ability-opt" data-ability="pen" onclick="pickAbility('pen')">
-  <span style="font-size:1.4rem;margin-right:8px;">🖊️</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">ペン</span><br><span style="font-size:.55rem;color:#5a7a6a;">山牌に絵を描く</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">落書き系</span>
-</div><div class="popup-ability-opt" data-ability="pinzu" onclick="pickAbility('pinzu')">
-  <span style="font-size:1.4rem;margin-right:8px;">🔵</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">ピンズー教</span><br><span style="font-size:.55rem;color:#5a7a6a;">筒子の位置が見える</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">情報系</span>
-</div>
-    </div>
-
-    <button class="start-btn" onclick="saveProfile()">保存してロビーへ →</button>
-  </div>
-</div>
-
-<!-- LOBBY -->
-<div id="lobby">
-  <div class="lobby-title">
-    <div class="lobby-tiles">🍺🐻🀇🀙</div>
-    <h1 style="letter-spacing:.05em;">手にビまーじゃん</h1>
-  </div>
-
-  <!-- Top nav -->
-  <div style="display:flex;gap:8px;justify-content:center;align-items:center;">
-    <button onclick="toggleTitleSettings()" style="
-      background:#030a10;border:1px solid #1a3a2a;border-radius:7px;
-      color:#5a8a6a;font-size:1rem;padding:6px 10px;cursor:pointer;
-      transition:all .15s;" title="設定">⚙️</button>
-  </div>
-
-  <!-- タイトル設定パネル -->
-  <div id="titleSettingsPanel" style="display:none;background:#030a10;border:1px solid #1a3a2a;border-radius:10px;padding:14px 18px;margin:6px auto 0;max-width:900px;width:100%;">
-    <!-- タブ -->
-    <div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid #1a3a2a;padding-bottom:8px;">
-      <button onclick="showTitleTab('audio')" id="titleTabAudio" style="background:#081a10;border:1px solid #2a5a3a;border-radius:5px;color:var(--gold);font-size:.65rem;padding:4px 10px;cursor:pointer;">🔊 サウンド</button>
-      <button onclick="showTitleTab('rules')" id="titleTabRules" style="background:#030a10;border:1px solid #1a3a2a;border-radius:5px;color:#5a7a6a;font-size:.65rem;padding:4px 10px;cursor:pointer;">📖 ルール</button>
-      <button onclick="showTitleTab('yaku')" id="titleTabYaku" style="background:#030a10;border:1px solid #1a3a2a;border-radius:5px;color:#5a7a6a;font-size:.65rem;padding:4px 10px;cursor:pointer;">🀄 役一覧</button>
-    </div>
-    <!-- サウンドタブ -->
-    <div id="titleTabContentAudio">
-      <div style="display:flex;flex-direction:column;gap:10px;">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:.65rem;color:#5a7a6a;width:60px;">🎵 SE</span>
-          <input type="range" min="0" max="1" step="0.05" value="0.14" style="flex:1;accent-color:var(--gold);"
-            oninput="SFX.setVol(+this.value)">
+            <a class="link-btn mahjong" href="https://teddybeerbear.onrender.com/" target="_blank">手にビまーじゃん</a>
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:.65rem;color:#5a7a6a;width:60px;">🎶 BGM</span>
-          <input type="range" min="0" max="0.5" step="0.02" value="0.022" style="flex:1;accent-color:var(--gold);"
-            oninput="BGM.setVol(+this.value)">
+
+        <div class="right-col">
+          <img src="main.png" alt="main image">
         </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:.65rem;color:#5a7a6a;width:60px;">タイトル曲</span>
-          <select id="titleBgmSel" style="flex:1;background:#030a10;color:var(--gold);border:1px solid #1a3a2a;border-radius:5px;font-size:.62rem;padding:3px 6px;"
-            onchange="_titleBgmKey=this.value; BGM.fadeOut(()=>BGM.fadeIn(_titleBgmKey));">
-            <option value="sakura">🌸 さくらポップ</option>
-            <option value="teatime">🍵 ティータイム</option>
-            <option value="adventure">⭐ アドベンチャー</option>
-            <option value="waltz">🌙 夜風のワルツ</option>
-            <option value="gameboy">🎮 ゲームボーイ</option>
-            <option value="none">🔇 なし</option>
-          </select>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:.65rem;color:#5a7a6a;width:60px;">対局曲</span>
-          <select id="gameBgmSel" style="flex:1;background:#030a10;color:var(--gold);border:1px solid #1a3a2a;border-radius:5px;font-size:.62rem;padding:3px 6px;"
-            onchange="_gameBgmKey=this.value;">
-            <option value="adventure">⭐ アドベンチャー</option>
-            <option value="sakura">🌸 さくらポップ</option>
-            <option value="teatime">🍵 ティータイム</option>
-            <option value="waltz">🌙 夜風のワルツ</option>
-            <option value="gameboy">🎮 ゲームボーイ</option>
-            <option value="none">🔇 なし</option>
-          </select>
-        </div>
-      </div>
-    </div>
-    <!-- ルールタブ -->
-    <div id="titleTabContentRules" style="display:none;font-size:.85rem;color:#8aaa8a;line-height:1.8;text-align:center;padding:20px 10px;">
-      同じ図柄を２つと同じ図柄を３つ<br>or 同じ図柄の並んだ数字を３つ<br>集めると上がれるよ。
-    </div>
-    <!-- 役一覧タブ -->
-    <div id="titleTabContentYaku" style="display:none;max-height:340px;overflow-y:auto;">
-      <table style="width:100%;border-collapse:collapse;font-size:.65rem;">
-        <thead><tr style="color:#4a7a5a;border-bottom:1px solid #1a3a2a;">
-          <th style="text-align:left;padding:3px 6px;font-weight:400;">役名</th>
-          <th style="text-align:right;padding:3px 6px;font-weight:400;color:var(--gold);">翻</th>
-          <th style="text-align:left;padding:3px 6px;font-weight:400;">条件</th>
-        </tr></thead>
-        <tbody style="color:#8aaa8a;">
-          <tr><td colspan="3" style="padding:4px 6px;color:#4a7a5a;font-size:.58rem;background:#081810;">── 1翻 ──</td></tr>
-          <tr><td style="padding:2px 6px;">リーチ</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">1</td><td style="padding:2px 6px;font-size:.58rem;">門前</td></tr>
-          <tr><td style="padding:2px 6px;">一発</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">1</td><td style="padding:2px 6px;font-size:.58rem;">リーチ後1巡以内</td></tr>
-          <tr><td style="padding:2px 6px;">ツモ</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">1</td><td style="padding:2px 6px;font-size:.58rem;">門前ツモ</td></tr>
-          <tr><td style="padding:2px 6px;">役牌</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">1</td><td style="padding:2px 6px;font-size:.58rem;">三元牌・場風・自風の刻子</td></tr>
-          <tr><td style="padding:2px 6px;">タンヤオ</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">1</td><td style="padding:2px 6px;font-size:.58rem;">2〜8のみ（萬は不可）</td></tr>
-          <tr><td style="padding:2px 6px;">平和</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">1</td><td style="padding:2px 6px;font-size:.58rem;">門前・順子のみ・両面待ち</td></tr>
-          <tr><td style="padding:2px 6px;">チャンタ</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">1</td><td style="padding:2px 6px;font-size:.58rem;">全面子に端牌・字牌含む</td></tr>
-          <tr><td style="padding:2px 6px;">ハイテイ</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">1</td><td style="padding:2px 6px;font-size:.58rem;">最後の牌でツモ</td></tr>
-          <tr><td style="padding:2px 6px;">ホウテイ</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">1</td><td style="padding:2px 6px;font-size:.58rem;">最後の牌でロン</td></tr>
-          <tr><td style="padding:2px 6px;">嶺上開花</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">1</td><td style="padding:2px 6px;font-size:.58rem;">カン後の嶺上牌でツモ</td></tr>
-          <tr><td style="padding:2px 6px;">槍槓</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">1</td><td style="padding:2px 6px;font-size:.58rem;">加槓牌でロン</td></tr>
-          <tr><td colspan="3" style="padding:4px 6px;color:#4a7a5a;font-size:.58rem;background:#081810;">── 2翻 ──</td></tr>
-          <tr><td style="padding:2px 6px;">ダブルリーチ</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">2</td><td style="padding:2px 6px;font-size:.58rem;">第一ツモ前リーチ</td></tr>
-          <tr><td style="padding:2px 6px;">オープンリーチ</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">2</td><td style="padding:2px 6px;font-size:.58rem;">手牌公開リーチ</td></tr>
-          <tr><td style="padding:2px 6px;">トイトイ</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">2</td><td style="padding:2px 6px;font-size:.58rem;">全刻子</td></tr>
-          <tr><td style="padding:2px 6px;">鳴きホンイツ</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">2</td><td style="padding:2px 6px;font-size:.58rem;">鳴き混一色</td></tr>
-          <tr><td style="padding:2px 6px;">鳴き純チャン</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">2</td><td style="padding:2px 6px;font-size:.58rem;">鳴き純全帯么九</td></tr>
-          <tr><td colspan="3" style="padding:4px 6px;color:#4a7a5a;font-size:.58rem;background:#081810;">── 3翻 ──</td></tr>
-          <tr><td style="padding:2px 6px;">ホンイツ</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">3</td><td style="padding:2px 6px;font-size:.58rem;">門前混一色</td></tr>
-          <tr><td style="padding:2px 6px;">純チャン</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">3</td><td style="padding:2px 6px;font-size:.58rem;">門前純全帯么九</td></tr>
-          <tr><td style="padding:2px 6px;">ダブルオープンリーチ</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">3</td><td style="padding:2px 6px;font-size:.58rem;">第一ツモ前オープンリーチ</td></tr>
-          <tr><td colspan="3" style="padding:4px 6px;color:#4a7a5a;font-size:.58rem;background:#081810;">── 5〜6翻 ──</td></tr>
-          <tr><td style="padding:2px 6px;">鳴き清一色</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">5</td><td style="padding:2px 6px;font-size:.58rem;">鳴き清一色</td></tr>
-          <tr><td style="padding:2px 6px;">清一色</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">6</td><td style="padding:2px 6px;font-size:.58rem;">門前清一色</td></tr>
-          <tr><td colspan="3" style="padding:4px 6px;color:#4a7a5a;font-size:.58rem;background:#081810;">── 役満 (130点) ──</td></tr>
-          <tr><td style="padding:2px 6px;">字一色</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">字牌のみ</td></tr>
-          <tr><td style="padding:2px 6px;">チンロウトウ</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">1・9のみ</td></tr>
-          <tr><td style="padding:2px 6px;">緑一色</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">索子2346・発のみ</td></tr>
-          <tr><td style="padding:2px 6px;">国士無双</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">東南西北中の5種+1</td></tr>
-          <tr><td style="padding:2px 6px;">一槓子</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">カン1回以上</td></tr>
-          <tr><td style="padding:2px 6px;">一暗刻</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">暗刻のみ（ツモか単騎）</td></tr>
-          <tr><td style="padding:2px 6px;">地和</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">子の第一ツモ上がり</td></tr>
-          <tr><td style="padding:2px 6px;">人和</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">第一ツモ前ロン</td></tr>
-          <tr><td colspan="3" style="padding:4px 6px;color:#4a7a5a;font-size:.58rem;background:#081810;">── 2倍役満 (260点) ──</td></tr>
-          <tr><td style="padding:2px 6px;">天和</td><td style="text-align:right;color:#ff44aa;padding:2px 6px;">2倍</td><td style="padding:2px 6px;font-size:.58rem;">親の配牌上がり</td></tr>
-          <tr><td style="padding:2px 6px;">一暗刻単騎</td><td style="text-align:right;color:#ff44aa;padding:2px 6px;">2倍</td><td style="padding:2px 6px;font-size:.58rem;">一暗刻＋単騎待ち</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
 
-
-
-  <!-- Cards row -->
-  <div id="lobbyCards">
-  <!-- Mode select -->
-  <div class="lobby-card" id="lobbyMode">
-    <h3>モード選択</h3>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
-      <button class="pcnt-btn active" onclick="startTitleBgmOnce();showSolo()" style="padding:10px 4px;text-align:center;">CPU対戦</button>
-      <button class="pcnt-btn" onclick="showOnline()" style="padding:10px 4px;text-align:center;">ルームマッチ</button>
-      <button class="pcnt-btn" onclick="showRank()" style="padding:10px 4px;text-align:center;">ランクマッチ</button>
-      <button class="pcnt-btn" onclick="startTitleBgmOnce();openGacha()" style="padding:10px 4px;text-align:center;border-color:#aa7700;color:#ffd700;background:linear-gradient(135deg,#1a0e00,#0a0500);">✨ ガチャ</button>
-      <button class="pcnt-btn" onclick="startTitleBgmOnce();openShop()" style="padding:10px 4px;text-align:center;border-color:#007799;color:#00ccff;background:linear-gradient(135deg,#001a1a,#000a10);">🏪 ショップ</button>
-      <button class="pcnt-btn" onclick="startTitleBgmOnce();openProfile()" style="padding:10px 4px;text-align:center;border-color:#2a5a3a;color:#c0e0c0;background:#030a10;">👤 プロフィール</button>
-    </div>
-  </div>
-
-  <!-- Solo card -->
-  <div class="lobby-card" id="lobbySolo">
-    <h3>プレイヤー数</h3>
-    <div class="pcnt">
-      <button class="pcnt-btn" onclick="selectCount(2)">２人</button>
-      <button class="pcnt-btn active" onclick="selectCount(3)">３人</button>
-      <button class="pcnt-btn" onclick="selectCount(4)">４人</button>
-    </div>
-
-    <div style="margin:10px 0 6px;border-top:1px solid #1a3a2a;padding-top:10px;">
-      <h3 style="font-size:.65rem;color:var(--gold);letter-spacing:.2em;margin-bottom:8px;text-align:center;">ゲームモード</h3>
-      <div class="pcnt" style="margin-bottom:8px;">
-        <button class="pcnt-btn active" id="modeAbilityOn" onclick="setAbilityMode(true)">⚡ 能力あり</button>
-        <button class="pcnt-btn" id="modeAbilityOff" onclick="setAbilityMode(false)">♟ 能力なし</button>
-      </div>
-      <div style="margin-top:6px;margin-bottom:2px;font-size:.58rem;color:#5a8a6a;letter-spacing:.1em;">制限時間</div>
-      <div class="pcnt" style="margin-bottom:8px;">
-        <button class="pcnt-btn" id="modeTimeOn" onclick="setTimeMode(true)">⏱ あり</button>
-        <button class="pcnt-btn active" id="modeTimeOff" onclick="setTimeMode(false)">∞ なし</button>
-      </div>
-      <div id="timeModeDesc" style="display:none;font-size:.55rem;color:#c9a84c;text-align:center;margin-bottom:4px;line-height:1.5;">
-        20秒+5秒スタート<br>未操作で自動ツモ切り→残り5秒の秒読み局
-      </div>
-    </div>
-    <button class="start-btn" onclick="initGame()">ゲーム開始 →</button>
-  </div>
-
-  <!-- Online card -->
-  <div class="lobby-card" id="lobbyOnline" style="display:none">
-    <h3>ルームマッチ（最大4人）</h3>
-    <div id="onlineStatus" style="font-size:.65rem;color:#4a7a5a;text-align:center;margin-bottom:10px;min-height:1.4em;"></div>
-
-    <!-- Host panel -->
-    <div id="hostPanel">
-      <!-- 能力あり/なし -->
-      <div style="margin-bottom:8px;">
-        <div style="font-size:.6rem;color:#5a7a6a;text-align:center;margin-bottom:4px;">ゲームモード</div>
-        <div class="pcnt" style="margin-bottom:0;">
-          <button class="pcnt-btn active" id="roomModeAbilityOn" onclick="setRoomAbilityMode(true)">⚡ 能力あり</button>
-          <button class="pcnt-btn" id="roomModeAbilityOff" onclick="setRoomAbilityMode(false)">♟ 能力なし</button>
-        </div>
-      </div>
-      <button class="start-btn" style="margin-bottom:10px;" onclick="createRoom()">部屋を作る（ホスト）</button>
-      <div id="roomCodeBox" style="display:none;text-align:center;">
-        <div style="font-size:.6rem;color:#5a7a6a;margin-bottom:4px;">フレンドにこの部屋番号を教えてください</div>
-        <div id="roomCodeDisplay" style="font-size:1.6rem;font-weight:900;color:var(--gold);letter-spacing:.3em;background:#030a10;border:1px solid #1a4a2a;border-radius:8px;padding:8px 16px;cursor:pointer;" onclick="copyRoomCode()" title="クリックでコピー"></div>
-        <div style="font-size:.55rem;color:#3a5a4a;margin-top:4px;">クリックでコピー</div>
-        <div id="waitingDots" style="font-size:.65rem;color:#4a7a5a;margin-top:8px;">
-          参加者を待っています<span class="thinking-dots"></span>
-          <div id="roomMemberList" style="font-size:.6rem;color:#4a8a6a;margin-top:6px;"></div>
-        </div>
-        <button id="roomStartBtn" class="start-btn" style="display:none;margin-top:8px;" onclick="hostStartGame()">ゲーム開始 →</button>
-      </div>
-    </div>
-
-    <div style="text-align:center;font-size:.6rem;color:#2a4a3a;margin:10px 0;">── または ──</div>
-
-    <!-- Join panel -->
-    <div id="joinPanel">
-      <div style="font-size:.6rem;color:#5a7a6a;margin-bottom:6px;text-align:center;">部屋番号を入力して参加</div>
-      <div style="display:flex;gap:6px;">
-        <input id="roomInput" type="text" maxlength="6" placeholder="例: 123456"
-          style="flex:1;padding:8px 10px;background:#030a10;border:1.5px solid #1a4a2a;border-radius:7px;color:var(--gold);font-family:inherit;font-size:.9rem;letter-spacing:.2em;text-align:center;"
-          oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,6)"
-          onkeydown="if(event.key==='Enter')joinRoom()">
-        <button class="btn btn-primary" onclick="joinRoom()" style="padding:8px 14px;font-size:.8rem;">参加</button>
-      </div>
-      <div id="guestWaitMsg" style="display:none;font-size:.6rem;color:#4a7a5a;text-align:center;margin-top:8px;">
-        ホストの開始を待っています<span class="thinking-dots"></span>
-        <div id="guestMemberList" style="font-size:.6rem;color:#4a8a6a;margin-top:4px;"></div>
       </div>
     </div>
   </div>
-
-  <!-- Rank Match card -->
-  <div class="lobby-card" id="lobbyRank" style="display:none">
-    <h3>⚔️ ランクマッチ（3人・時間制限あり）</h3>
-    <div id="rankStatus" style="font-size:.65rem;color:#4a7a5a;text-align:center;margin-bottom:6px;min-height:1.2em;"></div>
-
-    <!-- レート表示 -->
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;background:#030a10;border:1px solid #1a3a2a;border-radius:7px;padding:7px 14px;">
-      <span style="font-size:.6rem;color:#5a7a6a;">現在のレート</span>
-      <span id="myRatingDisplay" style="font-size:1.1rem;font-weight:900;color:var(--gold);">---</span>
-    </div>
-
-    <div id="rankWaitPanel">
-      <div style="font-size:.58rem;color:#5a7a6a;text-align:center;margin-bottom:14px;line-height:1.8;">
-        能力あり・3人対戦・制限時間ありで<br>マッチングします。
-      </div>
-      <button class="start-btn" onclick="joinRankQueue()">🔍 マッチング開始</button>
-    </div>
-
-    <div id="rankSearchPanel" style="display:none;text-align:center;">
-      <div style="font-size:1.5rem;margin:10px 0;animation:float 1.5s ease-in-out infinite;">⚔️</div>
-      <div style="font-size:.7rem;color:#5a9a7a;margin-bottom:4px;">対戦相手を探しています<span class="thinking-dots"></span></div>
-      <div id="rankQueueCount" style="font-size:.6rem;color:#4a8a6a;margin-bottom:4px;"></div>
-      <div id="rankSearchTime" style="font-size:.6rem;color:#3a5a4a;margin-bottom:14px;"></div>
-      <button class="btn btn-danger" onclick="cancelRankQueue()" style="width:100%;padding:10px;">キャンセル</button>
-    </div>
-
-    <div id="rankMatchedPanel" style="display:none;text-align:center;">
-      <div style="font-size:1.5rem;margin:8px 0;">🎉</div>
-      <div style="font-size:.75rem;color:var(--gold);font-weight:700;margin-bottom:6px;">マッチング成功！</div>
-      <div id="rankOpponentNames" style="font-size:.65rem;color:#5a9a7a;margin-bottom:12px;line-height:1.8;"></div>
-      <div style="font-size:.58rem;color:#4a6a5a;">接続中<span class="thinking-dots"></span></div>
-    </div>
-  </div>
-  </div>
-</div>
-
-<!-- ROOM LOBBY SCREEN -->
-<div id="roomLobbyScreen" style="display:none">
-  <div class="rls-inner">
-    <div style="text-align:center;margin-bottom:18px;">
-      <div style="font-size:1.4rem;font-weight:900;color:var(--gold);letter-spacing:.2em;">🎴 ルームマッチ</div>
-    </div>
-    <div id="rlsStatus" style="font-size:.65rem;color:#4a7a5a;text-align:center;margin-bottom:10px;min-height:1.2em;"></div>
-
-    <!-- ホスト: 部屋番号 -->
-    <div id="rlsCodeSection" style="display:none;margin-bottom:16px;">
-      <div style="font-size:.58rem;color:#5a7a6a;text-align:center;margin-bottom:6px;">フレンドにこの部屋番号を教えてください</div>
-      <div class="rls-code-box">
-        <div class="rls-code-val" id="rlsCodeDisplay" onclick="copyRlsCode()" title="クリックでコピー"></div>
-        <div style="font-size:.52rem;color:#3a5a4a;margin-top:4px;">クリックでコピー</div>
-      </div>
-    </div>
-
-    <!-- ホスト: ゲームモード -->
-    <div id="rlsModeSection" style="display:none;margin-bottom:14px;">
-      <div style="font-size:.6rem;color:#5a7a6a;text-align:center;margin-bottom:4px;">ゲームモード</div>
-      <div class="pcnt" style="margin-bottom:0;">
-        <button class="pcnt-btn active" id="rlsModeAbilityOn" onclick="setRoomAbilityMode(true);updateRoomLobbyUI()">⚡ 能力あり</button>
-        <button class="pcnt-btn" id="rlsModeAbilityOff" onclick="setRoomAbilityMode(false);updateRoomLobbyUI()">♟ 能力なし</button>
-      </div>
-    </div>
-
-    <!-- メンバーリスト -->
-    <div style="margin-bottom:14px;">
-      <div style="font-size:.65rem;color:#5a7a6a;text-align:center;margin-bottom:8px;font-weight:700;">参加者（<span id="rlsMemberCount">1</span>/4）</div>
-      <div id="rlsMemberList" style="max-height:240px;overflow-y:auto;"></div>
-    </div>
-
-    <!-- ホスト: 開始ボタン -->
-    <div id="rlsHostControls" style="display:none;">
-      <button id="rlsStartBtn" class="start-btn" style="display:none;width:100%;margin-bottom:10px;" onclick="hostStartGame()">ゲーム開始 →</button>
-    </div>
-
-    <!-- ゲスト: 待機メッセージ -->
-    <div id="rlsGuestWait" style="display:none;font-size:.62rem;color:#4a7a6a;text-align:center;margin-bottom:14px;background:#0d1a10;padding:12px;border-radius:6px;border:1px solid #1a3a2a;">
-      ホストがゲーム開始を待っています<span class="thinking-dots"></span>
-    </div>
-
-    <button class="start-btn" onclick="leaveRoomLobby()" style="background:linear-gradient(135deg,#1a0808,#0d0505);border-color:#553333;color:#aa6666;">退出する</button>
-  </div>
-</div>
-
-<!-- GAME -->
-<div id="gameScreen" style="display:none">
-  <div class="game-header" style="display:none;">
-    <div id="timerDisplay" style="display:none!important;">
-      <div class="timer-bar-wrap" style="width:80px;height:8px;background:#111;border-radius:4px;overflow:hidden;border:1px solid #223;">
-        <div id="timerBar" class="timer-bar" style="height:100%;width:100%;transition:width .9s linear;border-radius:4px;background:#44cc88;"></div>
-      </div>
-      <span id="timerNum" class="timer-num" style="font-size:.8rem;font-weight:700;min-width:1.5em;text-align:right;color:#44cc88;"></span>
-    </div>
-  </div>
-
-  <div id="tableWrapper" style="position:relative;transform-origin:center center;">
-  <div class="mahjong-table" id="mahjongTable">
-    <!-- 局情報: 卓左上内に固定 -->
-    <div id="tableInfoBox" style="
-      position:absolute;top:8px;left:8px;z-index:40;
-      padding:5px 8px;
-      background:linear-gradient(160deg,#040d10,#030a0c);
-      border:1px solid #1a4a2a;border-radius:6px;
-      display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;
-    ">
-      <div class="info-block"><span class="info-label">局</span><span class="info-val" id="hRound">東1局</span></div>
-      <div class="info-block"><span class="info-label">本場</span><span class="info-val" id="hHonba">0本場</span></div>
-      <div class="info-block"><span class="info-label">山牌</span><span class="info-val" id="hDeck">--</span></div>
-      <div class="info-block"><span class="info-label">リーチ棒</span><span class="info-val" id="hRiichiPot">0</span></div>
-    </div>
-    <!-- ドラ山: 卓右上内に固定 -->
-    <div id="doraPileFixed" style="
-      position:absolute;top:8px;right:8px;z-index:40;
-      padding:3px 6px;
-      background:transparent;
-      border:1px solid transparent;border-radius:6px;
-      display:flex;flex-direction:column;align-items:center;gap:2px;
-    ">
-      <canvas id="doraCanvas" style="display:block;border-radius:3px;cursor:default;touch-action:none;"></canvas>
-    </div>
-    <!-- 左下: 自動ツモ -->
-    <div id="tableCornerLeft" style="
-      position:absolute;bottom:8px;left:8px;z-index:30;
-      display:flex;flex-direction:column;gap:4px;align-items:flex-start;
-    ">
-      <div style="position:relative;">
-        <button id="autoMenuToggle" onclick="toggleAutoMenu()" style="
-          background:#030a10;border:1px solid #1a3a2a;border-radius:7px;
-          color:#4a8a6a;font-size:.6rem;padding:5px 9px;cursor:pointer;
-          transition:all .2s;letter-spacing:.04em;white-space:nowrap;display:flex;align-items:center;gap:4px;
-        "><span id="autoMenuLabel">設定 ▼</span></button>
-        <div id="autoMenuPanel" style="
-          display:none;position:absolute;bottom:calc(100% + 4px);left:0;
-          background:#040d14;border:1px solid #1a3a2a;border-radius:8px;
-          padding:6px;display:none;flex-direction:column;gap:4px;min-width:120px;z-index:50;
-        ">
-          <button id="noMeldBtn" onclick="toggleNoMeld()" style="
-            background:#030a10;border:1px solid #1a3a1a;border-radius:7px;
-            color:#4a7a4a;font-size:.6rem;padding:5px 9px;cursor:pointer;
-            transition:all .2s;letter-spacing:.04em;white-space:nowrap;text-align:left;
-          ">🚫 鳴き無し</button>
-          <button id="autoDrawBtn" onclick="toggleAutoDraw()" style="
-            background:#030a10;border:1px solid #1a4a2a;border-radius:7px;
-            color:#5a9a7a;font-size:.6rem;padding:5px 9px;cursor:pointer;
-            transition:all .2s;letter-spacing:.04em;white-space:nowrap;text-align:left;
-          ">🎲 自動ツモ</button>
-          <button id="autoDiscardBtn" onclick="toggleAutoDiscard()" style="
-            background:#030a10;border:1px solid #3a2a0a;border-radius:7px;
-            color:#8a6a3a;font-size:.6rem;padding:5px 9px;cursor:pointer;
-            transition:all .2s;letter-spacing:.04em;white-space:nowrap;text-align:left;
-          ">✂️ 自動切り</button>
-          <button id="autoKitaBtn" onclick="toggleAutoKita()" style="
-            background:#030a10;border:1px solid #0a2a3a;border-radius:7px;
-            color:#3a6a8a;font-size:.6rem;padding:5px 9px;cursor:pointer;
-            transition:all .2s;letter-spacing:.04em;white-space:nowrap;text-align:left;
-          ">🀃 自動北抜き</button>
-          <button id="autoWinBtn" onclick="toggleAutoWin()" style="
-            background:#030a10;border:1px solid #2a2a0a;border-radius:7px;
-            color:#7a7a2a;font-size:.6rem;padding:5px 9px;cursor:pointer;
-            transition:all .2s;letter-spacing:.04em;white-space:nowrap;text-align:left;
-          ">🀄 自動上がり</button>
-        </div>
-      </div>
-      <div style="display:flex;gap:4px;align-items:center;">
-        <button id="afkBtn" onclick="setAFK(!playerAFK)" style="
-          background:#030a10;border:1px solid #3a1a1a;border-radius:7px;
-          color:#8a4a4a;font-size:.6rem;padding:5px 9px;cursor:pointer;
-          transition:all .2s;letter-spacing:.04em;white-space:nowrap;
-        ">🚶 離席</button>
-        <button id="settingsBtn" onclick="toggleSettingsPanel()" style="
-          background:#030a10;border:1px solid #2a3a4a;border-radius:7px;
-          color:#5a7a8a;font-size:.7rem;padding:5px 8px;cursor:pointer;
-          transition:all .2s;white-space:nowrap;
-        ">⚙️</button>
-      </div>
-      <!-- 設定パネル -->
-      <div id="settingsPanel" style="
-        display:none;background:#040d14;border:1px solid #1a3a4a;
-        border-radius:8px;padding:8px 10px;
-        display:none;flex-direction:column;gap:6px;min-width:160px;
-      ">
-        <button onclick="confirmBackToTitle()" style="
-          background:#030a10;border:1px solid #3a2a1a;border-radius:6px;
-          color:#8a6a3a;font-size:.58rem;padding:4px 8px;cursor:pointer;text-align:left;
-        ">← タイトルに戻る</button>
-        <div style="border-top:1px solid #1a2a1a;margin:2px 0;"></div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
-          <span>🎵 SE</span>
-          <input type="range" min="0" max="1" step="0.05" value="0.14" style="flex:1;accent-color:var(--gold);"
-            oninput="SFX.setVol(+this.value)">
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
-          <span>🎶 BGM</span>
-          <input type="range" min="0" max="0.5" step="0.02" value="0.022" style="flex:1;accent-color:var(--gold);"
-            oninput="BGM.setVol(+this.value)">
-        </div>
-        <select id="gameBgmSelHdr" style="background:#030a10;color:var(--gold);border:1px solid #1a3a2a;border-radius:4px;font-size:.5rem;padding:2px 3px;"
-          onchange="_gameBgmKey=this.value; BGM.fadeOut(()=>BGM.fadeIn(_gameBgmKey)); document.getElementById('gameBgmSel')&&(document.getElementById('gameBgmSel').value=this.value);">
-          <option value="adventure">⭐ アドベンチャー</option>
-          <option value="sakura">🌸 さくらポップ</option>
-          <option value="teatime">🍵 ティータイム</option>
-          <option value="waltz">🌙 夜風のワルツ</option>
-          <option value="gameboy">🎮 ゲームボーイ</option>
-          <option value="none">🔇 なし</option>
-        </select>
-      </div>
-    </div>
-    <!-- 鳴き牌・北抜き: マット右中段（cornerRightの上） -->
-    <div id="meldKitaArea" style="
-      position:absolute;right:8px;bottom:130px;z-index:25;
-      display:flex;flex-direction:column;gap:4px;align-items:flex-end;
-    "></div>
-    <!-- 右下: ペン + 能力 -->
-    <div id="tableCornerRight" style="
-      position:absolute;bottom:8px;right:8px;z-index:30;
-      display:flex;flex-direction:column;gap:4px;align-items:flex-end;
-    ">
-      <!-- ペンツールバー（ペンON時） -->
-      <div id="penToolbarFloat" style="
-        display:none;flex-direction:column;gap:5px;align-items:flex-end;
-        background:#030a10;border:1px solid #1a4a3a;border-radius:9px;
-        padding:8px 10px;box-shadow:0 2px 14px #000c;
-      ">
-        <!-- 自分の色スウォッチ（JS で _initPenToolbar() が描画） -->
-        <div id="penColorRow" style="display:flex;gap:5px;align-items:center;"></div>
-        <div style="display:flex;gap:3px;">
-          <button class="pen-size active" data-size="2" onclick="setPenSize(this)">細</button>
-          <button class="pen-size" data-size="5" onclick="setPenSize(this)">中</button>
-          <button class="pen-size" data-size="10" onclick="setPenSize(this)">太</button>
-        </div>
-        <button onclick="penCanvasClear()" style="font-size:.52rem;padding:2px 7px;border-radius:4px;border:1px solid #aa3333;background:#030a10;color:#cc5555;cursor:pointer;width:100%;">🗑️ 全消去</button>
-      </div>
-      <!-- ボタン行: ペン + 能力 -->
-      <div id="cornerBtns" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
-        <button id="penToggleBtn" onclick="togglePenMode()">🖊️ ペン</button>
-        <!-- 能力ボタンはrenderCornerAbilityBtns()で動的挿入 -->
-      </div>
-    </div>
-    <!-- Action area: 卓内下部に固定 -->
-    <div class="action-area" id="actionArea"></div>
-    <!-- Seats filled by JS -->
-    <div class="table-center" id="tableCenter">
-      <div class="tc-riichi" id="tcRiichi"></div>
-      <div id="wallArea" class="wall-area"><canvas id="wallCanvas"></canvas></div>
-      <div id="tcRound" style="display:none"></div>
-    </div>
-  </div>
-  </div><!-- /mahjongTable wrapper -->
-
-  
-<!-- pen panel removed: direct wall canvas drawing -->
-
-</div>
-
-<!-- BACK TO TITLE CONFIRM -->
-<div class="overlay" id="titleConfirmOverlay">
-  <div class="modal" style="max-width:280px;">
-    <div class="modal-title" style="font-size:1rem;">タイトルに戻る</div>
-    <div class="modal-sub">対局は中断されます。よろしいですか？</div>
-    <div class="modal-btns" style="gap:8px;">
-      <button class="btn btn-danger" onclick="backToLobby()">戻る</button>
-      <button class="btn" onclick="document.getElementById('titleConfirmOverlay').classList.remove('show')">キャンセル</button>
-    </div>
-  </div>
-</div>
-
-<!-- WIN MODAL -->
-<div class="overlay" id="winOverlay">
-  <div class="modal">
-    <div class="modal-title" id="mTitle">上がり！</div>
-    <div class="modal-sub" id="mSub"></div>
-    <div class="modal-hand" id="mHand"></div>
-    <table class="yaku-table"><thead><tr><th>役</th><th>翻</th></tr></thead><tbody id="mYakuBody"></tbody></table>
-    <div class="score-display" id="mScore"></div>
-    <div class="score-sub" id="mScoreSub"></div>
-    <div class="modal-btns">
-      <div id="winTimerDisplay" style="font-size:1.5rem;font-weight:700;color:#c9a84c;text-shadow:0 0 10px #c9a84c66;margin-bottom:6px;letter-spacing:.05em;"></div>
-      <div id="winReadyStatus" style="font-size:.62rem;color:#4a8a6a;margin-bottom:6px;min-height:1em;"></div>
-      <button class="btn btn-primary" id="winOkBtn" onclick="onWinOk()">OK →</button>
-    </div>
-  </div>
-</div>
-
-<!-- RESULT MODAL -->
-<div class="overlay" id="resultOverlay">
-  <div class="modal">
-    <div class="modal-title">ゲーム終了</div>
-    <div class="modal-sub">最終結果</div>
-    <table class="result-table" id="resultTable"></table>
-    <div id="resultCoinReward" style="margin:10px 0;font-size:.82rem;text-align:center;color:var(--gold);font-weight:700;"></div>
-    <div id="resultRatingBox" style="display:none;margin:10px 0;padding:10px 14px;background:#030a10;border:1px solid #1a3a2a;border-radius:9px;">
-      <div style="font-size:.6rem;color:#5a8a7a;text-align:center;margin-bottom:8px;font-weight:700;">⚔️ レート変動</div>
-      <div id="resultRatingTable" style="font-size:.65rem;"></div>
-    </div>
-    <div class="modal-btns"><button class="btn btn-primary" onclick="backToLobby()">ロビーへ戻る</button></div>
-  </div>
-</div>
-<script src="js/sound.js"></script>
-<script src="js/tiles.js"></script>
-<script src="js/net.js"></script>
-<script src="js/game.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/profile.js"></script>
 </body>
 </html>
