@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>手にビまーじゃん２あ</title>
+<title>手にビまーじゃん</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 function _centerHandSeats(table){ /* CSS固定値で処理 */ }
@@ -2115,20 +2115,24 @@ const REJOIN_KEY = 'mjRejoinSession';
 const REJOIN_TTL = 30 * 60 * 1000; // 30分
 
 function saveRejoinSession(){
-  if(!NET.online || !NET.roomCode || !G || !G.players) return;
+  if(!NET.online || !G || !G.players) return;
+  // ★ランクマッチは roomCode の代わりに RANK.matchId を使う
+  const code = NET.roomCode || (NET.isRankMatch ? RANK.matchId : null);
+  if(!code) return;
   // 現在接続中のホストのPeerIDを保存（ホスト引き継ぎ後も正しい接続先を知るため）
   // ホスト自身の場合は null（自分が落ちた時は guestPeerIds[0] を新ホストとして使う）
   const currentHostPeerId = NET.isHost ? null : (NET.currentHostPeerId || NET.conn?.peer || null);
   const session = {
-    code:        NET.roomCode,
+    code,
     myIdx:       NET.myIdx,
     name:        (G.players[NET.myIdx]||{}).name || PROFILE.name || 'プレイヤー',
     savedAt:     Date.now(),
     hostPeerId:  currentHostPeerId,
-    guestPeerIds: NET.guestPeerIds.slice(), // 元ホストが落ちた場合の次ホスト候補
-    // ★修正: 全プレイヤーのPeerIDを保存（自分がホストだった場合の復帰先特定用）
-    // 例: P1がホストの時にP0のPeerIDをallPlayerPeerIds[0]として保持しておく
+    guestPeerIds: NET.guestPeerIds.slice(),
     allPlayerPeerIds: G.players.map(p => p.peerId || ''),
+    // ★ランクマッチ用フラグ
+    isRankMatch: NET.isRankMatch || false,
+    matchId:     NET.isRankMatch ? RANK.matchId : null,
   };
   try{ localStorage.setItem(REJOIN_KEY, JSON.stringify(session)); }catch(e){}
 }
@@ -2158,9 +2162,17 @@ function showRejoinPanel(){
   if(!panel) return;
   if(!session){ panel.style.display='none'; return; }
   const info = document.getElementById('rejoinInfo');
-  if(info) info.innerHTML =
-    `部屋番号: <strong style="color:var(--gold)">${session.code}</strong>　` +
-    `プレイヤー: <strong style="color:var(--gold)">${session.name}</strong>`;
+  if(info){
+    if(session.isRankMatch){
+      info.innerHTML =
+        `ランクマッチ（試合ID: <strong style="color:var(--gold)">${session.matchId||session.code}</strong>）　` +
+        `プレイヤー: <strong style="color:var(--gold)">${session.name}</strong>`;
+    } else {
+      info.innerHTML =
+        `部屋番号: <strong style="color:var(--gold)">${session.code}</strong>　` +
+        `プレイヤー: <strong style="color:var(--gold)">${session.name}</strong>`;
+    }
+  }
   panel.style.display = '';
 }
 
@@ -2199,7 +2211,14 @@ async function attemptRejoin(){
   setOnlineStatus('復帰中…');
   NET.isHost   = false;
   NET.myIdx    = session.myIdx;
-  NET.roomCode = session.code;
+  // ★ランクマッチは roomCode がないので isRankMatch フラグで区別
+  NET.isRankMatch = session.isRankMatch || false;
+  if(NET.isRankMatch){
+    NET.roomCode = null;
+    RANK.matchId = session.matchId || session.code;
+  } else {
+    NET.roomCode = session.code;
+  }
   NET.conns    = [];
   NET.online   = false;
 
@@ -2237,9 +2256,15 @@ async function attemptRejoin(){
 
     conn.on('data', msg=>{
       if(msg.type === 'rejoinAck'){
-        NET.myIdx      = msg.myIdx;
-        NET.online     = true;
-        G_ABILITY_MODE = msg.abilityMode ?? true;
+        NET.myIdx       = msg.myIdx;
+        NET.online      = true;
+        G_ABILITY_MODE  = msg.abilityMode ?? true;
+        // ★ランクマッチフラグを復元
+        if(msg.isRankMatch){
+          NET.isRankMatch = true;
+          if(msg.matchId) RANK.matchId = msg.matchId;
+          G_TIME_MODE = true;
+        }
         clearRejoinSession();
         setOnlineStatus('状態を同期中…');
         // ★ 画面遷移は state 受信後に行う（G が確定してから表示）
@@ -2991,6 +3016,7 @@ function showRank(){
   document.querySelectorAll('#lobbyMode .pcnt-btn').forEach((b,i)=>b.classList.toggle('active',i===2));
   _rankReset();
   _loadMyRating();
+  showRejoinPanel(); // ★ランクマッチ中の切断からも復帰できるように
 }
 
 // ── ランクマッチ（3人固定・時間制限あり） ──────────────────────
@@ -3200,15 +3226,36 @@ function _onRankMatched(data){
     // ホスト: 2人のゲストからの接続を待つ（先にリスナーを登録してからキューを削除）
     NET.peer.off('connection');
     NET.peer.on('connection', conn=>{
-      if(NET.conns.length >= 2){ conn.close(); return; }
+      // ★ゲーム中の復帰接続は満員でも受け入れる（rejoinメッセージで判断）
+      const isGameActive = NET.online && G && G.players && G.players.length > 0;
+      if(NET.conns.length >= 2 && !isGameActive){ conn.close(); return; }
+
       const guestIdx = NET.conns.length + 1;
       conn._playerIdx = guestIdx;
-      NET.conns.push(conn);
+      if(!NET.conns.includes(conn)) NET.conns.push(conn);
       if(guestIdx===1) NET.conn = conn;
-      conn.on('data', msg=>onNetData(msg, guestIdx));
-      attachConnHandlers(conn, guestIdx);
+
+      // ★ rejoin メッセージを先行監視
+      let _rejoinHandled = false;
+      conn.on('data', msg=>{
+        if(msg.type === 'rejoin' && !_rejoinHandled){
+          _rejoinHandled = true;
+          _handleRejoin(conn, msg);
+          return;
+        }
+        onNetData(msg, conn._playerIdx ?? guestIdx);
+      });
+      attachConnHandlers(conn, ()=>getPlayerIdxByConn(conn));
+
       const onOpen = ()=>{
         if(conn.peer) peerRegistryAdd(conn.peer, guestIdx, conn);
+        if(isGameActive){
+          // ゲーム中: rejoin か通常接続かを判断するため少し待つ
+          setTimeout(()=>{
+            if(!_rejoinHandled && conn.open) conn.close();
+          }, 5000);
+          return;
+        }
         conn.send({type:'joined', myIdx:guestIdx, abilityMode:true, members:3});
         RANK.connectedGuests++;
         setRankStatus(`対戦相手を待っています… (${RANK.connectedGuests}/2)`);
@@ -3235,6 +3282,8 @@ function _onRankMatched(data){
       };
       if(conn.open){ onOpen(); } else { conn.on('open', onOpen); }
     });
+    // ★ランクマッチ ホストのPeerIDを記録（ゲストの復帰先として使う）
+    NET.currentHostPeerId = NET.peer?.id || null;
   } else {
     // ゲスト: ホストのPeerIDに接続（ホストがリスナー登録するまで時間がかかる場合があるのでリトライ）
     const hostPeerId = data.hostPeerId;
@@ -3262,6 +3311,8 @@ function _rankGuestConnect(hostPeerId, attempt){
     let opened = false;
     conn.on('open', ()=>{
       opened = true;
+      // ★ランクマッチゲスト: 接続先ホストのPeerIDを記録（復帰時に使う）
+      NET.currentHostPeerId = hostPeerId;
       setRankStatus('ホストに接続しました！ゲーム開始を待っています…');
     });
     conn.on('data', msg=>onNetData(msg, null));
@@ -3879,7 +3930,7 @@ function _handleRejoin(conn, msg){
   addLog(`🔄 ${p.name} が対局に復帰しました！`,'log-new');
 
   // 承認メッセージを送信
-  conn.send({type:'rejoinAck', myIdx:originalIdx, abilityMode:G_ABILITY_MODE});
+  conn.send({type:'rejoinAck', myIdx:originalIdx, abilityMode:G_ABILITY_MODE, isRankMatch:NET.isRankMatch||false, matchId:RANK.matchId||null});
   // 最新ゲーム状態を送信（手牌含む全state）
   broadcastState();
   renderAll();
@@ -4384,7 +4435,10 @@ function broadcastState(extra={}){
 // ゲスト側: state を受信するたびに復帰セッションを更新しておく
 // （ホストが broadcastState するたびに呼ばれる applyHostState の末尾で使用）
 function _refreshRejoinSession(){
-  if(NET.online && !NET.isHost && NET.roomCode && G && G.players && G.players.length > 0){
+  // ★ランクマッチは roomCode がないため isRankMatch も条件に加える
+  // ★ホスト側も復帰セッションを保持（ホスト自身が切断→復帰できるように）
+  const hasSession = NET.roomCode || NET.isRankMatch;
+  if(NET.online && hasSession && G && G.players && G.players.length > 0){
     saveRejoinSession();
   }
 }
@@ -4521,7 +4575,11 @@ function startOnlineGame(){
   // 自分（ホスト = playerIdx 0）の peerId をセット
   if(G.players[NET.myIdx]) G.players[NET.myIdx].peerId = NET.peer?.id || '';
   broadcastState();
-  if(amIHost()) startSyncBroadcast();
+  if(amIHost()){
+    startSyncBroadcast();
+    // ★ランクマッチのホストも復帰セッションを保存する
+    setTimeout(saveRejoinSession, 600);
+  }
 }
 
 // ── Solo mode ─────────────────────────────────────────────────
