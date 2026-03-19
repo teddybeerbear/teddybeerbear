@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>手にビ麻雀</title>
+<title>手にビじゃん</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 function _centerHandSeats(table){ /* CSS固定値で処理 */ }
@@ -895,8 +895,7 @@ body::before{
 .pen-action-btn{font-size:.65rem;padding:5px 12px;border-radius:6px;border:1px solid;cursor:pointer;font-weight:700;}
 .pen-save-btn{background:#030a10;border-color:#3ada8a;color:#3ada8a;}
 .pen-save-btn:hover{background:#0a1a14;}
-.pen-clear-btn{background:#030a10;border-color:#aa3333;color:#cc5555;}
-.pen-clear-btn:hover{background:#1a0808;}
+
 .pen-close-btn{background:#030a10;border-color:#556677;color:#8899aa;}
 /* 描いた画像の山牌上表示 */
 .wall-tile.has-drawing{position:relative;}
@@ -1167,7 +1166,7 @@ body::before{
       <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#0a1a14;border:1px solid #2a4a3a;color:#5a8a7a;">NORMAL 89.9%</span>
       <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#0a0a24;border:1px solid #3333aa;color:#8888ff;">RARE 10%</span>
       <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#18081a;border:1px solid #8833aa;color:#cc66ff;">EPIC 1%</span>
-      <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#1a0e00;border:1px solid #ffd700;color:#ffd700;">LEGEND 0.1% → 能力</span>
+      <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#1a0e00;border:1px solid #ffd700;color:#ffd700;">LEGEND 0.1%</span>
     </div>
 
     <!-- コイン残高 -->
@@ -1307,7 +1306,7 @@ body::before{
 <div id="lobby">
   <div class="lobby-title">
     <div class="lobby-tiles">🍺🐻🀇🀙</div>
-    <h1 style="letter-spacing:.05em;">手にビ麻雀</h1>
+    <h1 style="letter-spacing:.05em;">手にビじゃん</h1>
   </div>
 
   <!-- Top nav -->
@@ -1788,7 +1787,7 @@ body::before{
           <button class="pen-size" data-size="5" onclick="setPenSize(this)">中</button>
           <button class="pen-size" data-size="10" onclick="setPenSize(this)">太</button>
         </div>
-        <button onclick="penCanvasClear()" style="font-size:.52rem;padding:2px 7px;border-radius:4px;border:1px solid #aa3333;background:#030a10;color:#cc5555;cursor:pointer;width:100%;">🗑️ 全消去</button>
+
       </div>
       <!-- ボタン行: ペン + 能力 -->
       <div id="cornerBtns" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
@@ -4514,14 +4513,6 @@ function handleGuestAction(msg, senderIdx){
         broadcastState();
       }
       break;
-    case 'penClear':
-      if(amIHost()){
-        G.penDrawings={};
-        Object.keys(_penImgCache).forEach(k=>delete _penImgCache[k]);
-        renderWall(); renderDoraCanvas();
-        broadcastState();
-      }
-      break;
   }
 }
 
@@ -6993,17 +6984,6 @@ function setPenSize(el){
   document.querySelectorAll('.pen-size').forEach(e => e.classList.remove('active'));
   el.classList.add('active');
 }
-function penCanvasClear(){
-  if(!G.deckSlots) return;
-  G.penDrawings = {};
-  Object.keys(_penImgCache).forEach(k=>delete _penImgCache[k]);
-  _wallCanvasInited = false;
-  _doraCanvasInited = false;
-  renderWall();
-  renderDoraCanvas();
-  if(NET.online && !amIHost()){ netSend({type:'penClear'}); }
-  else { broadcastState(); }
-}
 
 // ── ペン描画同期ヘルパー ──────────────────────────────
 function _syncPenDrawings(changedKeys){
@@ -8264,7 +8244,6 @@ const GACHA_ABILITIES = [
   {key:'yami',   icon:'🌑', name:'闇',        tag:'撹乱系'},
   {key:'sanctuary',icon:'🏛️',name:'聖域',    tag:'防御系'},
   {key:'steal',  icon:'🃏', name:'スチール',  tag:'奪取系'},
-  {key:'pen',    icon:'🖊️', name:'ペン',       tag:'落書き系'},
   {key:'pinzu',  icon:'🔵', name:'ピンズー教', tag:'情報系'},
 ];
 const RARITY_TABLE = [

@@ -38,7 +38,7 @@ async function initDB() {
         name         TEXT,
         email        TEXT,
         coins        INTEGER NOT NULL DEFAULT 10000,
-        abilities    TEXT NOT NULL DEFAULT '[]',
+        abilities    TEXT NOT NULL DEFAULT '["ペン"]',
         total_pulls  INTEGER NOT NULL DEFAULT 0,
         gacha_icons  TEXT NOT NULL DEFAULT '[]',
         icon_id      TEXT NOT NULL DEFAULT '',
@@ -143,14 +143,14 @@ app.get("/api/profile", requireAuth, async (req, res) => {
     if (result.rows.length === 0) {
       // 初回: デフォルト値でレコード作成
       await pool.query(
-        `INSERT INTO user_profiles (google_id, name, email)
-         VALUES ($1, $2, $3)
+        `INSERT INTO user_profiles (google_id, name, email, abilities)
+         VALUES ($1, $2, $3, $4)
          ON CONFLICT (google_id) DO NOTHING`,
-        [uid, req.user.name, req.user.email]
+        [uid, req.user.name, req.user.email, JSON.stringify(["ペン"])]
       );
       return res.json({
         coins: 10000,
-        abilities: [],
+        abilities: ["ペン"],
         totalPulls: 0,
         gachaIcons: [],
         iconId: "",
@@ -488,7 +488,7 @@ app.get("/", (req, res) => {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>手にビまーじゃん</title>
+<title>手にビじゃん</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -505,8 +505,8 @@ app.get("/", (req, res) => {
 </head>
 <body>
   <div class="emoji">🀄</div>
-  <h1>手にビまーじゃん</h1>
-  <p>ONLINE MAHJONG</p>
+  <h1>手にビじゃん</h1>
+  <p>tenibijan</p>
   <div class="card">
     <div class="msg">プレイするにはログインが必要です</div>
     <a class="btn" href="/auth/google">
