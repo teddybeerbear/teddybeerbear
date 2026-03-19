@@ -4601,6 +4601,9 @@ function applyHostState(msg){
     // ゲスト: 自分のターンでdiscardフェーズ（ツモ済み）の場合もタイマーを起動
     if(G.phase==='discard' && G.current===NET.myIdx){
       timerOnMyTurn();
+      // 引いた牌を選択状態にする（リーチ中は除く）
+      const _gp=G.players[NET.myIdx];
+      if(_gp&&!_gp.riichi&&selIdx<0) selIdx=_gp.hand.length-1;
     }
     renderAll();
     if(s.winModal){
@@ -5669,6 +5672,7 @@ function humanPickWall(slotIdx){
   }
 
   G.phase='discard';
+  selIdx=p.hand.length-1; // 引いた牌を最初から選択状態に
   // タイマーはdraw_wait開始時に起動済み → ここでは継続（restartしない）
   if(p.isDealer&&G.firstRound&&canWin(p.hand))p.isTenhou=true;
   if(!p.isDealer&&G.firstRound&&canWin(p.hand))p.isChiihou=true;
@@ -6544,9 +6548,9 @@ function addLog(msg,cls){
 // ============================================================
 function renderAll(){
   renderHeader();renderTable();renderActions();
-  // ペンボタン: ペン能力所持時のみ表示
+  // ペンボタン: 能力モードONかつペン能力所持時のみ表示
   const ptb=document.getElementById('penToggleBtn');
-  if(ptb) ptb.style.display=(PROFILE.ability==='pen')?'':'none';
+  if(ptb) ptb.style.display=(G_ABILITY_MODE&&PROFILE.ability==='pen')?'':'none';
   renderCornerAbilityBtns();
   // 拡大オーバーレイが開いていれば更新
   renderWallExpand();
@@ -6896,6 +6900,7 @@ function _initWallExpandEvents(ec){
 }
 
 function togglePenMode(){
+  if(!G_ABILITY_MODE||PROFILE.ability!=='pen') return; // ペン能力がない場合は無効
   _penModeOn=!_penModeOn;
   if(_penModeOn){ _initPenToolbar(); }
   const btn=document.getElementById('penToggleBtn');
@@ -8488,7 +8493,7 @@ function toggleAbilityPopup(){
 
 // ── 能力ポップアップを動的生成 ────────────────────────────
 // 初期解放能力（ガチャ/ショップ不要、最初から使える）
-const INITIAL_ABILITY_KEYS = ['mine','light','haku','pen'];
+const INITIAL_ABILITY_KEYS = ['pen'];
 const ALL_ABILITY_DATA = [
   {key:'',       icon:'🚫', name:'能力なし',    desc:'特殊能力なし',       tag:'',     initial:true},
   {key:'mine',   icon:'💣', name:'地雷',        desc:'山牌に地雷を仕掛ける', tag:'妨害系', initial:true},
@@ -8906,7 +8911,7 @@ function renderProfileAbilityList(){
   (PROFILE.abilities||[]).forEach(a=>{counts[a]=(counts[a]||0)+1;});
   document.querySelectorAll('#abilityList .ability-card').forEach(el=>{
     const ab=el.dataset.ability||'';
-    const has=ab===''||counts[ab]>0;
+    const has=_isAbilityOwned(ab);
     el.style.display=has?'':'none';
     el.classList.toggle('selected', ab===(PROFILE.ability||''));
     // カウントバッジ
