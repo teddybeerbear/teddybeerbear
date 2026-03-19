@@ -70,9 +70,17 @@ function scaleTable(){
       '.seat-bottom .melds-wrap { margin-bottom: 20px !important; }' +
       '#meldKitaArea { margin-bottom: 160px !important; }'+
       /* 字風点数パネルを手牌に被らないよう右端に絶対配置 */
-      '.bottom-score-panel { position: absolute !important; left: 1020px !important; top: 56px !important; margin-left: 0 !important; }'+
+      '.player-score-panel { transform: scale(2.3) !important; transform-origin: left center !important; }'+
+      /* 縦画面: アイコン+名前を2倍（席ごとに回転維持）*/
+      '.seat-bottom .player-icon-panel { transform: scale(2) !important; transform-origin: center bottom !important; }'+
+      '.seat-top .player-icon-panel { transform: rotate(180deg) scale(2) !important; transform-origin: center top !important; }'+
+      '.seat-right .player-icon-panel { transform: translateX(50px) translateY(-100px) rotate(90deg) scale(2) !important; transform-origin: left center !important; }'+
+      '.seat-left .player-icon-panel { transform: translateX(-10px) translateY(-100px) rotate(-90deg) scale(2) !important; transform-origin: right center !important; }'+
+      '.bottom-score-panel { position: absolute !important; left: 850px !important; top: 36px !important; margin-left: 0 !important; transform-origin: left top !important; }'+
       /* 縦画面: 能力ボタン(右下)を5倍スケール・手牌より下に配置 */
-      '#tableCornerLeft { bottom: 55px !important; left: 12px !important; transform: scale(3) !important; transform-origin: bottom left !important; }'+
+      '#tableInfoBox { transform: scale(2) !important; transform-origin: top left !important; }'+
+      '#doraPileFixed { transform: scale(1.5) !important; transform-origin: top right !important; }'+
+      '#tableCornerLeft { bottom: 35px !important; left: 12px !important; transform: scale(3) !important; transform-origin: bottom left !important; }'+
       '#tableCornerRight { bottom: 55px !important; right: 12px !important; transform: scale(2.5) !important; transform-origin: bottom right !important; }'+
       /* 縦画面: アクションエリア(ロン/ツモ/鳴きボタン等)を5/3倍スケール */
       '.action-area { transform: translateX(-50%) scale(1.667) !important; transform-origin: bottom center !important; bottom: 55px !important; }';
@@ -1695,6 +1703,16 @@ body::before{
           background:#040d14;border:1px solid #1a3a2a;border-radius:8px;
           padding:6px;display:none;flex-direction:column;gap:4px;min-width:120px;z-index:50;
         ">
+          <button id="autoDrawBtn" onclick="toggleAutoDraw()" style="
+            background:#030a10;border:1px solid #1a4a2a;border-radius:7px;
+            color:#5a9a7a;font-size:.6rem;padding:5px 9px;cursor:pointer;
+            transition:all .2s;letter-spacing:.04em;white-space:nowrap;text-align:left;
+          ">引く</button>
+          <button id="afkBtn" onclick="setAFK(!playerAFK)" style="
+            background:#030a10;border:1px solid #3a1a1a;border-radius:7px;
+            color:#8a4a4a;font-size:.6rem;padding:5px 9px;cursor:pointer;
+            transition:all .2s;letter-spacing:.04em;white-space:nowrap;text-align:left;
+          ">離席</button>
           <button id="noMeldBtn" onclick="toggleNoMeld()" style="
             background:#030a10;border:1px solid #1a3a1a;border-radius:7px;
             color:#4a7a4a;font-size:.6rem;padding:5px 9px;cursor:pointer;
@@ -1718,16 +1736,6 @@ body::before{
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;">
-        <button id="autoDrawBtn" onclick="toggleAutoDraw()" style="
-          background:#030a10;border:1px solid #1a4a2a;border-radius:7px;
-          color:#5a9a7a;font-size:.6rem;padding:5px 9px;cursor:pointer;
-          transition:all .2s;letter-spacing:.04em;white-space:nowrap;
-        ">引く</button>
-        <button id="afkBtn" onclick="setAFK(!playerAFK)" style="
-          background:#030a10;border:1px solid #3a1a1a;border-radius:7px;
-          color:#8a4a4a;font-size:.6rem;padding:5px 9px;cursor:pointer;
-          transition:all .2s;letter-spacing:.04em;white-space:nowrap;
-        ">離席</button>
         <button id="settingsBtn" onclick="toggleSettingsPanel()" style="
           background:#030a10;border:1px solid #2a3a4a;border-radius:7px;
           color:#5a7a8a;font-size:.7rem;padding:5px 8px;cursor:pointer;
@@ -7513,6 +7521,7 @@ function renderTable(){
     // ── 左: wind orb + 名前（牌1.5倍サイズ・牌3個分=120px離す） ──
     const leftPanel = document.createElement('div');
     leftPanel.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:108px;flex-shrink:0;margin-right:120px;';
+    leftPanel.classList.add('player-icon-panel');
     const windOrb2 = document.createElement('div');
     windOrb2.className='wind-orb'+(p.isDealer?' dealer-orb':'');
     const _orbIconId = isHuman ? (PROFILE&&PROFILE.iconId||'') : (p.iconId||'');
@@ -7546,6 +7555,7 @@ function renderTable(){
     // ── 右パネル: 場風・持ち点横並び(牌と同高48px) + 能力縦 ──
     const rightPanel = document.createElement('div');
     rightPanel.style.cssText='display:flex;flex-direction:column;align-items:flex-start;gap:3px;margin-left:8px;flex-shrink:0;';
+    rightPanel.classList.add('player-score-panel');
     if(si===0) rightPanel.classList.add('bottom-score-panel');
 
     // 場風・持ち点: 横並び・高さ48px
