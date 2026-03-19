@@ -37,7 +37,7 @@ async function initDB() {
         google_id    TEXT PRIMARY KEY,
         name         TEXT,
         email        TEXT,
-        coins        INTEGER NOT NULL DEFAULT 10000,
+        coins        INTEGER NOT NULL DEFAULT 0,
         abilities    TEXT NOT NULL DEFAULT '["ペン"]',
         total_pulls  INTEGER NOT NULL DEFAULT 0,
         gacha_icons  TEXT NOT NULL DEFAULT '[]',
@@ -149,7 +149,7 @@ app.get("/api/profile", requireAuth, async (req, res) => {
         [uid, req.user.name, req.user.email, JSON.stringify(["ペン"])]
       );
       return res.json({
-        coins: 10000,
+        coins: 0,
         abilities: ["ペン"],
         totalPulls: 0,
         gachaIcons: [],
