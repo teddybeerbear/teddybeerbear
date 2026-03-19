@@ -1288,43 +1288,6 @@ body::before{
     <!-- hidden input for abilityList compatibility -->
     <div id="abilityList" style="display:none;"></div>
     <div id="abilityPopup" style="display:none;background:#030a10;border:1px solid #1a3a2a;border-radius:10px;padding:8px;margin-bottom:10px;max-height:260px;overflow-y:auto;">
-      <div class="popup-ability-opt" data-ability="" onclick="pickAbility('')">
-  <span style="font-size:1.4rem;margin-right:8px;">🚫</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">能力なし</span><br><span style="font-size:.55rem;color:#5a7a6a;">   殊能力なし</span></span>
-  
-</div><div class="popup-ability-opt" data-ability="mine" onclick="pickAbility('mine')">
-  <span style="font-size:1.4rem;margin-right:8px;">💣</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">地雷</span><br><span style="font-size:.55rem;color:#5a7a6a;">山牌に地雷を仕掛ける</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">妨害系</span>
-</div><div class="popup-ability-opt" data-ability="light" onclick="pickAbility('light')">
-  <span style="font-size:1.4rem;margin-right:8px;">☀️</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">光</span><br><span style="font-size:.55rem;color:#5a7a6a;">牌を1枚覗き見する</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">索敵系</span>
-</div><div class="popup-ability-opt" data-ability="yami" onclick="pickAbility('yami')">
-  <span style="font-size:1.4rem;margin-right:8px;">🌑</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">闇</span><br><span style="font-size:.55rem;color:#5a7a6a;">オープンリーチ時に牌を裏向きに</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">撹乱系</span>
-</div><div class="popup-ability-opt" data-ability="haku" onclick="pickAbility('haku')">
-  <span style="font-size:1.4rem;margin-right:8px;">🀆</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">白</span><br><span style="font-size:.55rem;color:#5a7a6a;">手牌1枚を白に変換</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">変換系</span>
-</div><div class="popup-ability-opt" data-ability="sanctuary" onclick="pickAbility('sanctuary')">
-  <span style="font-size:1.4rem;margin-right:8px;">🏛️</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">聖域</span><br><span style="font-size:.55rem;color:#5a7a6a;">親番中、失点を受けない</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">防御系</span>
-</div><div class="popup-ability-opt" data-ability="steal" onclick="pickAbility('steal')">
-  <span style="font-size:1.4rem;margin-right:8px;">🃏</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">スチール</span><br><span style="font-size:.55rem;color:#5a7a6a;">捨て牌から1枚盗む</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">奪取系</span>
-</div><div class="popup-ability-opt" data-ability="pen" onclick="pickAbility('pen')">
-  <span style="font-size:1.4rem;margin-right:8px;">🖊️</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">ペン</span><br><span style="font-size:.55rem;color:#5a7a6a;">山牌に絵を描く</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">落書き系</span>
-</div><div class="popup-ability-opt" data-ability="pinzu" onclick="pickAbility('pinzu')">
-  <span style="font-size:1.4rem;margin-right:8px;">🔵</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">ピンズー教</span><br><span style="font-size:.55rem;color:#5a7a6a;">筒子の位置が見える</span></span>
-  <span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">情報系</span>
-</div>
     </div>
 
     <button class="start-btn" onclick="saveProfile()">保存してロビーへ →</button>
@@ -8523,9 +8486,64 @@ function renderProfileGachaIcons(){
 function pickIcon(icon){ } // legacy (emoji icons removed)
 function toggleAbilityPopup(){
   const p=document.getElementById('abilityPopup');
-  p.style.display=p.style.display==='none'?'block':'none';
+  const willOpen=p.style.display==='none';
+  if(willOpen){ renderAbilityPopup(); p.style.display='block'; }
+  else { p.style.display='none'; }
 }
+
+// ── 能力ポップアップを動的生成 ────────────────────────────
+// 初期解放能力（ガチャ/ショップ不要、最初から使える）
+const INITIAL_ABILITY_KEYS = ['mine','light','haku','pen'];
+const ALL_ABILITY_DATA = [
+  {key:'',       icon:'🚫', name:'能力なし',    desc:'特殊能力なし',       tag:'',     initial:true},
+  {key:'mine',   icon:'💣', name:'地雷',        desc:'山牌に地雷を仕掛ける', tag:'妨害系', initial:true},
+  {key:'light',  icon:'☀️', name:'光',          desc:'牌を1枚覗き見する',   tag:'索敵系', initial:true},
+  {key:'haku',   icon:'🀆', name:'白',          desc:'手牌1枚を白に変換',   tag:'変換系', initial:true},
+  {key:'pen',    icon:'🖊️', name:'ペン',        desc:'山牌に絵を描く',       tag:'落書き系',initial:true},
+  {key:'yami',   icon:'🌑', name:'闇',          desc:'オープンリーチ時に牌を裏向きに', tag:'撹乱系', initial:false},
+  {key:'sanctuary',icon:'🏛️',name:'聖域',      desc:'親番中、失点を受けない', tag:'防御系', initial:false},
+  {key:'steal',  icon:'🃏', name:'スチール',    desc:'捨て牌から1枚盗む',   tag:'奪取系', initial:false},
+  {key:'pinzu',  icon:'🔵', name:'ピンズー教',  desc:'筒子の位置が見える',   tag:'情報系', initial:false},
+];
+
+function _isAbilityOwned(key){
+  if(key===''||INITIAL_ABILITY_KEYS.includes(key)) return true;
+  const counts={};
+  (PROFILE.abilities||[]).forEach(a=>{ counts[a]=(counts[a]||0)+1; });
+  return counts[key]>0;
+}
+
+function renderAbilityPopup(){
+  const popup=document.getElementById('abilityPopup');
+  if(!popup) return;
+  const current=PROFILE.ability||'';
+  let html='';
+  for(const ab of ALL_ABILITY_DATA){
+    const owned=_isAbilityOwned(ab.key);
+    const isSel=ab.key===current;
+    if(owned){
+      // 所持済み: 通常表示・クリック可
+      html+=`<div class="popup-ability-opt${isSel?' selected':''}" data-ability="${ab.key}" onclick="pickAbility('${ab.key}')">
+  <span style="font-size:1.4rem;margin-right:8px;">${ab.icon}</span>
+  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">${ab.name}</span><br><span style="font-size:.55rem;color:#5a7a6a;">${ab.desc}</span></span>
+  ${ab.tag?`<span style="font-size:.48rem;color:#5a8a6a;border:1px solid #2a5a3a;border-radius:3px;padding:0 4px;">${ab.tag}</span>`:''}
+</div>`;
+    } else {
+      // 未所持: グレーアウト・クリック不可
+      html+=`<div class="popup-ability-opt" data-ability="${ab.key}" style="opacity:.35;cursor:default;pointer-events:none;filter:grayscale(1);">
+  <span style="font-size:1.4rem;margin-right:8px;">${ab.icon}</span>
+  <span style="flex:1;"><span style="font-weight:700;color:#6a7a6a;">${ab.name}</span><br><span style="font-size:.55rem;color:#3a4a3a;">${ab.desc}</span></span>
+  ${ab.tag?`<span style="font-size:.48rem;color:#3a5a3a;border:1px solid #1a3a1a;border-radius:3px;padding:0 4px;">${ab.tag}</span>`:''}
+</div>`;
+    }
+  }
+  popup.innerHTML=html;
+}
+
 function pickAbility(ability){
+  // ── 所持チェック ──────────────────────────────────────
+  if(!_isAbilityOwned(ability)) return; // 未所持なら無視
+  // ──────────────────────────────────────────────────────
   const ABILITY_DATA={
     '':['🚫','能力なし','特殊能力なし'],
     'mine':['💣','地雷','山牌に地雷を仕掛ける'],
@@ -8533,7 +8551,7 @@ function pickAbility(ability){
     'yami':['🌑','闇','オープンリーチ時に牌を裏向きに'],
     'haku':['🀆','白','手牌1枚を白に変換'],
     'sanctuary':['🏛️','聖域','親番中、失点を受けない'],
-    'steal':['🃏','スチール','捨て牌   ら1枚盗む'],
+    'steal':['🃏','スチール','捨て牌から1枚盗む'],
     'pen':['🖊️','ペン','山牌に絵を描く'],
     'pinzu':['🔵','ピンズー教','筒子の位置が見える'],
   };
@@ -8885,6 +8903,8 @@ function openProfile(){
   // 能力表示更新
   if(PROFILE.ability) pickAbility(PROFILE.ability);
   renderProfileAbilityList();
+  // ポップアップを最新所持状態で再生成（プロフィールを開くたびに反映）
+  renderAbilityPopup();
 }
 function renderProfileAbilityList(){
   const counts={};
