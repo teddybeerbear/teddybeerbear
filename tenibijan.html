@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>手にビまーじゃん (手牌左寄せ180px版)</title>
+<title>手にビ麻雀</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 function _centerHandSeats(table){ /* CSS固定値で処理 */ }
@@ -1214,20 +1214,6 @@ body::before{
       <span style="font-size:.62rem;color:#5a7a6a;">手にビコイン</span>
     </div>
 
-    <div class="shop-section-title">🎁 デイリー</div>
-
-    <!-- デイリーギフト -->
-    <div class="shop-item">
-      <div class="shop-item-icon">🎁</div>
-      <div class="shop-item-info">
-        <div class="shop-item-name">デイリーギフト</div>
-        <div class="shop-item-desc">1日1回無料で受け取れます。毎日ログインボーナス！</div>
-      </div>
-      <div class="shop-item-price">
-        <button class="shop-buy-btn free" id="dailyBtn" onclick="claimDaily()">無料 🪙+5</button>
-      </div>
-    </div>
-
     <div class="shop-section-title">⚡ 能力を購入</div>
     <div style="font-size:.56rem;color:#4a6a5a;margin-bottom:8px;">所持していない能力を🪙100枚で解放できます。</div>
     <div class="shop-ability-grid" id="shopAbilityGrid"></div>
@@ -1276,7 +1262,7 @@ body::before{
     <div id="abilityPopup" style="display:none;background:#030a10;border:1px solid #1a3a2a;border-radius:10px;padding:8px;margin-bottom:10px;max-height:260px;overflow-y:auto;">
       <div class="popup-ability-opt" data-ability="" onclick="pickAbility('')">
   <span style="font-size:1.4rem;margin-right:8px;">🚫</span>
-  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">能力なし</span><br><span style="font-size:.55rem;color:#5a7a6a;">���殊能力なし</span></span>
+  <span style="flex:1;"><span style="font-weight:700;color:#c0d8c0;">能力なし</span><br><span style="font-size:.55rem;color:#5a7a6a;">   殊能力なし</span></span>
   
 </div><div class="popup-ability-opt" data-ability="mine" onclick="pickAbility('mine')">
   <span style="font-size:1.4rem;margin-right:8px;">💣</span>
@@ -1321,7 +1307,7 @@ body::before{
 <div id="lobby">
   <div class="lobby-title">
     <div class="lobby-tiles">🍺🐻🀇🀙</div>
-    <h1 style="letter-spacing:.05em;">手にビまーじゃん</h1>
+    <h1 style="letter-spacing:.05em;">手にビ麻雀</h1>
   </div>
 
   <!-- Top nav -->
@@ -1897,7 +1883,7 @@ const SFX = (() => {
     return ctx;
   }
 
-  // 矩形波の���いビー���
+  // 矩形波の   いビー   
   function beep(freq, dur, v, t0) {
     const c = ac(), t = t0 ?? c.currentTime;
     const o = c.createOscillator();
@@ -2576,7 +2562,7 @@ let _tileIdSeq=0;
 function mt(suit,num){return{suit,num,_id:_tileIdSeq++};}
 function sortTiles(tiles){
   const so={man:0,pin:1,sou:2,honor:3};
-  const ho={'東':0,'南':1,'西':2,'��':3,'白':4,'発':5,'中':6};
+  const ho={'東':0,'南':1,'西':2,'  ':3,'白':4,'発':5,'中':6};
   return[...tiles].sort((a,b)=>{
     if(so[a.suit]!==so[b.suit])return so[a.suit]-so[b.suit];
     const an=typeof a.num==='number'?a.num:ho[a.num];
@@ -5223,7 +5209,7 @@ function checkPon(fromPidx,tile){
   for(let i=0;i<numPlayers;i++){
     if(i===fromPidx)continue;
     const p=G.players[i];
-    if(p.riichi)continue; // リー��中はポン不可
+    if(p.riichi)continue; // リー  中はポン不可
     const cnt=cntMap(p.hand);
     if((cnt[tk(tile)]||0)>=2){
       // オンライン: 自分自身か、ホストが管理しているゲストか判定
@@ -5544,7 +5530,7 @@ function humanHakuAuto(){
   const p=G.players[myIdx];
   if(!G_ABILITY_MODE||PROFILE.ability!=='haku'||p.abilityUsed)return;
   if(!p||p.riichi||G.phase!=='discard')return;
-  // cpuWorstTileIdxと同じロジックで孤立牌���自動選択
+  // cpuWorstTileIdxと同じロジックで孤立牌   自動選択
   const idx=cpuWorstTileIdx(p);
   if(idx<0)return;
   const t=p.hand[idx];
@@ -6310,11 +6296,13 @@ function showFinalResult(){
   // コイン付与: 自分の順位を判定
   const myPlayer=G.players[NET.myIdx];
   const myRank=sorted.findIndex(p=>p===myPlayer);
-  const earned=myRank===0?20:10;
+  const _coinTable={2:10,3:30,4:40};
+  const _firstPrize=_coinTable[numPlayers]||10;
+  const earned=myRank===0?_firstPrize:0;
   PROFILE.coins=(PROFILE.coins||0)+earned;
   saveProfileSilent();
   const rewardEl=document.getElementById('resultCoinReward');
-  if(rewardEl) rewardEl.innerHTML=`🪙 +${earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">${myRank===0?'1位ボーナス：+20枚':'参加報酬：+10枚'}</span>`;
+  if(rewardEl) rewardEl.innerHTML=`🪙 +${earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">${myRank===0?'1位ボーナス：+'+_firstPrize+'枚':'参加報酬：+0枚'}</span>`;
 
   // ランクマッチの場合、ホストがスコアを提出してレートを更新
   const ratingBox=document.getElementById('resultRatingBox');
@@ -6368,11 +6356,13 @@ function showFinalResultData(sorted){
   // コイン付与（ゲスト側）
   const myPlayer = G && G.players ? G.players[NET.myIdx] : null;
   const myRank = myPlayer ? sorted.findIndex(p=>p.name===myPlayer.name) : -1;
-  const earned = myRank===0 ? 20 : 10;
+  const _g_coinTable={2:10,3:30,4:40};
+  const _g_firstPrize=_g_coinTable[numPlayers]||10;
+  const earned = myRank===0 ? _g_firstPrize : 0;
   PROFILE.coins = (PROFILE.coins||0) + earned;
   saveProfileSilent();
   const rewardEl = document.getElementById('resultCoinReward');
-  if(rewardEl) rewardEl.innerHTML=`🪙 +${earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">${myRank===0?'1位ボーナス：+20枚':'参加報酬：+10枚'}</span>`;
+  if(rewardEl) rewardEl.innerHTML=`🪙 +${earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">${myRank===0?'1位ボーナス：+'+_g_firstPrize+'枚':'参加報酬：+0枚'}</span>`;
 
   // ランクマッチ: レート変動をサーバーから取得（ホストのPOSTが完了するまで少し待つ）
   const ratingBox = document.getElementById('resultRatingBox');
@@ -6617,12 +6607,12 @@ function renderCornerAbilityBtns(){
     }
   }
 
-  // ── 闇 🌑 ───────────────────────────���───────────────────
+  // ── 闇 🌑 ───────────────────────────   ───────────────────
   if(ab==='yami'&&!p.abilityUsed&&(phase==='discard')&&isMyTurn){
     if(!G.yamiSelectMode){
       const yamiSet=p.yamiTileIdx>=0&&p.yamiTileIdx<p.hand.length;
       if(!yamiSet)
-        add('🌑 闇','#cc99ff','#7744aa',()=>{G.yamiSelectMode=true;renderAll();},'捨て牌を裏向��に');
+        add('🌑 闇','#cc99ff','#7744aa',()=>{G.yamiSelectMode=true;renderAll();},'捨て牌を裏向  に');
     }
   }
 }
@@ -7429,7 +7419,7 @@ function renderTable(){
         :p.riichi&&p.openRiichi?`<span class="badge" style="background:#1a0020;border:1px solid #8844cc;color:#cc88ff;letter-spacing:-.02em;">オープンリーチ</span>`
         :p.riichi?`<span class="badge badge-riichi">リーチ</span>`:'',
       (p.tenpai&&!p.riichi&&pidx===NET.myIdx)?`<span class="badge badge-tenpai">テンパイ</span>`:'',
-      p.kitaCount>0?`<span class="badge badge-dora">���×${p.kitaCount}</span>`:'',
+      p.kitaCount>0?`<span class="badge badge-dora">   ×${p.kitaCount}</span>`:'',
     ].join('');
 
     const riichiStick=p.riichi?`<span class="riichi-stick">リーチ</span>`:''; 
@@ -7754,7 +7744,7 @@ function renderTable(){
     dw.classList.add('discard-abs','discard-abs-'+_sideName);
     dw.dataset.discardSide=_si;
     if(_si===1||_si===3){
-      // left/right: table-center の子として position:absolute で外側��定
+      // left/right: table-center の子として position:absolute で外側  定
       const tcEl2=document.getElementById('tableCenter');
       tcEl2.querySelectorAll('.discard-abs-'+_sideName).forEach(el=>el.remove());
       tcEl2.appendChild(dw);
@@ -7862,7 +7852,7 @@ function _positionDiscards(table){
   const GRID_W=314; // 捨て牌外枠幅 left/right（8列, padding+border込み）
 
   // 右: rotate(-90deg) origin(0,0)
-  // top=GRID_W → 回��後の上端=top-GRID_W=0 → tc上端に揃う
+  // top=GRID_W → 回  後の上端=top-GRID_W=0 → tc上端に揃う
   // left=tcW+GAP → tc右辺外にぴったり
   tc.querySelectorAll('.discard-abs-right').forEach(dw=>{
     dw.style.left=(tcW+GAP)+'px';
@@ -7938,12 +7928,12 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
       }
       // 白・闇: セレクトモード中のヒント+キャンセルのみ（ボタン本体はcornerBtns）
       if(G_ABILITY_MODE&&PROFILE.ability==='haku'&&G.hakuSelectMode){
-        html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変���る手牌をクリック！</span>`;
+        html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変   る手牌をクリック！</span>`;
         html+=`<button class="btn btn-danger" onclick="G.hakuSelectMode=false;renderAll();">キャンセル</button>`;
       }
       if(G_ABILITY_MODE&&PROFILE.ability==='yami'&&G.yamiSelectMode){
         html+=`<span class="action-hint" style="color:#cc99ff;">🌑 闇にする手牌をクリック！</span>`;
-        html+=`<button class="btn btn-danger" onclick="G.yamiSelectMode=false;renderAll();">キャ���セル</button>`;
+        html+=`<button class="btn btn-danger" onclick="G.yamiSelectMode=false;renderAll();">キャ   セル</button>`;
       }
       // 加槓チェック(右下ボタンへ移動済み): ポン済み牌と同じ牌が手牌にある
       for(let ki=0;ki<p.hand.length;ki++){
@@ -8244,7 +8234,7 @@ function pickAbility(ability){
     'yami':['🌑','闇','オープンリーチ時に牌を裏向きに'],
     'haku':['🀆','白','手牌1枚を白に変換'],
     'sanctuary':['🏛️','聖域','親番中、失点を受けない'],
-    'steal':['🃏','スチール','捨て牌���ら1枚盗む'],
+    'steal':['🃏','スチール','捨て牌   ら1枚盗む'],
     'pen':['🖊️','ペン','山牌に絵を描く'],
     'pinzu':['🔵','ピンズー教','筒子の位置が見える'],
   };
@@ -8607,20 +8597,6 @@ function updateShopCoinDisplay(){
 }
 function renderShop(){
   updateShopCoinDisplay();
-  // デイリーボタン状態
-  const btn=document.getElementById('dailyBtn');
-  if(btn){
-    const now=Date.now();
-    const last=PROFILE.lastDaily||0;
-    const canClaim=now-last>=86400000;
-    btn.disabled=!canClaim;
-    if(!canClaim){
-      const hrs=Math.ceil((86400000-(now-last))/3600000);
-      btn.textContent=`あと${hrs}時間`;
-    } else {
-      btn.textContent='無料 🪙+5';
-    }
-  }
   // 能力グリッド
   const grid=document.getElementById('shopAbilityGrid');
   if(!grid) return;
@@ -8639,17 +8615,6 @@ function renderShop(){
         onclick="buyAbility('${ab.key}')">${has?'所持済み':'購入'}</button>`;
     grid.appendChild(card);
   });
-}
-function claimDaily(){
-  const now=Date.now();
-  const last=PROFILE.lastDaily||0;
-  if(now-last<86400000){ renderShop(); return; }
-  PROFILE.lastDaily=now;
-  PROFILE.coins=(PROFILE.coins||0)+5;
-  saveProfileSilent();
-  renderShop();
-  updateGachaCoinDisplay();
-  _shopToast('🎁 デイリーギフト受け取り！🪙+5');
 }
 function shopPull1(){
   if((PROFILE.coins||0)<1){
