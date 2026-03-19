@@ -2784,9 +2784,9 @@ function evalYaku(hand5,winTile,isTsumo,player,roundWind){
 
   // Yakuman (複合役満を累積する)
   const ymList=[];
-  if(player.isTenhou)ymList.push({name:'天和',han:26});
-  if(player.isChiihou)ymList.push({name:'地和',han:13});
-  if(player.isRenhou)ymList.push({name:'人和',han:13});
+  if(player.isTenhou&&isTsumo)ymList.push({name:'天和',han:26});
+  if(player.isChiihou&&isTsumo)ymList.push({name:'地和',han:13});
+  if(player.isRenhou&&!isTsumo)ymList.push({name:'人和',han:13});
   if(isZiiso(allTiles))ymList.push({name:'字一色',han:13});
   if(isChinroutou(allTiles))ymList.push({name:'チンロウトウ',han:13});
   if(isRyuuiisou(allTiles))ymList.push({name:'緑一色',han:13});
@@ -2795,7 +2795,9 @@ function evalYaku(hand5,winTile,isTsumo,player,roundWind){
   const kanCount=meldTypes.filter(t=>['ankan','minkan','kakan'].includes(t)).length;
   if(kanCount>=1)ymList.push({name:'一槓子',han:13});
   // 一暗刻: 門前トイトイ形。ツモなら一暗刻/一暗刻単騎。ロンは単騎のみ
-  if(isToitoiHand(hand5)&&isMenzen){
+  // 暗槓は門前扱い（ankanのみのmeldsは門前とみなす）
+  const isMenzenForIankou=melds.every(m=>m.type==='ankan');
+  if(isToitoiHand(hand5)&&isMenzenForIankou){
     const isTanki=isTankiWait(hand5,winTile);
     if(isTsumo){
       ymList.push({name:isTanki?'一暗刻単騎':'一暗刻',han:isTanki?26:13});
@@ -2856,7 +2858,8 @@ function evalYaku(hand5,winTile,isTsumo,player,roundWind){
       // 残り3枚が全て順子（刻子なし）+ canDecompose
       const noTriplet=!Object.values(rc).some(v=>v>=3);
       if(noTriplet&&rest.length===3&&canDecompose(rest)){
-        const isTwoSided=isTwoSidedWait(hand5,winTile);
+        // 両面判定は確定した残り3枚（順子ブロック）とwinTileで行う
+        const isTwoSided=isTwoSidedWait([...rest,winTile],winTile);
         if(isTwoSided)yakus.push({name:'平和',han:1});
       }
     }
@@ -2915,10 +2918,6 @@ function evalYaku(hand5,winTile,isTsumo,player,roundWind){
     Object.values(allCnt).filter(v=>v===2).length===1&&Object.values(allCnt).filter(v=>v>=3).length===1;
   const mAllT=melds.every(m=>['pon','ankan','minkan','kakan'].includes(m.type));
   if(allTP&&mAllT)yakus.push({name:'トイトイ',han:2});
-
-  // Shousangen
-  const dcnt=(['白','発','中'].map(d=>cnt[`honor_${d}`]||0)).reduce((a,b)=>a+b,0);
-  if(dcnt>=4)yakus.push({name:'小三元',han:2});
 
   // Honitsu / Chinitsu
   const numSuits=new Set(allTiles.filter(t=>t.suit!=='honor').map(t=>t.suit));
@@ -4696,6 +4695,10 @@ function remoteWallPick(pidx,slotIdx){
   }
 
   G.phase='discard';
+  // 天和: 親 かつ 1巡目 かつ 自分がまだ一度も捨てていない
+  if(p.isDealer&&G.firstRound&&(p.turnCount||0)===0&&canWin(p.hand))p.isTenhou=true;
+  // 地和: 非親 かつ 1巡目 かつ 全員が未捨て
+  if(!p.isDealer&&G.firstRound&&(p.turnCount||0)===0&&G.players.every(pl=>(pl.turnCount||0)===0)&&canWin(p.hand))p.isChiihou=true;
   updateTenpai(p);
   if(canWin(p.hand)){addLog(`${emj(tile)} ツモ！上がれます`,'log-tsumo');renderAll();broadcastState();return;}
   const drawnIsKita=tile.suit==='honor'&&tile.num==='北';
@@ -4848,7 +4851,7 @@ function makePlayer(id,dealer){
     score:0,isDealer:dealer,riichi:false,doubleRiichi:false,openRiichi:false,
     ippatsu:false,isTenhou:false,isChiihou:false,isRenhou:false,
     isHaite:false,isRinshanKaihou:false,isChankan:false,
-    drawnTile:null,tenpai:false,waits:[],riichiDiscardIdx:-1,kanCount:0,yamiTileIdx:-1,hakuTileId:null,
+    drawnTile:null,tenpai:false,waits:[],riichiDiscardIdx:-1,kanCount:0,yamiTileIdx:-1,hakuTileId:null,turnCount:0,
     ability:pAbility, abilityUsed:false,
 };
 }
@@ -5085,6 +5088,8 @@ function discardAction(pidx,tidx,isYami=false){ if(pidx===NET.myIdx){ _timerSave
   else p.yamiTileIdx=-1;
   updateTenpai(p);
   p.turnCount=(p.turnCount||0)+1;
+  // 全員が1回以上捨てたら1巡目終了
+  if(G.firstRound && G.players.every(pl=>( pl.turnCount||0)>=1)) G.firstRound=false;
   G.players.forEach(pl=>{if(pl.id!==pidx)pl.ippatsu=false;});
 
   if(isYami) addLog(`${p.name} → 🌑 を捨てた`,'log-new');
@@ -5272,7 +5277,7 @@ function handlePon(pidx,tile,fromPidx){
 }
 
 function nextTurn(pidx){
-  G.current=pidx;G.phase='draw';G.firstRound=false;renderAll();
+  G.current=pidx;G.phase='draw';renderAll();
   // Online: ホスト（amIHost()）だけがCPU/ドロー進行。ゲストはstate pushを待つ
   if(NET.online&&!amIHost()){broadcastState();return;}
   if(NET.online&&amIHost()){
@@ -5674,8 +5679,10 @@ function humanPickWall(slotIdx){
   G.phase='discard';
   selIdx=p.hand.length-1; // 引いた牌を最初から選択状態に
   // タイマーはdraw_wait開始時に起動済み → ここでは継続（restartしない）
-  if(p.isDealer&&G.firstRound&&canWin(p.hand))p.isTenhou=true;
-  if(!p.isDealer&&G.firstRound&&canWin(p.hand))p.isChiihou=true;
+  // 天和: 親 かつ 1巡目 かつ 自分がまだ一度も捨てていない
+  if(p.isDealer&&G.firstRound&&(p.turnCount||0)===0&&canWin(p.hand))p.isTenhou=true;
+  // 地和: 非親 かつ 1巡目 かつ 自分より前の全員が未捨て（誰も鳴いていない）
+  if(!p.isDealer&&G.firstRound&&(p.turnCount||0)===0&&G.players.every(pl=>(pl.turnCount||0)===0)&&canWin(p.hand))p.isChiihou=true;
   if(canWin(p.hand)){addLog(`${emj(tile)} ツモ！上がれます`,'log-tsumo');renderAll();broadcastState();return;}
   const drawnIsKita=tile.suit==='honor'&&tile.num==='北';
   if(p.riichi&&!drawnIsKita){
@@ -5770,6 +5777,10 @@ function handleRon(widx,tile,fromidx){
   const loser=G.players[fromidx];
   if(winner.openRiichi && !loser.riichi){
     winner._openRiichiRon=true; // evalYakuで参照
+  }
+  // 人和: 1巡目 かつ 自分がまだ一度も捨てていない（鳴きなし）
+  if(G.firstRound&&(winner.turnCount||0)===0&&winner.melds.length===0){
+    winner.isRenhou=true;
   }
   handleWin(widx,tile,false,fromidx);
   winner._openRiichiRon=false;
@@ -6554,49 +6565,55 @@ function renderAll(){
   renderCornerAbilityBtns();
   // 拡大オーバーレイが開いていれば更新
   renderWallExpand();
+  // 選択中牌の同種ハイライト更新
+  updateSelHighlight();
 }
 
 // ── 同種牌ハイライト ─────────────────────────────────────────
 // テーブル全体にイベント委譲で登録（renderAll後のDOM再生成にも対応）
-(function(){
-  let _active = null; // 現在ホバー中の {suit, num}
+let _highlightHover = null; // 現在ホバー中の {suit, num}
+let _highlightSel   = null; // 現在選択中の {suit, num}
 
-  function _highlight(suit, num, on){
-    if(!suit) return;
-    document.querySelectorAll('.tile[data-suit]').forEach(el=>{
-      // back（伏せ牌）・yami-hidden はスキップ
-      if(el.classList.contains('back') || el.classList.contains('yami-hidden')) return;
-      if(el.dataset.suit === suit && String(el.dataset.num) === String(num)){
-        el.classList.toggle('same-highlight', on);
-      }
-    });
+function _applyHighlights(){
+  // suit/numが一致するタイルにsame-highlightを付ける（ホバーor選択）
+  document.querySelectorAll('.tile[data-suit]').forEach(el=>{
+    if(el.classList.contains('back') || el.classList.contains('yami-hidden')) return;
+    const s=el.dataset.suit, n=String(el.dataset.num);
+    const matchHover=_highlightHover&&_highlightHover.suit===s&&String(_highlightHover.num)===n;
+    const matchSel  =_highlightSel  &&_highlightSel.suit===s  &&String(_highlightSel.num)===n;
+    el.classList.toggle('same-highlight', !!(matchHover||matchSel));
+  });
+}
+
+function updateSelHighlight(){
+  // selIdx から選択牌のsuit/numを取得してハイライト更新
+  const p=G&&G.players&&G.players[NET&&NET.myIdx];
+  if(p&&selIdx>=0&&selIdx<p.hand.length){
+    const t=p.hand[selIdx];
+    _highlightSel=t?{suit:t.suit,num:String(t.num)}:null;
+  } else {
+    _highlightSel=null;
   }
+  _applyHighlights();
+}
 
+(function(){
   document.addEventListener('mouseover', e=>{
     const tile = e.target.closest('.tile[data-suit]');
     if(!tile || tile.classList.contains('back') || tile.classList.contains('yami-hidden')) {
-      if(_active){ _highlight(_active.suit, _active.num, false); _active=null; }
-      return;
+      _highlightHover=null; _applyHighlights(); return;
     }
-    const suit = tile.dataset.suit;
-    const num  = tile.dataset.num;
-    if(_active && (_active.suit !== suit || _active.num !== num)){
-      _highlight(_active.suit, _active.num, false);
-    }
-    _active = {suit, num};
-    _highlight(suit, num, true);
+    _highlightHover={suit:tile.dataset.suit, num:String(tile.dataset.num)};
+    _applyHighlights();
   }, true);
 
   document.addEventListener('mouseout', e=>{
     const tile = e.target.closest('.tile[data-suit]');
     if(!tile) return;
-    // relatedTarget が同じタイルの子要素なら無視
     if(tile.contains(e.relatedTarget)) return;
-    const suit = tile.dataset.suit;
-    const num  = tile.dataset.num;
-    if(_active && _active.suit === suit && _active.num === num){
-      _highlight(suit, num, false);
-      _active = null;
+    const suit=tile.dataset.suit, num=String(tile.dataset.num);
+    if(_highlightHover&&_highlightHover.suit===suit&&String(_highlightHover.num)===num){
+      _highlightHover=null; _applyHighlights();
     }
   }, true);
 })();
