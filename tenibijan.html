@@ -83,7 +83,12 @@ function scaleTable(){
       '#tableCornerLeft { bottom: 35px !important; left: 12px !important; transform: scale(3) !important; transform-origin: bottom left !important; }'+
       '#tableCornerRight { bottom: 55px !important; right: 12px !important; transform: scale(2.5) !important; transform-origin: bottom right !important; }'+
       /* 縦画面: アクションエリア(ロン/ツモ/鳴きボタン等)を5/3倍スケール */
-      '.action-area { transform: translateX(-50%) scale(1.667) !important; transform-origin: bottom center !important; bottom: 55px !important; }';
+      '.action-area { transform: translateX(-50%) scale(1.667) !important; transform-origin: bottom center !important; bottom: 55px !important; }'+
+      /* 縦画面: 手牌上リーチ・離席ラベルを2.5倍スケール・位置調整 */
+      '.seat-bottom .hand-outer-riichi-label { font-size: 3.4375rem !important; top: -90px !important; }'+
+      '.seat-bottom .hand-outer-afk-label { font-size: 4.6875rem !important; top: -110px !important; left: 570px !important; }'+
+      '.seat-top .hand-outer-riichi-label,.seat-left .hand-outer-riichi-label,.seat-right .hand-outer-riichi-label { font-size: 3.4375rem !important; top: -90px !important; }'+
+      '.seat-top .hand-outer-afk-label,.seat-left .hand-outer-afk-label,.seat-right .hand-outer-afk-label { font-size: 4.6875rem !important; top: -110px !important; }';
   } else {
     if(ps) ps.textContent='';
   }
@@ -5078,7 +5083,7 @@ function revealKanDora(){
   }
 }
 
-function discardAction(pidx,tidx,isYami=false){ if(pidx===NET.myIdx){ _timerSaveBonus(); timerStop(); }
+function discardAction(pidx,tidx,isYami=false){ if(pidx===NET.myIdx){ _timerSaveBonus(); timerStop(); selIdx=-1; }
   if(pidx===NET.myIdx||!NET.online) SFX.discard();
   // CPU闇能力: _cpuNextYamiフラグがあれば闇捨て
   const pd=G.players[pidx];
@@ -5128,7 +5133,7 @@ function discardAction(pidx,tidx,isYami=false){ if(pidx===NET.myIdx){ _timerSave
 
 // 加槓: ポン済みの牌に同じ牌を追加してカンにする
 function handleKakan(pidx, handIdx){
-  // SFX.kan();
+  SFX.kan();
   const p=G.players[pidx];
   const tile=p.hand[handIdx];
   // ポン済み面子を探す
@@ -5212,7 +5217,7 @@ function canAnkan(pidx){
 }
 
 function handleAnkan(pidx, tileKey){
-  // SFX.kan();
+  SFX.kan();
   const p=G.players[pidx];
   const tiles=p.hand.filter(t=>tk(t)===tileKey);
   if(tiles.length<4)return;
@@ -5269,7 +5274,7 @@ function checkPon(fromPidx,tile){
 }
 
 function handlePon(pidx,tile,fromPidx){
-  // SFX.pon();
+  SFX.pon();
   const p=G.players[pidx];
   let rm=0;p.hand=p.hand.filter(t=>{if(rm<2&&teq(t,tile)){rm++;return false;}return true;});
   p.melds.push({type:'pon',tiles:[tile,tile,tile],from:fromPidx});
@@ -6140,6 +6145,7 @@ function humanMinkan(){
   broadcastState();
 }
 function handleMinkan(pidx,tile,fromPidx){
+  SFX.kan();
   const p=G.players[pidx];
   let rm=0;p.hand=p.hand.filter(t=>{if(rm<3&&teq(t,tile)){rm++;return false;}return true;});
   p.melds.push({type:'minkan',tiles:[tile,tile,tile,tile],from:fromPidx});
@@ -6586,12 +6592,13 @@ let _highlightHover = null; // 現在ホバー中の {suit, num}
 let _highlightSel   = null; // 現在選択中の {suit, num}
 
 function _applyHighlights(){
-  // suit/numが一致するタイルにsame-highlightを付ける（ホバーor選択）
+  // ホバー中は選択ハイライトを無効化（ホバー優先）
+  const activeSel = _highlightHover ? null : _highlightSel;
   document.querySelectorAll('.tile[data-suit]').forEach(el=>{
     if(el.classList.contains('back') || el.classList.contains('yami-hidden')) return;
     const s=el.dataset.suit, n=String(el.dataset.num);
     const matchHover=_highlightHover&&_highlightHover.suit===s&&String(_highlightHover.num)===n;
-    const matchSel  =_highlightSel  &&_highlightSel.suit===s  &&String(_highlightSel.num)===n;
+    const matchSel  =activeSel&&activeSel.suit===s&&String(activeSel.num)===n;
     el.classList.toggle('same-highlight', !!(matchHover||matchSel));
   });
 }
@@ -7783,7 +7790,8 @@ function renderTable(){
     const isDOR = p.riichi && p.openRiichi && p.doubleRiichi;
     if(p.riichi){
       const rLabel = document.createElement('div');
-      rLabel.style.cssText='position:absolute;top:-18px;left:50%;transform:translateX(-50%);white-space:nowrap;z-index:5;font-size:.55rem;font-weight:700;pointer-events:none;';
+      rLabel.className='hand-outer-riichi-label';
+      rLabel.style.cssText='position:absolute;top:-38px;left:50%;transform:translateX(-50%);white-space:nowrap;z-index:5;font-size:1.375rem;font-weight:700;pointer-events:none;';
       if(isDOR)      rLabel.innerHTML='<span style="color:#ee99ff;background:#1a0030;border:1px solid #aa55ff;border-radius:3px;padding:1px 4px;">Ｄオープンリーチ</span>';
       else if(isOR)  rLabel.innerHTML='<span style="color:#cc88ff;background:#1a0020;border:1px solid #8844cc;border-radius:3px;padding:1px 4px;">オープンリーチ</span>';
       else           rLabel.innerHTML='<span style="color:#ff8888;background:#1a0000;border:1px solid #cc4444;border-radius:3px;padding:1px 4px;">リーチ</span>';
@@ -7793,7 +7801,8 @@ function renderTable(){
     // ── 離席: 手牌の左上に絶対配置 ──
     if((isHuman && playerAFK) || p.isCpu){
       const afkEl=document.createElement('div');
-      afkEl.style.cssText='position:absolute;top:-22px;left:228px;font-size:.75rem;color:#ff6666;background:#1a0000;border:1px solid #cc3333;border-radius:4px;padding:2px 7px;z-index:5;pointer-events:none;font-weight:700;';
+      afkEl.className='hand-outer-afk-label';
+      afkEl.style.cssText='position:absolute;top:-50px;left:228px;font-size:1.875rem;color:#ff6666;background:#1a0000;border:1px solid #cc3333;border-radius:4px;padding:4px 12px;z-index:5;pointer-events:none;font-weight:700;';
       afkEl.textContent='離席';
       handOuter.appendChild(afkEl);
     }
