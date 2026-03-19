@@ -575,6 +575,35 @@ body::before{
 }
 #wallCanvas.pen-on{ cursor:crosshair; }
 #wallCanvas.pick-on{ cursor:pointer; }
+/* ===== 山牌拡大オーバーレイ ===== */
+#wallExpandOverlay{
+  position:fixed;inset:0;z-index:500;
+  background:rgba(0,0,0,.92);
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  gap:10px;
+  touch-action:none;
+}
+#wallExpandOverlay.show{display:flex;}
+#wallExpandCanvas{
+  display:block;border-radius:6px;
+  cursor:default;user-select:none;touch-action:none;
+  max-width:98vw;max-height:88vh;
+}
+#wallExpandCanvas.pen-on{cursor:crosshair;}
+#wallExpandCanvas.pick-on{cursor:pointer;}
+#wallExpandCloseBtn{
+  position:fixed;top:12px;right:16px;z-index:501;
+  background:#030a10;border:1.5px solid #334455;border-radius:8px;
+  color:#8899aa;font-size:.85rem;padding:6px 14px;cursor:pointer;
+  transition:all .2s;
+}
+#wallExpandCloseBtn:hover{border-color:#55aaff;color:#55aaff;}
+#wallExpandBtn{
+  background:#030a10;border:1.5px solid #334455;border-radius:7px;
+  color:#8899aa;font-size:.6rem;padding:5px 9px;cursor:pointer;
+  transition:all .2s;letter-spacing:.04em;white-space:nowrap;
+}
+#wallExpandBtn:hover{border-color:#55aaff;color:#55aaff;}
 /* ペントグルボタン */
 #penToggleBtn{
   background:#030a10;border:1.5px solid #334455;border-radius:7px;
@@ -1464,6 +1493,11 @@ body::before{
       <div id="timeModeDesc" style="display:none;font-size:.55rem;color:#c9a84c;text-align:center;margin-bottom:4px;line-height:1.5;">
         20秒+5秒スタート<br>未操作で自動ツモ切り→残り5秒の秒読み局
       </div>
+      <div style="margin-top:6px;margin-bottom:2px;font-size:.58rem;color:#5a8a6a;letter-spacing:.1em;">飛び</div>
+      <div class="pcnt" style="margin-bottom:0;">
+        <button class="pcnt-btn active" id="modeTobiOn" onclick="setTobiMode(true)">💀 あり</button>
+        <button class="pcnt-btn" id="modeTobiOff" onclick="setTobiMode(false)">🛡 なし</button>
+      </div>
     </div>
     <button class="start-btn" onclick="initGame()">ゲーム開始 →</button>
   </div>
@@ -1499,6 +1533,14 @@ body::before{
         <div class="pcnt" style="margin-bottom:0;">
           <button class="pcnt-btn" id="roomModeTimeOn" onclick="setRoomTimeMode(true)">⏱ あり</button>
           <button class="pcnt-btn active" id="roomModeTimeOff" onclick="setRoomTimeMode(false)">∞ なし</button>
+        </div>
+      </div>
+      <!-- 飛びあり/なし -->
+      <div style="margin-bottom:8px;">
+        <div style="font-size:.6rem;color:#5a7a6a;text-align:center;margin-bottom:4px;">飛び</div>
+        <div class="pcnt" style="margin-bottom:0;">
+          <button class="pcnt-btn active" id="roomModeTobiOn" onclick="setRoomTobiMode(true)">💀 あり</button>
+          <button class="pcnt-btn" id="roomModeTobiOff" onclick="setRoomTobiMode(false)">🛡 なし</button>
         </div>
       </div>
       <button class="start-btn" style="margin-bottom:10px;" onclick="createRoom()">部屋を作る（ホスト）</button>
@@ -1610,9 +1652,14 @@ body::before{
         <button class="pcnt-btn" id="rlsModeAbilityOff" onclick="setRoomAbilityMode(false);updateRoomLobbyUI()">♟ 能力なし</button>
       </div>
       <div style="font-size:.6rem;color:#5a7a6a;text-align:center;margin-bottom:4px;">制限時間</div>
-      <div class="pcnt" style="margin-bottom:0;">
+      <div class="pcnt" style="margin-bottom:6px;">
         <button class="pcnt-btn" id="rlsModeTimeOn" onclick="setRoomTimeMode(true);updateRoomLobbyUI()">⏱ あり</button>
         <button class="pcnt-btn active" id="rlsModeTimeOff" onclick="setRoomTimeMode(false);updateRoomLobbyUI()">∞ なし</button>
+      </div>
+      <div style="font-size:.6rem;color:#5a7a6a;text-align:center;margin-bottom:4px;">飛び</div>
+      <div class="pcnt" style="margin-bottom:0;">
+        <button class="pcnt-btn active" id="rlsModeTobiOn" onclick="setRoomTobiMode(true);updateRoomLobbyUI()">💀 あり</button>
+        <button class="pcnt-btn" id="rlsModeTobiOff" onclick="setRoomTobiMode(false);updateRoomLobbyUI()">🛡 なし</button>
       </div>
     </div>
 
@@ -1791,6 +1838,7 @@ body::before{
       </div>
       <!-- ボタン行: ペン + 能力 -->
       <div id="cornerBtns" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+        <button id="wallExpandBtn" onclick="openWallExpand()">🔍</button>
         <button id="penToggleBtn" onclick="togglePenMode()">🖊️ ペン</button>
         <!-- 能力ボタンはrenderCornerAbilityBtns()で動的挿入 -->
       </div>
@@ -1809,6 +1857,12 @@ body::before{
   
 <!-- pen panel removed: direct wall canvas drawing -->
 
+</div>
+
+<!-- 山牌拡大オーバーレイ -->
+<div id="wallExpandOverlay" onclick="closeWallExpand(event)">
+  <button id="wallExpandCloseBtn" onclick="closeWallExpand()">✕ 閉じる</button>
+  <canvas id="wallExpandCanvas"></canvas>
 </div>
 
 <!-- BACK TO TITLE CONFIRM -->
@@ -2970,6 +3024,7 @@ let NET={
   myIdx:0,          // which player index am I (0=host,1=guest+)
   roomAbilityMode:true, // ルームマッチ能力あり/なし
   roomTimeMode:false,   // ルームマッチ制限時間あり/なし
+  roomTobiMode:true,    // ルームマッチ飛びあり/なし
   online:false,     // playing online?
   roomCode:null,
   isRankMatch:false, // ランクマッチ中か
@@ -3440,7 +3495,7 @@ function _onRankMatched(data){
             ];
             console.log('ホストからgameStart送信:', membersInfo);
             NET.conns.forEach((c)=>{
-              if(c&&c.open) c.send({type:'gameStart', totalPlayers:3, abilityMode:true, timeMode:true, membersInfo});
+              if(c&&c.open) c.send({type:'gameStart', totalPlayers:3, abilityMode:true, timeMode:true, tobiMode:true, membersInfo});
             });
             setTimeout(()=>{
               G_TIME_MODE = true;
@@ -3759,6 +3814,18 @@ function setRoomTimeMode(on){
   if(rlsOn) rlsOn.classList.toggle('active',on);
   if(rlsOff) rlsOff.classList.toggle('active',!on);
 }
+function setRoomTobiMode(on){
+  NET.roomTobiMode=on;
+  document.getElementById('roomModeTobiOn')?.classList.toggle('active',on);
+  document.getElementById('roomModeTobiOff')?.classList.toggle('active',!on);
+  document.getElementById('rlsModeTobiOn')?.classList.toggle('active',on);
+  document.getElementById('rlsModeTobiOff')?.classList.toggle('active',!on);
+}
+function setTobiMode(on){
+  G_TOBI_MODE=on;
+  document.getElementById('modeTobiOn')?.classList.toggle('active',on);
+  document.getElementById('modeTobiOff')?.classList.toggle('active',!on);
+}
 async function createRoom(){
   setOnlineStatus('接続中…');
   const code = String(Math.floor(100000+Math.random()*900000));
@@ -3902,6 +3969,8 @@ function updateRoomLobbyUI(){
     document.getElementById('rlsModeAbilityOff')?.classList.toggle('active', !NET.roomAbilityMode);
     document.getElementById('rlsModeTimeOn')?.classList.toggle('active', NET.roomTimeMode);
     document.getElementById('rlsModeTimeOff')?.classList.toggle('active', !NET.roomTimeMode);
+    document.getElementById('rlsModeTobiOn')?.classList.toggle('active', NET.roomTobiMode);
+    document.getElementById('rlsModeTobiOff')?.classList.toggle('active', !NET.roomTobiMode);
     const startBtn = document.getElementById('rlsStartBtn');
     if(startBtn) startBtn.style.display = NET.conns.length>=1?'':'none';
     // Build member cards
@@ -3989,7 +4058,7 @@ function hostStartGame(){
       ability: NET.guestAbilities[i]||''
     }))
   ];
-  NET.conns.forEach((c,i)=>{if(c.open)c.send({type:'gameStart',totalPlayers:NET.conns.length+1,abilityMode:NET.roomAbilityMode,timeMode:NET.roomTimeMode,membersInfo});});
+  NET.conns.forEach((c,i)=>{if(c.open)c.send({type:'gameStart',totalPlayers:NET.conns.length+1,abilityMode:NET.roomAbilityMode,timeMode:NET.roomTimeMode,tobiMode:NET.roomTobiMode,membersInfo});});
   // ゲーム開始後はサーバーから部屋を削除する（新規参加を防ぐ）
   if(NET.roomCode) fetch('/room/'+NET.roomCode, {method:'DELETE'}).catch(()=>{});
   if(NET.roomTimeMode) G_TIME_MODE=true;
@@ -4261,6 +4330,7 @@ function onNetData(msg, senderIdx){
       numPlayers=msg.totalPlayers;
       G_ABILITY_MODE=msg.abilityMode;
       if(msg.timeMode) G_TIME_MODE=true;
+      G_TOBI_MODE = msg.tobiMode !== false; // デフォルトtrue（ランクは常にtrue）
       
       console.log('gameStart受信:', {myIdx: NET.myIdx, isHost: NET.isHost, membersInfo: msg.membersInfo});
       
@@ -4540,6 +4610,7 @@ function applyHostState(msg){
     G.players=s.players;
     numPlayers=s.numPlayers;
     pendingAction=s.pendingAction;
+    if(s.tobiMode !== undefined) G_TOBI_MODE = s.tobiMode;
     selIdx=-1;
     // Bug4修正: ゲストのPeerIDリストをホストから受け取って保持（ホスト昇格時に使用）
     if(s.guestPeerIds) NET.guestPeerIds = s.guestPeerIds;
@@ -4597,6 +4668,7 @@ function _buildStateSnapshot(extra={}){
     mineSlots:G.mineSlots,mineRinshanIdxs:G.mineRinshanIdxs,mineOwners:G.mineOwners??{},mineRinshanOwners:G.mineRinshanOwners??{},mineCount:G.mineCount,yamiSelectMode:G.yamiSelectMode,hakuSelectMode:G.hakuSelectMode,stealMode:G.stealMode,lightMode:G.lightMode,lightUserIdx:G.lightUserIdx??null,lightRevealedSlots:G.lightRevealedSlots,lightRevealedHand:G.lightRevealedHand,lightExtraDora:G.lightExtraDora??[],penDrawings:G.penDrawings??{},
     players:G.players,numPlayers,pendingAction,
     guestPeerIds:NET.guestPeerIds,
+    tobiMode:G_TOBI_MODE,
     _lastActionId:NET._lastActionId,
     ...extra
   };
@@ -4737,6 +4809,9 @@ function startOnlineGame(){
   NET._lastActionId=0;
   if(!NET.isRankMatch){
     G_ABILITY_MODE=NET.roomAbilityMode;
+    G_TOBI_MODE=NET.roomTobiMode;
+  } else {
+    G_TOBI_MODE=true; // ランクマッチは飛びあり固定
   }
   hideRoomLobby();
   document.getElementById('lobby').style.display='none';
@@ -4812,7 +4887,9 @@ function makePlayer(id,dealer){
 };
 }
 
-function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; timerStop(); _timerAutoActFired=false; _timerDebt=0;
+function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; _wallExpandInited=false; timerStop(); _timerAutoActFired=false; _timerDebt=0;
+  // ペンモードOFFにリセット（局をまたいでペン状態が残らないよう）
+  if(_penModeOn){ _penModeOn=false; window._activePenOC=null; const pb=document.getElementById('penToggleBtn');if(pb)pb.classList.remove('pen-active'); const pt=document.getElementById('penToolbarFloat');if(pt)pt.style.display='none'; const wc=document.getElementById('wallCanvas');if(wc){wc.classList.remove('pen-on');wc.classList.remove('pick-on');} const wo=document.getElementById('wallExpandOverlay');if(wo)wo.classList.remove('show'); }
   // 前局の白変換を元に戻す（players再生成前に処理）
   if(G.players){
     G.players.forEach(p=>{
@@ -5664,15 +5741,9 @@ function handleExhausted(){
   G.phase='end';
   addLog('山牌が尽きました。流局です。','log-draw');
   const tp=G.players.filter(p=>p.tenpai);
-  const np=G.players.filter(p=>!p.tenpai);
-  const POT=3000;
-  if(tp.length>0&&tp.length<numPlayers){
-    const ea=Math.floor(POT/tp.length/100)*100;
-    tp.forEach(p=>p.score+=ea);
-    np.forEach(p=>p.score-=Math.floor(POT/np.length/100)*100);
-    addLog(`テンパイ: ${tp.map(p=>p.name).join(', ')}`,'log-new');
-  }
+  if(tp.length>0) addLog(`テンパイ: ${tp.map(p=>p.name).join(', ')}`,'log-new');
   G.honba++;saveScores();renderAll();broadcastState();
+  if(checkTobi()) return;
   setTimeout(()=>advanceRound(false),2800);
 }
 
@@ -5724,6 +5795,7 @@ function handleWin(widx,winTile,isTsumo,losidx){
   G._dealerWon=w.isDealer;
   addLog(`${w.name} の${isTsumo?'ツモ':'ロン'}上がり！ ${score}点`,'log-win');
   saveScores();
+  if(checkTobi()) return; // 飛び発生 → 即終了（winModalは出さない）
   const _wmd={winnerId:w.id,hand:displayHand,winTile,isTsumo,losidx,yakus,score,han};
   showWinModal(w,displayHand,winTile,isTsumo,losidx,yakus,score,han);renderAll();
   broadcastState({winModal:_wmd});
@@ -6264,6 +6336,7 @@ function nextRound(){
   WIN_READY.proceeded = true;
   if(WIN_READY.timer){ clearInterval(WIN_READY.timer); WIN_READY.timer=null; }
   document.getElementById('winOverlay').classList.remove('show');
+  if(checkTobi())return;
   if(checkEnd())return;
   advanceRound(G._dealerWon);G._dealerWon=false;
 }
@@ -6273,6 +6346,15 @@ function advanceRound(dealerWon){
   if(G.roundNum>numPlayers){G.roundNum=1;G.roundWind=G.roundWind==='東'?'南':'東';}
   if(G.roundWind==='南'&&G.roundNum>numPlayers){showFinalResult();return;}
   startRound();
+}
+// 飛びチェック: -1000点以下のプレイヤーがいれば即終了
+function checkTobi(){
+  if(!G_TOBI_MODE) return false;
+  const tobiPlayer = G.players.find(p => p.score <= -1000);
+  if(!tobiPlayer) return false;
+  addLog(`💀 ${tobiPlayer.name} が飛び！試合終了`, 'log-win');
+  showFinalResult();
+  return true;
 }
 function checkEnd(){
   if(G.roundWind==='南'&&G.roundNum>=numPlayers){showFinalResult();return true;}
@@ -6284,16 +6366,26 @@ function showFinalResult(){
   document.getElementById('resultTable').innerHTML=sorted.map((p,i)=>
     `<tr class="${i===0?'result-winner':''}"><td>${i+1}位 ${p.name}</td><td>${p.wind}</td><td>${p.score.toLocaleString()}点</td></tr>`
   ).join('');
-  // コイン付与: 自分の順位を判定
+  // コイン付与: サーバーAPIで付与（クライアント側での増減は行わない）
   const myPlayer=G.players[NET.myIdx];
   const myRank=sorted.findIndex(p=>p===myPlayer);
   const _coinTable={2:10,3:30,4:40};
   const _firstPrize=_coinTable[numPlayers]||10;
   const earned=myRank===0?_firstPrize:0;
-  PROFILE.coins=(PROFILE.coins||0)+earned;
-  saveProfileSilent();
   const rewardEl=document.getElementById('resultCoinReward');
-  if(rewardEl) rewardEl.innerHTML=`🪙 +${earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">${myRank===0?'1位ボーナス：+'+_firstPrize+'枚':'参加報酬：+0枚'}</span>`;
+  if(earned>0){
+    fetch('/api/reward',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({rank:1,numPlayers})})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){
+        PROFILE.coins=d.coins; // サーバーの値で上書き
+        if(rewardEl) rewardEl.innerHTML=`🪙 +${d.earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">1位ボーナス：+${d.earned}枚</span>`;
+      }
+    }).catch(()=>{});
+  } else {
+    if(rewardEl) rewardEl.innerHTML=`🪙 +0 手にビコイン<br><span style="font-size:.65rem;color:#5a7a6a;">参加報酬：+0枚</span>`;
+  }
+  saveProfileSilent();
 
   // ランクマッチの場合、ホストがスコアを提出してレートを更新
   const ratingBox=document.getElementById('resultRatingBox');
@@ -6344,16 +6436,26 @@ function showFinalResultData(sorted){
     `<tr class="${i===0?'result-winner':''}"><td>${i+1}位 ${p.name}</td><td>${p.wind}</td><td>${p.score.toLocaleString()}点</td></tr>`
   ).join('');
 
-  // コイン付与（ゲスト側）
+  // コイン付与（ゲスト側）: サーバーAPIで付与
   const myPlayer = G && G.players ? G.players[NET.myIdx] : null;
   const myRank = myPlayer ? sorted.findIndex(p=>p.name===myPlayer.name) : -1;
+  const rewardEl = document.getElementById('resultCoinReward');
   const _g_coinTable={2:10,3:30,4:40};
   const _g_firstPrize=_g_coinTable[numPlayers]||10;
   const earned = myRank===0 ? _g_firstPrize : 0;
-  PROFILE.coins = (PROFILE.coins||0) + earned;
+  if(earned>0){
+    fetch('/api/reward',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({rank:1,numPlayers})})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){
+        PROFILE.coins=d.coins;
+        if(rewardEl) rewardEl.innerHTML=`🪙 +${d.earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">1位ボーナス：+${d.earned}枚</span>`;
+      }
+    }).catch(()=>{});
+  } else {
+    if(rewardEl) rewardEl.innerHTML=`🪙 +0 手にビコイン<br><span style="font-size:.65rem;color:#5a7a6a;">参加報酬：+0枚</span>`;
+  }
   saveProfileSilent();
-  const rewardEl = document.getElementById('resultCoinReward');
-  if(rewardEl) rewardEl.innerHTML=`🪙 +${earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">${myRank===0?'1位ボーナス：+'+_g_firstPrize+'枚':'参加報酬：+0枚'}</span>`;
 
   // ランクマッチ: レート変動をサーバーから取得（ホストのPOSTが完了するまで少し待つ）
   const ratingBox = document.getElementById('resultRatingBox');
@@ -6396,6 +6498,22 @@ function confirmBackToTitle(){
   document.getElementById('titleConfirmOverlay').classList.add('show');
 }
 function backToLobby(){
+  // ── ペン描画状態を完全リセット ──
+  _penModeOn = false;
+  _wallCanvasInited = false;
+  _doraCanvasInited = false;
+  _wallExpandInited = false;
+  window._activePenOC = null;
+  Object.keys(_penImgCache).forEach(k => delete _penImgCache[k]);
+  const penBtn = document.getElementById('penToggleBtn');
+  if(penBtn) penBtn.classList.remove('pen-active');
+  const penToolbar = document.getElementById('penToolbarFloat');
+  if(penToolbar) penToolbar.style.display = 'none';
+  const wc = document.getElementById('wallCanvas');
+  if(wc){ wc.classList.remove('pen-on'); wc.classList.remove('pick-on'); }
+  // 山牌拡大オーバーレイを閉じる
+  const wallOv = document.getElementById('wallExpandOverlay');
+  if(wallOv) wallOv.classList.remove('show');
   // 全オーバーレイを確実に閉じる
   document.getElementById('resultOverlay').classList.remove('show');
   document.getElementById('winOverlay').classList.remove('show');
@@ -6412,7 +6530,7 @@ function backToLobby(){
   if(NET.isHost && NET.roomCode) fetch('/room/'+NET.roomCode, {method:'DELETE'}).catch(()=>{});
   const wasRankMatch = NET.isRankMatch;
   if(NET.peer){try{NET.peer.destroy();}catch(e){} NET.peer=null;NET.conn=null;NET.conns=[];NET.online=false;}
-  NET.roomCode=null; NET.isHost=false; NET.isRankMatch=false; NET.roomTimeMode=false;
+  NET.roomCode=null; NET.isHost=false; NET.isRankMatch=false; NET.roomTimeMode=false; NET.roomTobiMode=true;
   NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
   RANK.matchId=null; RANK.connectedGuests=0;
   setOnlineStatus('');
@@ -6472,6 +6590,8 @@ function renderAll(){
   const ptb=document.getElementById('penToggleBtn');
   if(ptb) ptb.style.display=(PROFILE.ability==='pen')?'':'none';
   renderCornerAbilityBtns();
+  // 拡大オーバーレイが開いていれば更新
+  renderWallExpand();
 }
 
 // ── 同種牌ハイライト ─────────────────────────────────────────
@@ -6617,6 +6737,205 @@ const _penImgCache={}; // ペンON/OFFトグル
 let   _wallPenActive=false, _wallPenLX=0, _wallPenLY=0;
 // 各スロットの描画データ: {idx: ImageData} — canvas座標に対応
 // 描画はG.penDrawings[idx]にdataURL保存
+
+// ============================================================
+// 山牌拡大表示
+// ============================================================
+let _wallExpandInited = false;
+
+function openWallExpand(){
+  const ov = document.getElementById('wallExpandOverlay');
+  if(!ov) return;
+  // 前回のペン確定バッファをリセット（再オープン時に二重合成を防ぐ）
+  window._activePenOC = null;
+  ov.classList.add('show');
+  renderWallExpand();
+  // ペンモードON中は拡大側もペンカーソルに
+  const ec = document.getElementById('wallExpandCanvas');
+  if(ec){
+    ec.classList.toggle('pen-on', _penModeOn);
+    ec.classList.toggle('pick-on', !_penModeOn && (G.phase==='draw_wait'&&G.current===NET.myIdx || !!G.minePlantMode || G.lightMode==='pick'));
+  }
+}
+
+function closeWallExpand(e){
+  // canvas自体のクリックは閉じない（描画・ツモ操作のため）
+  if(e && e.target && e.target.id === 'wallExpandCanvas') return;
+  const ov = document.getElementById('wallExpandOverlay');
+  if(ov) ov.classList.remove('show');
+  // 確定バッファをクリア（元の卓に戻ったときに二重合成しない）
+  window._activePenOC = null;
+}
+
+function renderWallExpand(){
+  const ov = document.getElementById('wallExpandOverlay');
+  if(!ov || !ov.classList.contains('show')) return;
+  if(!G.deckSlots) return;
+
+  const ec = document.getElementById('wallExpandCanvas');
+  if(!ec) return;
+
+  // 元の wallCanvas と同じ論理サイズで計算し、画面に収まるようスケール
+  const total = G.deckSlots.length;
+  const rows  = Math.ceil(total / W_COLS);
+  const logW  = W_COLS * (W_TW + W_GAP) - W_GAP;
+  const logH  = rows  * (W_TH + W_GAP) - W_GAP;
+
+  // 利用可能領域（閉じるボタン分を除く）
+  const availW = window.innerWidth  * 0.98;
+  const availH = window.innerHeight * 0.88;
+  const scale  = Math.min(availW / logW, availH / logH);
+  const dispW  = Math.round(logW * scale);
+  const dispH  = Math.round(logH * scale);
+
+  // CSS表示サイズを設定（論理サイズは元の wallCanvas と同じ → 同じ renderWall ロジックで描ける）
+  ec.style.width  = dispW + 'px';
+  ec.style.height = dispH + 'px';
+  ec.width  = logW;
+  ec.height = logH;
+
+  // wallCanvas と完全に同じ描画ロジックを流用
+  // 一時的に wallCanvas を ec に差し替えて renderWall を呼ぶ
+  const origCanvas = document.getElementById('wallCanvas');
+  if(!origCanvas) return;
+
+  // 元の wallCanvas の id を退避して ec を wallCanvas として使わせる
+  origCanvas.id = '_wallCanvas_bak';
+  ec.id = 'wallCanvas';
+  // _wallCanvasInited をリセットしてイベント再登録しないようにする
+  const savedInited = _wallCanvasInited;
+  _wallCanvasInited = true; // イベント登録スキップ（拡大canvas は別途登録）
+  renderWall();
+  // 元に戻す
+  ec.id = 'wallExpandCanvas';
+  origCanvas.id = 'wallCanvas';
+  _wallCanvasInited = savedInited;
+
+  // 拡大canvas のインタラクション設定（初回のみ）
+  if(!_wallExpandInited){
+    _wallExpandInited = true;
+    _initWallExpandEvents(ec);
+  }
+
+  // カーソル更新
+  ec.classList.toggle('pen-on', _penModeOn);
+  const canInteract = !_penModeOn && (
+    (G.phase==='draw_wait' && G.current===NET.myIdx) ||
+    !!G.minePlantMode ||
+    G.lightMode==='pick'
+  );
+  ec.classList.toggle('pick-on', canInteract);
+}
+
+function _initWallExpandEvents(ec){
+  const getPos = (e) => {
+    const rect = ec.getBoundingClientRect();
+    const pt   = e.touches ? e.touches[0] : e;
+    const scaleX = ec.width  / rect.width;
+    const scaleY = ec.height / rect.height;
+    return {
+      x: (pt.clientX - rect.left) * scaleX,
+      y: (pt.clientY - rect.top)  * scaleY,
+    };
+  };
+
+  // ── ペン描き込み ──────────────────────────────────────
+  let _epActive = false, _epLX = 0, _epLY = 0, _epSlots = new Set();
+  // _epOC: ストローク中のリアルタイム描画バッファ
+  // _epCommitted: 確定済み全ストロークの累積バッファ（消去しない）
+  let _epOC = null;
+  let _epCommitted = null; // ← ストローク完了後も保持する確定バッファ
+
+  // 確定バッファを初期化（サイズ変更時も対応）
+  function _ensureCommitted(){
+    if(!_epCommitted || _epCommitted.width !== ec.width){
+      _epCommitted = document.createElement('canvas');
+      _epCommitted.width = ec.width;
+      _epCommitted.height = ec.height;
+    }
+  }
+
+  const epDown = (e) => {
+    if(!_penModeOn) return;
+    e.preventDefault(); e.stopPropagation();
+    _epActive = true; _epSlots.clear();
+    const p = getPos(e); _epLX = p.x; _epLY = p.y;
+    _ensureCommitted();
+    if(!_epOC || _epOC.width !== ec.width){
+      _epOC = document.createElement('canvas');
+      _epOC.width = ec.width; _epOC.height = ec.height;
+      // 確定済み内容を引き継ぐ
+      _epOC.getContext('2d').drawImage(_epCommitted, 0, 0);
+    }
+    window._activePenOC = _epOC;
+    const ctx = _epOC.getContext('2d');
+    ctx.strokeStyle = ctx.fillStyle = _penColor; ctx.lineWidth = _penSize;
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.arc(p.x, p.y, ctx.lineWidth/2, 0, Math.PI*2); ctx.fill();
+    const si = _wallSlotAt(p.x, p.y); if(si >= 0) _epSlots.add(si);
+    renderWallExpand();
+  };
+  const epMove = (e) => {
+    if(!_penModeOn || !_epActive) return;
+    e.preventDefault(); e.stopPropagation();
+    const p = getPos(e);
+    if(!_epOC) return;
+    const ctx = _epOC.getContext('2d');
+    ctx.strokeStyle = _penColor; ctx.lineWidth = _penSize;
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(_epLX, _epLY); ctx.lineTo(p.x, p.y); ctx.stroke();
+    _epLX = p.x; _epLY = p.y;
+    const si = _wallSlotAt(p.x, p.y); if(si >= 0) _epSlots.add(si);
+    renderWallExpand();
+  };
+  const epUp = (e) => {
+    if(!_penModeOn || !_epActive) return;
+    e.preventDefault(); e.stopPropagation();
+    _epActive = false;
+
+    // 確定バッファに今のストロークを合成してから保存
+    _ensureCommitted();
+    if(_epOC){
+      _epCommitted.getContext('2d').drawImage(_epOC, 0, 0);
+    }
+
+    // G.penDrawings と _penImgCache に保存
+    _saveWallPenDrawingsFromOC(_epOC, _epSlots);
+
+    // ★ _activePenOC を確定バッファに差し替えて null にしない
+    //   → renderWall/_renderWallExpand が確定済み絵を描き続ける
+    window._activePenOC = _epCommitted;
+
+    _epOC = null;
+    _epSlots = new Set();
+    renderWallExpand();
+    renderWall(); // 元の卓も更新
+  };
+
+  // ── クリック（ツモ・地雷等）──────────────────────────
+  const epClick = (e) => {
+    if(_penModeOn) return;
+    e.stopPropagation(); // overlay の closeWallExpand を止める
+    const p   = getPos(e);
+    const si  = _wallSlotAt(p.x, p.y);
+    if(si < 0 || G.deckSlots[si] === null) return;
+    if(G.minePlantMode){ plantMine(si); renderWallExpand(); }
+    else if(G.lightMode === 'pick'){ lightRevealWall(si); renderWallExpand(); }
+    else if(G.phase === 'draw_wait' && G.current === NET.myIdx){
+      humanPickWall(si);
+      closeWallExpand(); // ツモったら閉じる
+    }
+  };
+
+  ec.addEventListener('mousedown',  epDown);
+  ec.addEventListener('mousemove',  epMove);
+  ec.addEventListener('mouseup',    epUp);
+  ec.addEventListener('mouseleave', (e) => { if(_epActive) epUp(e); });
+  ec.addEventListener('touchstart', epDown, {passive:false});
+  ec.addEventListener('touchmove',  epMove, {passive:false});
+  ec.addEventListener('touchend',   epUp,   {passive:false});
+  ec.addEventListener('click',      epClick);
+}
 
 function togglePenMode(){
   _penModeOn=!_penModeOn;
@@ -8040,6 +8359,7 @@ function _doSteal(myIdx,fromPidx,discardIdx){
 let PROFILE = {name:'プレイヤー', ability:'', abilities:[], totalPulls:0, coins:0};
 let G_ABILITY_MODE = true; // 能力あり/なし
 let G_TIME_MODE    = false; // 制限時間モード
+let G_TOBI_MODE    = true;  // 飛びあり/なし（-1000点以下で即終了）
 
 function _applyProfile(){
   // ペン能力は最初から所持
@@ -8298,31 +8618,75 @@ function pullOnce(){
   return result;
 }
 
+// サーバーから返ってきたガチャ結果をアニメーション関数用に変換
+function _convertSvrResult(r) {
+  const rd = RARITY_TABLE.find(x => x.rarity === r.rarity) || RARITY_TABLE[3];
+  const res = { rarity: r.rarity, rd };
+  if (r.rarity === 'legend') {
+    res.ability  = { icon: r.abilityIcon, name: r.abilityName, tag: r.abilityTag, key: r.abilityKey };
+    res.isNew    = r.isNewAbility;
+  } else {
+    res.label = r.label || rd.label;
+  }
+  if (r.iconId) {
+    const info = GACHA_ICONS.find(i => i.id === r.iconId);
+    res.icon      = info || { id: r.iconId, label: r.iconId };
+    res.iconIsNew = r.iconIsNew;
+  }
+  return res;
+}
+
 function doPull10(){
   if((PROFILE.coins||0)<10){
-    // コイン不足アラート
     const el=document.getElementById('gachaCoinDisplay');
     if(el){el.style.color='#ff4444';setTimeout(()=>{el.style.color='var(--gold)';},600);}
     const btn=document.querySelector('.gacha-pull-10');
     if(btn){btn.style.boxShadow='0 0 12px #ff444488';setTimeout(()=>{btn.style.boxShadow='';},600);}
     return;
   }
-  PROFILE.coins-=10;
-  const results = Array.from({length:10}, ()=>pullOnce());
-  saveProfileSilent();
-  showGachaAnim10(results);
-  renderGachaCollection();
-  updateGachaStat();
-  updateGachaCoinDisplay();
+  fetch('/api/gacha',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({pullType:'pull10'})})
+  .then(r=>r.json()).then(d=>{
+    if(!d.ok){
+      const el=document.getElementById('gachaCoinDisplay');
+      if(el){el.style.color='#ff4444';setTimeout(()=>{el.style.color='var(--gold)';},600);}
+      return;
+    }
+    // サーバーの最新データでローカルを上書き
+    PROFILE.coins      = d.coins;
+    PROFILE.totalPulls = d.totalPulls;
+    PROFILE.abilities  = d.abilities;
+    PROFILE.gachaIcons = d.gachaIcons;
+    const results = d.results.map(_convertSvrResult);
+    saveProfileSilent();
+    showGachaAnim10(results);
+    renderGachaCollection();
+    updateGachaStat();
+    updateGachaCoinDisplay();
+  }).catch(()=>{});
 }
 
 function doPull1(){
-  const res = pullOnce();
-  saveProfileSilent();
-  showGachaAnim1(res);
-  renderGachaCollection();
-  updateGachaStat();
-  updateGachaCoinDisplay();
+  if((PROFILE.coins||0)<1){
+    const el=document.getElementById('gachaCoinDisplay');
+    if(el){el.style.color='#ff4444';setTimeout(()=>{el.style.color='var(--gold)';},600);}
+    return;
+  }
+  fetch('/api/gacha',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({pullType:'pull1'})})
+  .then(r=>r.json()).then(d=>{
+    if(!d.ok) return;
+    PROFILE.coins      = d.coins;
+    PROFILE.totalPulls = d.totalPulls;
+    PROFILE.abilities  = d.abilities;
+    PROFILE.gachaIcons = d.gachaIcons;
+    const res = _convertSvrResult(d.results[0]);
+    saveProfileSilent();
+    showGachaAnim1(res);
+    renderGachaCollection();
+    updateGachaStat();
+    updateGachaCoinDisplay();
+  }).catch(()=>{});
 }
 
 function showGachaAnim1(res){
@@ -8476,14 +8840,12 @@ function closeGacha(){
 function saveProfileSilent(){
   try{ localStorage.setItem('mjProfile',JSON.stringify(PROFILE)); }catch(e){}
   updateProfileBadge();
-  // サーバー（Neon PostgreSQL）にも保存
+  // サーバー（Neon PostgreSQL）に保存（coins/totalPullsはサーバー管理のため送信しない）
   fetch('/api/profile',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
-      coins:      PROFILE.coins,
       abilities:  PROFILE.abilities,
-      totalPulls: PROFILE.totalPulls,
       gachaIcons: PROFILE.gachaIcons||[],
       iconId:     PROFILE.iconId||'',
       ability:    PROFILE.ability||'',
@@ -8596,14 +8958,7 @@ function renderShop(){
   });
 }
 function shopPull1(){
-  if((PROFILE.coins||0)<1){
-    _shopToast('🪙 コインが足りません！対局で獲得できます。'); return;
-  }
-  PROFILE.coins-=1;
-  saveProfileSilent();
-  updateShopCoinDisplay();
-  updateGachaCoinDisplay();
-  // ガチャを1回実行してgachaAnimで表示
+  // doPull1() 内でサーバーAPI経由のコイン消費が行われるため、ここでは遷移のみ
   closeShop();
   document.getElementById('gachaScreen').classList.add('active');
   updateGachaCoinDisplay();
@@ -8615,14 +8970,21 @@ function buyAbility(key){
   }
   const owned=PROFILE.abilities||[];
   if(owned.includes(key)){ _shopToast('すでに所持しています'); return; }
-  PROFILE.coins-=SHOP_AB_COST;
-  if(!PROFILE.abilities) PROFILE.abilities=[];
-  PROFILE.abilities.push(key);
-  saveProfileSilent();
-  renderShop();
-  updateGachaCoinDisplay();
-  const ab=SHOP_ABILITIES.find(a=>a.key===key);
-  _shopToast(`${ab?ab.icon:'⚡'} ${ab?ab.name:key} を解放しました！`);
+  fetch('/api/gacha',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({pullType:'shop_ability', abilityKey:key})})
+  .then(r=>r.json()).then(d=>{
+    if(!d.ok){ _shopToast(d.error||'コインが不足しています'); return; }
+    PROFILE.coins      = d.coins;
+    PROFILE.abilities  = d.abilities;
+    PROFILE.gachaIcons = d.gachaIcons;
+    saveProfileSilent();
+    renderShop();
+    updateGachaCoinDisplay();
+    const ab=SHOP_ABILITIES.find(a=>a.key===key);
+    _shopToast(`${ab?ab.icon:'⚡'} ${ab?ab.name:key} を解放しました！`);
+  }).catch(()=>{
+    _shopToast('エラーが発生しました。もう一度お試しください。');
+  });
 }
 function _shopToast(msg){
   let t=document.getElementById('shopToast');

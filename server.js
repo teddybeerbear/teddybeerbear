@@ -177,32 +177,121 @@ app.get("/api/profile", requireAuth, async (req, res) => {
 // ── コイン付与ルール（サーバー側で検証） ─────────────────────────
 // ガチャ消費: pull10=10枚, pull1=1枚, shop_ability=100枚
 const GACHA_COST = { pull10: 10, pull1: 1, shop_ability: 100 };
-// 対局1位報酬（numPlayers別）
 const REWARD_TABLE = { 2: 10, 3: 30, 4: 40 };
-// 能力ホワイトリスト
 const VALID_ABILITIES = ["mine","light","yami","haku","sanctuary","pinzu","steal","pen"];
 
-// POST /api/gacha — ガチャ消費（コイン減算のみサーバーで管理）
+// ── サーバー側ガチャロジック ──────────────────────────────────────
+const GACHA_ABILITIES_SVR = [
+  { key:"yami",      icon:"🌑", name:"闇",        tag:"撹乱系" },
+  { key:"sanctuary", icon:"🏛️", name:"聖域",      tag:"防御系" },
+  { key:"steal",     icon:"🃏", name:"スチール",  tag:"奪取系" },
+  { key:"pinzu",     icon:"🔵", name:"ピンズー教", tag:"情報系" },
+];
+const GACHA_ICONS_SVR = [
+  ...Array.from({length:9},  (_,i) => ({ id:`C${String(i+1).padStart(2,"0")}`, rarity:"normal" })),
+  ...Array.from({length:15}, (_,i) => ({ id:`R${String(i+1).padStart(2,"0")}`, rarity:"rare"   })),
+  ...Array.from({length:7},  (_,i) => ({ id:`E${String(i+1).padStart(2,"0")}`, rarity:"epic"   })),
+  ...Array.from({length:3},  (_,i) => ({ id:`L${String(i+1).padStart(2,"0")}`, rarity:"legend" })),
+];
+
+function serverRollRarity() {
+  const r = Math.random();
+  if (r < 0.001) return "legend";
+  if (r < 0.011) return "epic";
+  if (r < 0.111) return "rare";
+  return "normal";
+}
+
+function serverPullOnce(ownedAbilities, ownedIcons) {
+  const rarity = serverRollRarity();
+  const result = { rarity };
+  if (rarity === "legend") {
+    const ab = GACHA_ABILITIES_SVR[Math.floor(Math.random() * GACHA_ABILITIES_SVR.length)];
+    result.abilityKey   = ab.key;
+    result.abilityName  = ab.name;
+    result.abilityIcon  = ab.icon;
+    result.abilityTag   = ab.tag;
+    result.isNewAbility = !ownedAbilities.includes(ab.key);
+    if (result.isNewAbility) ownedAbilities.push(ab.key);
+  }
+  const available = GACHA_ICONS_SVR.filter(i => i.rarity === rarity);
+  if (available.length > 0) {
+    const icon = available[Math.floor(Math.random() * available.length)];
+    result.iconId    = icon.id;
+    result.iconIsNew = !ownedIcons.includes(icon.id);
+    if (result.iconIsNew) ownedIcons.push(icon.id);
+  }
+  return result;
+}
+
+// POST /api/gacha — コイン消費・ロール・DB保存を全てサーバーで実施
 app.post("/api/gacha", requireAuth, async (req, res) => {
-  const { pullType } = req.body; // "pull10" | "pull1"
+  const { pullType } = req.body;
   const cost = GACHA_COST[pullType];
   if (!cost) return res.status(400).json({ error: "不正なガチャ種別です" });
   const uid = req.user.id;
+  // shop_ability は1回分として扱う。abilityKey の検証
+  const isShopAbility = pullType === "shop_ability";
+  const { abilityKey } = req.body;
+  if (isShopAbility && !VALID_ABILITIES.includes(abilityKey))
+    return res.status(400).json({ error: "不正な能力キーです" });
+  const pullCount = pullType === "pull10" ? 10 : 1;
   try {
+    // コイン減算（残高チェック付き）＆現在の abilities/gacha_icons を取得
     const r = await pool.query(
-      `UPDATE user_profiles SET coins = coins - $2, total_pulls = total_pulls + $3, updated_at = NOW()
+      `UPDATE user_profiles
+         SET coins = coins - $2,
+             total_pulls = total_pulls + $3,
+             updated_at = NOW()
        WHERE google_id = $1 AND coins >= $2
-       RETURNING coins, total_pulls`,
-      [uid, cost, pullType === "pull10" ? 10 : 1]
+       RETURNING coins, total_pulls, abilities, gacha_icons`,
+      [uid, cost, pullCount]
     );
     if (r.rowCount === 0)
       return res.status(402).json({ error: "コインが不足しています" });
-    res.json({ ok: true, coins: r.rows[0].coins, totalPulls: r.rows[0].total_pulls });
+
+    const row = r.rows[0];
+    const ownedAbilities = JSON.parse(row.abilities || "[]");
+    const ownedIcons     = JSON.parse(row.gacha_icons || "[]");
+
+    let results;
+    if (isShopAbility) {
+      // ショップ直接購入: 指定能力を追加（ランダムロールなし）
+      const isNew = !ownedAbilities.includes(abilityKey);
+      if (isNew) ownedAbilities.push(abilityKey);
+      results = [{ rarity: "legend", abilityKey, isNewAbility: isNew }];
+    } else {
+      // 通常ガチャ: サーバー側でロール
+      results = [];
+      for (let i = 0; i < pullCount; i++) {
+        results.push(serverPullOnce(ownedAbilities, ownedIcons));
+      }
+    }
+
+    // 取得した能力・アイコンをDBに保存
+    await pool.query(
+      `UPDATE user_profiles
+         SET abilities   = $2,
+             gacha_icons = $3,
+             updated_at  = NOW()
+       WHERE google_id = $1`,
+      [uid, JSON.stringify(ownedAbilities), JSON.stringify(ownedIcons)]
+    );
+
+    res.json({
+      ok: true,
+      results,
+      coins:      row.coins,
+      totalPulls: row.total_pulls,
+      abilities:  ownedAbilities,
+      gachaIcons: ownedIcons,
+    });
   } catch (err) {
-    console.error("ガチャ消費エラー:", err.message);
+    console.error("ガチャエラー:", err.message);
     res.status(500).json({ error: "DB エラー" });
   }
 });
+
 
 // POST /api/reward — 対局報酬（1位のみ・numPlayersをサーバーで検証）
 app.post("/api/reward", requireAuth, async (req, res) => {
