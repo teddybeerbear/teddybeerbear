@@ -5174,22 +5174,17 @@ function canAnkan(pidx){
   const result=[];
   for(const[k,v] of Object.entries(cnt)){
     if(v>=4){
-      // リーチ中の場合: 暗槓後もテンパイ形・待ちが変わらないかチェック
       if(p.riichi){
-        const[s,n]=k.split('_');
-        const kTile=mt(s,isNaN(n)?n:+n);
-        const after=p.hand.filter(t=>!teq(t,kTile));
-        // 待ちが同じかチェック (4枚除いた後1枚=残り手牌1枚 → 単騎のみ)
-        // 5枚手牌で4枚同じ → 残り1枚が単騎待ち、待ち変化なしなら可
-        if(after.length===1){
-          const newWaits=getWaits(after); // 1枚だと getWaits fails (need 4)
-          // 実際は暗槓後手牌1枚+嶺上で5枚になるので常に変化あり
-          // リーチ中暗槓: 待ちが変わらない = 同じ待ち牌が維持される
-          const oldWaits=p.waits;
-          // 5枚→4枚(除く4枚)→嶺上1枚追加で5枚に戻る
-          // 待ちは変わらない（単騎待ちはそのまま）
-          // → 許可
-        }
+        // リーチ中の暗槓: 以下を両方満たす場合のみ許可
+        // 1. ツモ牌が暗槓対象と同じ牌（手出しでないこと）
+        // 2. 暗槓後の待ちが現在の待ちと完全一致（待ち変化なし）
+        if(!p.drawnTile||tk(p.drawnTile)!==k) continue;
+        const afterHand=p.hand.filter(t=>tk(t)!==k);
+        const newWaits=getWaits(afterHand);
+        const oldSet=new Set((p.waits||[]).map(t=>tk(t)));
+        const newSet=new Set(newWaits.map(t=>tk(t)));
+        const sameWaits=oldSet.size===newSet.size&&[...oldSet].every(w=>newSet.has(w));
+        if(!sameWaits) continue;
         result.push({key:k,tile:p.hand.find(t=>tk(t)===k)});
       } else {
         result.push({key:k,tile:p.hand.find(t=>tk(t)===k)});
