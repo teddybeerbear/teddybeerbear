@@ -37,7 +37,7 @@ async function initDB() {
         google_id    TEXT PRIMARY KEY,
         name         TEXT,
         email        TEXT,
-        coins        INTEGER NOT NULL DEFAULT 0,
+        coins        INTEGER NOT NULL DEFAULT 10000,
         abilities    TEXT NOT NULL DEFAULT '[]',
         total_pulls  INTEGER NOT NULL DEFAULT 0,
         gacha_icons  TEXT NOT NULL DEFAULT '[]',
@@ -46,17 +46,17 @@ async function initDB() {
         updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    console.log("✓ DBテーブル（user_profiles）準備完了");
-    
-    // ランク用レーティングテーブル
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS user_ratings (
-        google_id    TEXT PRIMARY KEY,
-        rating       INTEGER NOT NULL DEFAULT 1500,
-        updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      CREATE TABLE IF NOT EXISTS rank_ratings (
+        google_id   TEXT PRIMARY KEY,
+        name        TEXT NOT NULL DEFAULT '',
+        rating      INTEGER NOT NULL DEFAULT 1500,
+        wins        INTEGER NOT NULL DEFAULT 0,
+        games       INTEGER NOT NULL DEFAULT 0,
+        updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    console.log("✓ DBテーブル（user_ratings）準備完了");
+    console.log("✓ DBテーブル準備完了");
   } catch (err) {
     console.error("✗ DBテーブル作成失敗:", err.message);
   }
@@ -149,7 +149,7 @@ app.get("/api/profile", requireAuth, async (req, res) => {
         [uid, req.user.name, req.user.email]
       );
       return res.json({
-        coins: 0,
+        coins: 10000,
         abilities: [],
         totalPulls: 0,
         gachaIcons: [],
@@ -196,7 +196,7 @@ app.post("/api/profile", requireAuth, async (req, res) => {
         uid,
         name || req.user.name,
         req.user.email,
-        coins ?? 0,
+        coins ?? 10000,
         JSON.stringify(abilities ?? []),
         totalPulls ?? 0,
         JSON.stringify(gachaIcons ?? []),
@@ -209,198 +209,6 @@ app.post("/api/profile", requireAuth, async (req, res) => {
     console.error("プロフィール保存エラー:", err.message);
     res.status(500).json({ error: "DB エラー" });
   }
-});
-
-// ── ランクマッチング（3人制） ──────────────────────────────────────
-const rankQueue = []; // { peerId, name, rating, joinedAt }
-const rankMatches = new Map(); // matchId -> { hostPeerId, hostIdx, guests: [], createdAt }
-const RANK_MATCH_TTL_MS = 5 * 60 * 1000; // 5分
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [matchId, match] of rankMatches.entries()) {
-    if (now - match.createdAt > RANK_MATCH_TTL_MS) {
-      rankMatches.delete(matchId);
-      console.log(`ランクマッチ ${matchId} を期限切れで削除`);
-    }
-  }
-}, 60 * 1000);
-
-// レート取得
-app.get("/rank/my-rating", requireAuth, async (req, res) => {
-  const uid = req.user.id;
-  try {
-    const result = await pool.query(
-      "SELECT rating FROM user_ratings WHERE google_id = $1",
-      [uid]
-    );
-    if (result.rows.length === 0) {
-      // 初回: デフォルトレート 1500
-      await pool.query(
-        `INSERT INTO user_ratings (google_id, rating)
-         VALUES ($1, 1500)
-         ON CONFLICT (google_id) DO NOTHING`,
-        [uid]
-      );
-      return res.json({ rating: 1500 });
-    }
-    res.json({ rating: result.rows[0].rating });
-  } catch (err) {
-    console.error("レート取得エラー:", err.message);
-    res.json({ rating: 1500 }); // エラー時はデフォルト
-  }
-});
-
-// ランクマッチキューに参加
-app.post("/rank/join", requireAuth, (req, res) => {
-  try {
-    const { peerId } = req.body;
-    const googleId = req.user.id;
-    const name = req.user.name || "プレイヤー";
-    
-    if (!peerId) {
-      return res.status(400).json({ error: "peerId は必須です" });
-    }
-
-    // すでにキューに入っている場合はスキップ
-    const alreadyQueued = rankQueue.find(q => q.googleId === googleId);
-    if (alreadyQueued) {
-      // 既に参加済みの場合、キューサイズを返す
-      return res.json({
-        matched: false,
-        queueSize: rankQueue.length,
-        alreadyQueued: true,
-      });
-    }
-
-    // キューに追加
-    rankQueue.push({
-      peerId,
-      googleId,
-      name,
-      rating: 1500, // 仮のレート値
-      joinedAt: Date.now(),
-    });
-
-    console.log(`ランクキュー参加: ${name} (${peerId}), キュー人数: ${rankQueue.length}`);
-
-    // 3人揃ったかチェック
-    if (rankQueue.length >= 3) {
-      const matched = rankQueue.splice(0, 3); // 3人取り出す
-      const matchId = `match-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-      
-      // マッチ情報を保存
-      rankMatches.set(matchId, {
-        hostPeerId: matched[0].peerId,
-        hostGoogleId: matched[0].googleId,
-        hostIdx: 0,
-        members: matched.map((m, idx) => ({
-          peerId: m.peerId,
-          googleId: m.googleId,
-          name: m.name,
-          rating: m.rating,
-          idx: idx,
-        })),
-        createdAt: Date.now(),
-      });
-
-      console.log(`ランクマッチ成立: ${matchId}`, matched.map(m => m.name));
-
-      // ホスト（最初の人）にはisHost=trueで返す
-      if (matched[0].googleId === googleId) {
-        return res.json({
-          matched: true,
-          matchId,
-          isHost: true,
-          myIdx: 0,
-          hostPeerId: matched[0].peerId,
-          myRating: matched[0].rating,
-          opponents: [
-            { name: matched[1].name, rating: matched[1].rating },
-            { name: matched[2].name, rating: matched[2].rating },
-          ],
-        });
-      } else {
-        // ゲスト（2番目、3番目の人）にもマッチ情報を返す
-        const myIdx = matched.findIndex(m => m.googleId === googleId);
-        return res.json({
-          matched: true,
-          matchId,
-          isHost: false,
-          myIdx: myIdx,
-          hostPeerId: matched[0].peerId,
-          myRating: matched[myIdx].rating,
-          opponents: matched.filter((_, i) => i !== myIdx).map(m => ({
-            name: m.name,
-            rating: m.rating,
-          })),
-        });
-      }
-    }
-
-    // 3人未満: マッチ待機
-    res.json({
-      matched: false,
-      queueSize: rankQueue.length,
-    });
-  } catch (err) {
-    console.error("/rank/join エラー:", err.message);
-    res.status(500).json({ error: "サーバーエラー: " + err.message });
-  }
-});
-
-// ランクマッチ状態をポーリング
-app.get("/rank/status", requireAuth, (req, res) => {
-  try {
-    const googleId = req.user.id;
-    
-    // このユーザーがマッチしているか確認
-    for (const [matchId, match] of rankMatches.entries()) {
-      const member = match.members.find(m => m.googleId === googleId);
-      if (member) {
-        // マッチ成立！
-        return res.json({
-          matched: true,
-          matchId,
-          isHost: match.hostGoogleId === googleId,
-          myIdx: member.idx,
-          hostPeerId: match.hostPeerId,
-          myRating: member.rating,
-          opponents: match.members.filter(m => m.googleId !== googleId).map(m => ({
-            name: m.name,
-            rating: m.rating,
-          })),
-        });
-      }
-    }
-    
-    // マッチしていない場合はキューサイズを返す
-    res.json({
-      matched: false,
-      queueSize: rankQueue.length,
-    });
-  } catch (err) {
-    console.error("/rank/status エラー:", err.message);
-    res.json({
-      matched: false,
-      queueSize: rankQueue.length,
-    });
-  }
-});
-
-// ランクマッチキューから削除
-app.delete("/rank/cancel", requireAuth, (req, res) => {
-  const idx = rankQueue.findIndex(q => q.googleId === req.user.id);
-  if (idx >= 0) {
-    rankQueue.splice(idx, 1);
-    console.log(`ランクキューキャンセル: ${req.user.name}, 残り: ${rankQueue.length}`);
-  }
-  res.json({ ok: true });
-});
-
-// ランクマッチ完了（ゲーム終了時）
-app.delete("/rank/done", requireAuth, (req, res) => {
-  res.json({ ok: true });
 });
 
 // ── ルームマッチング ─────────────────────────────────────────────
@@ -447,7 +255,232 @@ app.delete("/room/:code", requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── ページ ───────────────────────────────────────────────────────
+// ── ランクマッチ ─────────────────────────────────────────────────
+// キュー: Map<googleId, {googleId, peerId, name, rating, joinedAt}>
+const rankQueue = new Map();
+// マッチ中: Map<matchId, {matchId, players:[{googleId,peerId,name,rating}], scores, changes, createdAt}>
+const rankMatches = new Map();
+// googleId → matchId の逆引き（マッチ中かどうか確認用）
+const playerMatchId = new Map();
+
+const RANK_MATCH_TTL = 60 * 60 * 1000; // 1時間でマッチデータ破棄
+
+// 古いマッチデータを定期削除
+setInterval(() => {
+  const now = Date.now();
+  for (const [mid, m] of rankMatches.entries()) {
+    if (now - m.createdAt > RANK_MATCH_TTL) {
+      m.players.forEach(p => playerMatchId.delete(p.googleId));
+      rankMatches.delete(mid);
+    }
+  }
+}, 5 * 60 * 1000);
+
+// レーティング取得（なければ1500で初期化して返す）
+async function getOrCreateRating(googleId, name) {
+  const r = await pool.query(
+    `INSERT INTO rank_ratings (google_id, name, rating)
+     VALUES ($1, $2, 1500)
+     ON CONFLICT (google_id) DO UPDATE SET
+       name = EXCLUDED.name,
+       updated_at = NOW()
+     RETURNING rating, wins, games`,
+    [googleId, name || ""]
+  );
+  return r.rows[0];
+}
+
+// レーティング変動計算
+// players: [{googleId, name, rating}] (プレイヤーインデックス順)
+// scores:  [score0, score1, score2]
+function calcRatingChanges(players, scores) {
+  // 順位付け（同点は先のインデックスが上位）
+  const indexed = players.map((p, i) => ({ ...p, score: scores[i], origIdx: i }));
+  indexed.sort((a, b) => b.score - a.score || a.origIdx - b.origIdx);
+
+  // 基礎点: 1位+30, 2位 0, 3位-30
+  const BASE = [30, 0, -30];
+
+  return indexed.map((p, rank) => {
+    // 相手2人の平均レート
+    const opponentAvgRating =
+      (indexed.reduce((s, op) => s + op.rating, 0) - p.rating) / 2;
+    // レート差補正: ±400差で±10点。格上に勝つほど得、格下に負けるほど損
+    const diff = Math.max(-400, Math.min(400, opponentAvgRating - p.rating));
+    const adjustment = Math.round((diff / 400) * 10);
+    const change = BASE[rank] + adjustment;
+    const after = Math.max(0, p.rating + change);
+    return {
+      googleId: p.googleId,
+      name: p.name,
+      rank: rank + 1,
+      score: p.score,
+      before: p.rating,
+      change,
+      after,
+    };
+  });
+}
+
+// GET /rank/my-rating — 自分のレート取得
+app.get("/rank/my-rating", requireAuth, async (req, res) => {
+  try {
+    const row = await getOrCreateRating(req.user.id, req.user.name);
+    res.json({ rating: row.rating, wins: row.wins, games: row.games });
+  } catch (err) {
+    console.error("my-rating エラー:", err.message);
+    res.status(500).json({ error: "DB エラー" });
+  }
+});
+
+// POST /rank/join — キューに参加。3人揃ったらマッチング成立
+app.post("/rank/join", requireAuth, async (req, res) => {
+  const { peerId } = req.body;
+  if (!peerId) return res.status(400).json({ error: "peerId が必要です" });
+
+  const googleId = req.user.id;
+  const name = req.user.name || "プレイヤー";
+
+  // 既存マッチ中なら再通知
+  const existingMatchId = playerMatchId.get(googleId);
+  if (existingMatchId) {
+    const m = rankMatches.get(existingMatchId);
+    if (m) {
+      const me = m.players.find(p => p.googleId === googleId);
+      return res.json(_buildMatchResponse(m, googleId));
+    }
+    playerMatchId.delete(googleId);
+  }
+
+  // レート取得
+  let rating = 1500;
+  try {
+    const row = await getOrCreateRating(googleId, name);
+    rating = row.rating;
+  } catch (e) { /* fallback to 1500 */ }
+
+  // キューに追加（重複は上書き）
+  rankQueue.set(googleId, { googleId, peerId, name, rating, joinedAt: Date.now() });
+  console.log(`ランクキュー参加: ${name} (rating:${rating}) 現在${rankQueue.size}人`);
+
+  // 3人揃ったらマッチング
+  if (rankQueue.size >= 3) {
+    const entries = Array.from(rankQueue.values()).slice(0, 3);
+    entries.forEach(e => rankQueue.delete(e.googleId));
+
+    const matchId = "rm-" + Date.now() + "-" + Math.floor(Math.random() * 9999);
+    const match = {
+      matchId,
+      players: entries, // index 0 がホスト
+      scores: null,
+      changes: null,
+      createdAt: Date.now(),
+    };
+    rankMatches.set(matchId, match);
+    entries.forEach(e => playerMatchId.set(e.googleId, matchId));
+
+    console.log(`マッチング成立: ${matchId} — ${entries.map(e => e.name).join(", ")}`);
+    return res.json(_buildMatchResponse(match, googleId));
+  }
+
+  res.json({ matched: false, queueSize: rankQueue.size });
+});
+
+// GET /rank/status — マッチング状況ポーリング
+app.get("/rank/status", requireAuth, async (req, res) => {
+  const googleId = req.user.id;
+
+  // マッチ成立済み？
+  const matchId = playerMatchId.get(googleId);
+  if (matchId) {
+    const m = rankMatches.get(matchId);
+    if (m) return res.json(_buildMatchResponse(m, googleId));
+    playerMatchId.delete(googleId);
+  }
+
+  // まだキュー待ち
+  const inQueue = rankQueue.has(googleId);
+  res.json({ matched: false, queueSize: rankQueue.size, inQueue });
+});
+
+// DELETE /rank/cancel — キューから離脱
+app.delete("/rank/cancel", requireAuth, (req, res) => {
+  rankQueue.delete(req.user.id);
+  res.json({ ok: true });
+});
+
+// DELETE /rank/done — マッチ情報をキューから削除（ゲーム開始後に呼ぶ）
+app.delete("/rank/done", requireAuth, (req, res) => {
+  // playerMatchId は結果提出まで残す
+  rankQueue.delete(req.user.id);
+  res.json({ ok: true });
+});
+
+// POST /rank/result — ホストがスコアを提出 → レーティング更新
+app.post("/rank/result", requireAuth, async (req, res) => {
+  const { matchId, scores } = req.body;
+  if (!matchId || !Array.isArray(scores) || scores.length !== 3)
+    return res.status(400).json({ error: "matchId と scores[3] が必要です" });
+
+  const match = rankMatches.get(matchId);
+  if (!match) return res.status(404).json({ error: "マッチが見つかりません" });
+  if (match.changes) return res.json({ ok: true, changes: match.changes }); // 二重提出防止
+
+  const changes = calcRatingChanges(match.players, scores);
+
+  // DB更新
+  try {
+    for (const c of changes) {
+      await pool.query(
+        `INSERT INTO rank_ratings (google_id, name, rating, wins, games, updated_at)
+         VALUES ($1, $2, $3, $4, 1, NOW())
+         ON CONFLICT (google_id) DO UPDATE SET
+           name       = EXCLUDED.name,
+           rating     = EXCLUDED.rating,
+           wins       = rank_ratings.wins + $4,
+           games      = rank_ratings.games + 1,
+           updated_at = NOW()`,
+        [c.googleId, c.name, c.after, c.rank === 1 ? 1 : 0]
+      );
+    }
+    match.scores = scores;
+    match.changes = changes;
+    console.log(`レート更新完了: ${matchId}`, changes.map(c => `${c.name} ${c.before}→${c.after}(${c.change>=0?'+':''}${c.change})`).join(", "));
+    res.json({ ok: true, changes });
+  } catch (err) {
+    console.error("レート更新エラー:", err.message);
+    res.status(500).json({ error: "DB エラー" });
+  }
+});
+
+// GET /rank/result-view — ゲストがレート変動を取得
+app.get("/rank/result-view", requireAuth, async (req, res) => {
+  const { matchId } = req.query;
+  if (!matchId) return res.status(400).json({ error: "matchId が必要です" });
+  const match = rankMatches.get(matchId);
+  if (!match) return res.status(404).json({ error: "マッチが見つかりません" });
+  if (!match.changes) return res.json({ ready: false });
+  res.json({ ready: true, changes: match.changes });
+});
+
+// マッチレスポンス生成ヘルパー
+function _buildMatchResponse(match, myGoogleId) {
+  const myIdx = match.players.findIndex(p => p.googleId === myGoogleId);
+  const isHost = myIdx === 0;
+  return {
+    matched: true,
+    matchId: match.matchId,
+    isHost,
+    myIdx,
+    hostPeerId: match.players[0].peerId,
+    myRating: match.players[myIdx]?.rating ?? 1500,
+    opponents: match.players
+      .filter((_, i) => i !== myIdx)
+      .map(p => ({ name: p.name, rating: p.rating })),
+  };
+}
+
+
 app.get("/", (req, res) => {
   if (req.isAuthenticated()) return res.redirect("/game");
   res.send(`<!DOCTYPE html>
