@@ -1689,7 +1689,7 @@ body::before{
           background:#030a10;border:1px solid #1a3a2a;border-radius:7px;
           color:#4a8a6a;font-size:.6rem;padding:5px 9px;cursor:pointer;
           transition:all .2s;letter-spacing:.04em;white-space:nowrap;display:flex;align-items:center;gap:4px;
-        "><span id="autoMenuLabel">設定 ▼</span></button>
+        "><span id="autoMenuLabel">▽</span></button>
         <div id="autoMenuPanel" style="
           display:none;position:absolute;bottom:calc(100% + 4px);left:0;
           background:#040d14;border:1px solid #1a3a2a;border-radius:8px;
@@ -1700,11 +1700,6 @@ body::before{
             color:#4a7a4a;font-size:.6rem;padding:5px 9px;cursor:pointer;
             transition:all .2s;letter-spacing:.04em;white-space:nowrap;text-align:left;
           ">🚫 鳴き無し</button>
-          <button id="autoDrawBtn" onclick="toggleAutoDraw()" style="
-            background:#030a10;border:1px solid #1a4a2a;border-radius:7px;
-            color:#5a9a7a;font-size:.6rem;padding:5px 9px;cursor:pointer;
-            transition:all .2s;letter-spacing:.04em;white-space:nowrap;text-align:left;
-          ">🎲 自動ツモ</button>
           <button id="autoDiscardBtn" onclick="toggleAutoDiscard()" style="
             background:#030a10;border:1px solid #3a2a0a;border-radius:7px;
             color:#8a6a3a;font-size:.6rem;padding:5px 9px;cursor:pointer;
@@ -1722,12 +1717,17 @@ body::before{
           ">🀄 自動上がり</button>
         </div>
       </div>
-      <div style="display:flex;gap:4px;align-items:center;">
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;">
+        <button id="autoDrawBtn" onclick="toggleAutoDraw()" style="
+          background:#030a10;border:1px solid #1a4a2a;border-radius:7px;
+          color:#5a9a7a;font-size:.6rem;padding:5px 9px;cursor:pointer;
+          transition:all .2s;letter-spacing:.04em;white-space:nowrap;
+        ">引く</button>
         <button id="afkBtn" onclick="setAFK(!playerAFK)" style="
           background:#030a10;border:1px solid #3a1a1a;border-radius:7px;
           color:#8a4a4a;font-size:.6rem;padding:5px 9px;cursor:pointer;
           transition:all .2s;letter-spacing:.04em;white-space:nowrap;
-        ">🚶 離席</button>
+        ">離席</button>
         <button id="settingsBtn" onclick="toggleSettingsPanel()" style="
           background:#030a10;border:1px solid #2a3a4a;border-radius:7px;
           color:#5a7a8a;font-size:.7rem;padding:5px 8px;cursor:pointer;
@@ -5389,7 +5389,7 @@ function _afkTick(){
 function _updateAFKBtn(){
   const btn=document.getElementById('afkBtn');
   if(!btn) return;
-  btn.textContent=playerAFK?'🚶 離席中':'🚶 離席';
+  btn.textContent='離席';
   btn.style.borderColor=playerAFK?'#cc3333':'#3a1a1a';
   btn.style.color=playerAFK?'#ff6666':'#8a4a4a';
   btn.style.boxShadow=playerAFK?'0 0 8px #cc333366':'';
@@ -5421,9 +5421,9 @@ function toggleAutoMenu(){
   document.getElementById('autoMenuToggle').style.borderColor=open?'#1a3a2a':'#4a8a6a';
 }
 function updateAutoMenuLabel(){
-  const on=[noMeldEnabled,autoDrawEnabled,autoDiscardEnabled,autoKitaEnabled,autoWinEnabled].filter(Boolean).length;
+  const on=[noMeldEnabled,autoDiscardEnabled,autoKitaEnabled,autoWinEnabled].filter(Boolean).length;
   const lbl=document.getElementById('autoMenuLabel');
-  if(lbl) lbl.textContent=on>0?`設定 ${on} ▲`:'設定 ▼';
+  if(lbl) lbl.textContent=on>0?'△':'▽';
   const btn=document.getElementById('autoMenuToggle');
   if(btn){ btn.style.borderColor=on>0?'#44ff88':'#1a3a2a'; btn.style.color=on>0?'#44ff88':'#4a8a6a'; }
 }
@@ -5554,7 +5554,7 @@ function humanHakuAuto(){
 function _updateAutoDrawBtn(){
   const btn=document.getElementById('autoDrawBtn');
   if(!btn) return;
-  btn.textContent=autoDrawEnabled?'🎲 自動ツモ ON':'🎲 自動ツモ';
+  btn.textContent='引く';
   btn.style.borderColor=autoDrawEnabled?'#44ff88':'';
   btn.style.color=autoDrawEnabled?'#44ff88':'';
   btn.style.boxShadow=autoDrawEnabled?'0 0 8px #44ff8866':'';
