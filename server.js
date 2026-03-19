@@ -174,34 +174,105 @@ app.get("/api/profile", requireAuth, async (req, res) => {
   }
 });
 
-// プロフィール保存（ゲーム終了時などに呼ぶ）
+// ── コイン付与ルール（サーバー側で検証） ─────────────────────────
+// ガチャ消費: pull10=10枚, pull1=1枚, shop_ability=100枚
+const GACHA_COST = { pull10: 10, pull1: 1, shop_ability: 100 };
+// 対局1位報酬（numPlayers別）
+const REWARD_TABLE = { 2: 10, 3: 30, 4: 40 };
+// 能力ホワイトリスト
+const VALID_ABILITIES = ["mine","light","yami","haku","sanctuary","pinzu","steal","pen"];
+
+// POST /api/gacha — ガチャ消費（コイン減算のみサーバーで管理）
+app.post("/api/gacha", requireAuth, async (req, res) => {
+  const { pullType } = req.body; // "pull10" | "pull1"
+  const cost = GACHA_COST[pullType];
+  if (!cost) return res.status(400).json({ error: "不正なガチャ種別です" });
+  const uid = req.user.id;
+  try {
+    const r = await pool.query(
+      `UPDATE user_profiles SET coins = coins - $2, total_pulls = total_pulls + $3, updated_at = NOW()
+       WHERE google_id = $1 AND coins >= $2
+       RETURNING coins, total_pulls`,
+      [uid, cost, pullType === "pull10" ? 10 : 1]
+    );
+    if (r.rowCount === 0)
+      return res.status(402).json({ error: "コインが不足しています" });
+    res.json({ ok: true, coins: r.rows[0].coins, totalPulls: r.rows[0].total_pulls });
+  } catch (err) {
+    console.error("ガチャ消費エラー:", err.message);
+    res.status(500).json({ error: "DB エラー" });
+  }
+});
+
+// POST /api/reward — 対局報酬（1位のみ・numPlayersをサーバーで検証）
+app.post("/api/reward", requireAuth, async (req, res) => {
+  const { rank, numPlayers } = req.body;
+  if (rank !== 1) return res.json({ ok: true, earned: 0 });
+  const earned = REWARD_TABLE[numPlayers];
+  if (!earned) return res.status(400).json({ error: "不正なプレイヤー数です" });
+  const uid = req.user.id;
+  try {
+    const r = await pool.query(
+      `UPDATE user_profiles SET coins = coins + $2, updated_at = NOW()
+       WHERE google_id = $1
+       RETURNING coins`,
+      [uid, earned]
+    );
+    res.json({ ok: true, earned, coins: r.rows[0]?.coins ?? 0 });
+  } catch (err) {
+    console.error("報酬付与エラー:", err.message);
+    res.status(500).json({ error: "DB エラー" });
+  }
+});
+
+// プロフィール保存（非コイン項目のみ受け付ける）
+// ★ coins / totalPulls はクライアントからの書き換えを一切受け付けない
 app.post("/api/profile", requireAuth, async (req, res) => {
   const uid = req.user.id;
-  const { coins, abilities, totalPulls, gachaIcons, iconId, ability, name } = req.body;
+  const { abilities, gachaIcons, iconId, ability, name } = req.body;
+
+  // 能力ホワイトリスト検証
+  const safeAbilities = Array.isArray(abilities)
+    ? abilities.filter(a => VALID_ABILITIES.includes(a))
+    : [];
+
+  // gachaIcons: 既存IDパターン検証
+  const VALID_ICON_RE = /^[CREL]\d{2}$/;
+  const safeIcons = Array.isArray(gachaIcons)
+    ? gachaIcons.filter(id => typeof id === "string" && VALID_ICON_RE.test(id))
+    : [];
+
+  const safeAbility = VALID_ABILITIES.includes(ability) ? ability : "";
+  const safeName = typeof name === "string" ? name.slice(0, 12) : req.user.name;
+  const safeIconId = typeof iconId === "string" && VALID_ICON_RE.test(iconId) ? iconId : "";
+
   try {
+    // gachaIcons は既存レコードとマージ（クライアントが削除できないように）
+    const cur = await pool.query(
+      "SELECT gacha_icons FROM user_profiles WHERE google_id = $1", [uid]
+    );
+    const existingIcons = cur.rows[0] ? JSON.parse(cur.rows[0].gacha_icons) : [];
+    const mergedIcons = Array.from(new Set([...existingIcons, ...safeIcons]));
+
     await pool.query(
       `INSERT INTO user_profiles
-         (google_id, name, email, coins, abilities, total_pulls, gacha_icons, icon_id, ability, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+         (google_id, name, email, abilities, gacha_icons, icon_id, ability, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
        ON CONFLICT (google_id) DO UPDATE SET
          name        = EXCLUDED.name,
-         coins       = EXCLUDED.coins,
          abilities   = EXCLUDED.abilities,
-         total_pulls = EXCLUDED.total_pulls,
          gacha_icons = EXCLUDED.gacha_icons,
          icon_id     = EXCLUDED.icon_id,
          ability     = EXCLUDED.ability,
          updated_at  = NOW()`,
       [
         uid,
-        name || req.user.name,
+        safeName,
         req.user.email,
-        coins ?? 10000,
-        JSON.stringify(abilities ?? []),
-        totalPulls ?? 0,
-        JSON.stringify(gachaIcons ?? []),
-        iconId ?? "",
-        ability ?? "",
+        JSON.stringify(safeAbilities),
+        JSON.stringify(mergedIcons),
+        safeIconId,
+        safeAbility,
       ]
     );
     res.json({ ok: true });
@@ -425,6 +496,17 @@ app.post("/rank/result", requireAuth, async (req, res) => {
   const match = rankMatches.get(matchId);
   if (!match) return res.status(404).json({ error: "マッチが見つかりません" });
   if (match.changes) return res.json({ ok: true, changes: match.changes }); // 二重提出防止
+
+  // ★ 不正防止: 提出者がマッチのホスト(index=0)であることを検証
+  const googleId = req.user.id;
+  const submitterIdx = match.players.findIndex(p => p.googleId === googleId);
+  if (submitterIdx !== 0)
+    return res.status(403).json({ error: "ホストのみスコアを提出できます" });
+
+  // ★ スコア値の妥当性検証: 整数かつ合計が一定範囲内
+  const validScores = scores.every(s => Number.isInteger(s) && s >= -9999 && s <= 99999);
+  if (!validScores)
+    return res.status(400).json({ error: "スコア値が不正です" });
 
   const changes = calcRatingChanges(match.players, scores);
 
