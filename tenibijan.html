@@ -1436,6 +1436,14 @@ body::before{
           <button class="pcnt-btn" id="roomModeAbilityOff" onclick="setRoomAbilityMode(false)">♟ 能力なし</button>
         </div>
       </div>
+      <!-- 制限時間あり/なし -->
+      <div style="margin-bottom:8px;">
+        <div style="font-size:.6rem;color:#5a7a6a;text-align:center;margin-bottom:4px;">制限時間</div>
+        <div class="pcnt" style="margin-bottom:0;">
+          <button class="pcnt-btn" id="roomModeTimeOn" onclick="setRoomTimeMode(true)">⏱ あり</button>
+          <button class="pcnt-btn active" id="roomModeTimeOff" onclick="setRoomTimeMode(false)">∞ なし</button>
+        </div>
+      </div>
       <button class="start-btn" style="margin-bottom:10px;" onclick="createRoom()">部屋を作る（ホスト）</button>
       <div id="roomCodeBox" style="display:none;text-align:center;">
         <div style="font-size:.6rem;color:#5a7a6a;margin-bottom:4px;">フレンドにこの部屋番号を教えてください</div>
@@ -1474,9 +1482,25 @@ body::before{
     <div id="rankStatus" style="font-size:.65rem;color:#4a7a5a;text-align:center;margin-bottom:6px;min-height:1.2em;"></div>
 
     <!-- レート表示 -->
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;background:#030a10;border:1px solid #1a3a2a;border-radius:7px;padding:7px 14px;">
-      <span style="font-size:.6rem;color:#5a7a6a;">現在のレート</span>
-      <span id="myRatingDisplay" style="font-size:1.1rem;font-weight:900;color:var(--gold);">---</span>
+    <div style="background:#030a10;border:1px solid #1a3a2a;border-radius:7px;padding:8px 14px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:5px;">
+        <span style="font-size:.6rem;color:#5a7a6a;">⚔️ レート</span>
+        <span id="myRatingDisplay" style="font-size:1.2rem;font-weight:900;color:var(--gold);">---</span>
+      </div>
+      <div style="display:flex;justify-content:center;gap:16px;">
+        <div style="text-align:center;">
+          <div style="font-size:.5rem;color:#3a5a4a;letter-spacing:.08em;">対局数</div>
+          <div id="myGamesDisplay" style="font-size:.78rem;font-weight:700;color:#6a9a7a;">-</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:.5rem;color:#3a5a4a;letter-spacing:.08em;">1位</div>
+          <div id="myWinsDisplay" style="font-size:.78rem;font-weight:700;color:#6a9a7a;">-</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:.5rem;color:#3a5a4a;letter-spacing:.08em;">勝率</div>
+          <div id="myWinRateDisplay" style="font-size:.78rem;font-weight:700;color:#6a9a7a;">-%</div>
+        </div>
+      </div>
     </div>
 
     <div id="rankWaitPanel">
@@ -1524,9 +1548,14 @@ body::before{
     <!-- ホスト: ゲームモード -->
     <div id="rlsModeSection" style="display:none;margin-bottom:14px;">
       <div style="font-size:.6rem;color:#5a7a6a;text-align:center;margin-bottom:4px;">ゲームモード</div>
-      <div class="pcnt" style="margin-bottom:0;">
+      <div class="pcnt" style="margin-bottom:6px;">
         <button class="pcnt-btn active" id="rlsModeAbilityOn" onclick="setRoomAbilityMode(true);updateRoomLobbyUI()">⚡ 能力あり</button>
         <button class="pcnt-btn" id="rlsModeAbilityOff" onclick="setRoomAbilityMode(false);updateRoomLobbyUI()">♟ 能力なし</button>
+      </div>
+      <div style="font-size:.6rem;color:#5a7a6a;text-align:center;margin-bottom:4px;">制限時間</div>
+      <div class="pcnt" style="margin-bottom:0;">
+        <button class="pcnt-btn" id="rlsModeTimeOn" onclick="setRoomTimeMode(true);updateRoomLobbyUI()">⏱ あり</button>
+        <button class="pcnt-btn active" id="rlsModeTimeOff" onclick="setRoomTimeMode(false);updateRoomLobbyUI()">∞ なし</button>
       </div>
     </div>
 
@@ -2470,6 +2499,7 @@ const TILE_IMG={
 function tc(t){if(!t)return'';return t.suit==='honor'?'honor':t.suit;}
 function tk(t){return`${t.suit}_${t.num}`;}
 function teq(a,b){return a.suit===b.suit&&a.num===b.num;}
+function tileLabel(t){if(!t)return'?';if(t.suit==='honor')return String(t.num);const s={'man':'万','pin':'筒','sou':'索'}[t.suit]||'';return `${t.num}${s}`;}
 let _tileIdSeq=0;
 function mt(suit,num){return{suit,num,_id:_tileIdSeq++};}
 function sortTiles(tiles){
@@ -2882,6 +2912,7 @@ let NET={
   isHost:false,     // true if this player created the room
   myIdx:0,          // which player index am I (0=host,1=guest+)
   roomAbilityMode:true, // ルームマッチ能力あり/なし
+  roomTimeMode:false,   // ルームマッチ制限時間あり/なし
   online:false,     // playing online?
   roomCode:null,
   isRankMatch:false, // ランクマッチ中か
@@ -3153,8 +3184,15 @@ async function _loadMyRating(){
     if(r.ok){
       const d=await r.json();
       RANK.myRating=d.rating;
-      const el=document.getElementById('myRatingDisplay');
-      if(el) el.textContent=d.rating;
+      const elR=document.getElementById('myRatingDisplay');
+      const elG=document.getElementById('myGamesDisplay');
+      const elW=document.getElementById('myWinsDisplay');
+      const elWR=document.getElementById('myWinRateDisplay');
+      if(elR) elR.textContent=d.rating;
+      if(elG) elG.textContent=d.games ?? 0;
+      if(elW) elW.textContent=d.wins ?? 0;
+      const wr = d.games > 0 ? Math.round((d.wins/d.games)*100) : 0;
+      if(elWR) elWR.textContent=`${wr}%`;
     }
   }catch(e){}
 }
@@ -3300,40 +3338,9 @@ function _onRankMatched(data){
     // ホスト: 2人のゲストからの接続を待つ（先にリスナーを登録してからキューを削除）
     NET.peer.off('connection');
     NET.peer.on('connection', conn=>{
+      // ★ゲーム中の復帰接続は満員でも受け入れる（rejoinメッセージで判断）
       const isGameActive = NET.online && G && G.players && G.players.length > 0;
-
-      if(isGameActive){
-        // ★ゲーム中: rejoin のみ受け入れる。無関係な新規接続は即拒否する
-        let _rejoinHandled = false;
-        const _onRejoinData = msg=>{
-          if(msg.type === 'rejoin' && !_rejoinHandled){
-            _rejoinHandled = true;
-            conn.off('data', _onRejoinData);
-            if(!NET.conns.includes(conn)) NET.conns.push(conn);
-            _handleRejoin(conn, msg);
-          }
-        };
-        conn.on('data', _onRejoinData);
-        const _onRejoinOpen = ()=>{
-          if(conn.peer) peerRegistryAdd(conn.peer, null, conn);
-          // rejoin メッセージを待つ猶予（最大3秒）
-          setTimeout(()=>{
-            if(!_rejoinHandled){
-              // rejoin でない → 無関係な接続。拒否して即クローズ
-              try{ if(conn.open) conn.send({type:'rankFull'}); }catch(e){}
-              setTimeout(()=>{ try{ conn.close(); }catch(e){} }, 200);
-            }
-          }, 3000);
-        };
-        if(conn.open){ _onRejoinOpen(); } else { conn.on('open', _onRejoinOpen); }
-        // 切断時: このconnはNET.connsに入っていないのでゲームに影響しない
-        conn.on('close', ()=>{});
-        conn.on('error', ()=>{});
-        return;
-      }
-
-      // 通常接続: ゲーム開始前のマッチング
-      if(NET.conns.length >= 2){ conn.close(); return; }
+      if(NET.conns.length >= 2 && !isGameActive){ conn.close(); return; }
 
       const guestIdx = NET.conns.length + 1;
       conn._playerIdx = guestIdx;
@@ -3354,6 +3361,13 @@ function _onRankMatched(data){
 
       const onOpen = ()=>{
         if(conn.peer) peerRegistryAdd(conn.peer, guestIdx, conn);
+        if(isGameActive){
+          // ゲーム中: rejoin か通常接続かを判断するため少し待つ
+          setTimeout(()=>{
+            if(!_rejoinHandled && conn.open) conn.close();
+          }, 5000);
+          return;
+        }
         conn.send({type:'joined', myIdx:guestIdx, abilityMode:true, members:3});
         RANK.connectedGuests++;
         setRankStatus(`対戦相手を待っています… (${RANK.connectedGuests}/2)`);
@@ -3407,46 +3421,18 @@ function _rankGuestConnect(hostPeerId, attempt){
     NET.conns = [];
 
     let opened = false;
-    let joinedReceived = false;
     conn.on('open', ()=>{
       opened = true;
       // ★ランクマッチゲスト: 接続先ホストのPeerIDを記録（復帰時に使う）
       NET.currentHostPeerId = hostPeerId;
       setRankStatus('ホストに接続しました！ゲーム開始を待っています…');
     });
-    conn.on('data', msg=>{
-      if(msg.type === 'rankFull'){
-        // ★ホストがゲーム中で無関係な接続を拒否してきた → 別の部屋を探すため再マッチング
-        console.log('rankFull受信: このホストはゲーム中。再マッチングします。');
-        try{ conn.close(); }catch(e){}
-        NET.conn = null;
-        setRankStatus('再マッチング中…');
-        // サーバーに再度キュー参加を試みる
-        setTimeout(async ()=>{
-          if(NET.online) return;
-          try{
-            const res = await fetch('/rank/status');
-            if(!res.ok){ _rankGuestConnect(hostPeerId, attempt+1); return; }
-            const data = await res.json();
-            if(data.matched){
-              if(RANK.polling){clearInterval(RANK.polling);RANK.polling=null;}
-              _onRankMatched(data);
-            } else {
-              // まだマッチしていない → ポーリング継続
-              if(!RANK.polling) RANK.polling = setInterval(_pollRankStatus, 1000);
-            }
-          }catch(e){ _rankGuestConnect(hostPeerId, attempt+1); }
-        }, 1000);
-        return;
-      }
-      if(msg.type === 'joined' || msg.type === 'gameStart') joinedReceived = true;
-      onNetData(msg, null);
-    });
+    conn.on('data', msg=>onNetData(msg, null));
     attachConnHandlers(conn, ()=>getPlayerIdxByConn(conn));
 
-    // 接続タイムアウト: openされない or joinedが届かない場合はリトライ
+    // 接続タイムアウト: openされない場合はリトライ
     setTimeout(()=>{
-      if(!NET.online && !joinedReceived) _rankGuestConnect(hostPeerId, attempt+1);
+      if(!opened && !NET.online) _rankGuestConnect(hostPeerId, attempt+1);
     }, 4000);
   }, delay);
 }
@@ -3707,6 +3693,15 @@ function setRoomAbilityMode(on){
   document.getElementById('roomModeAbilityOn').classList.toggle('active',on);
   document.getElementById('roomModeAbilityOff').classList.toggle('active',!on);
 }
+function setRoomTimeMode(on){
+  NET.roomTimeMode=on;
+  document.getElementById('roomModeTimeOn').classList.toggle('active',on);
+  document.getElementById('roomModeTimeOff').classList.toggle('active',!on);
+  const rlsOn = document.getElementById('rlsModeTimeOn');
+  const rlsOff = document.getElementById('rlsModeTimeOff');
+  if(rlsOn) rlsOn.classList.toggle('active',on);
+  if(rlsOff) rlsOff.classList.toggle('active',!on);
+}
 async function createRoom(){
   setOnlineStatus('接続中…');
   const code = String(Math.floor(100000+Math.random()*900000));
@@ -3848,6 +3843,8 @@ function updateRoomLobbyUI(){
     if(gw) gw.style.display='none';
     document.getElementById('rlsModeAbilityOn')?.classList.toggle('active', NET.roomAbilityMode);
     document.getElementById('rlsModeAbilityOff')?.classList.toggle('active', !NET.roomAbilityMode);
+    document.getElementById('rlsModeTimeOn')?.classList.toggle('active', NET.roomTimeMode);
+    document.getElementById('rlsModeTimeOff')?.classList.toggle('active', !NET.roomTimeMode);
     const startBtn = document.getElementById('rlsStartBtn');
     if(startBtn) startBtn.style.display = NET.conns.length>=1?'':'none';
     // Build member cards
@@ -3935,9 +3932,10 @@ function hostStartGame(){
       ability: NET.guestAbilities[i]||''
     }))
   ];
-  NET.conns.forEach((c,i)=>{if(c.open)c.send({type:'gameStart',totalPlayers:NET.conns.length+1,abilityMode:NET.roomAbilityMode,membersInfo});});
+  NET.conns.forEach((c,i)=>{if(c.open)c.send({type:'gameStart',totalPlayers:NET.conns.length+1,abilityMode:NET.roomAbilityMode,timeMode:NET.roomTimeMode,membersInfo});});
   // ゲーム開始後はサーバーから部屋を削除する（新規参加を防ぐ）
   if(NET.roomCode) fetch('/room/'+NET.roomCode, {method:'DELETE'}).catch(()=>{});
+  if(NET.roomTimeMode) G_TIME_MODE=true;
   hideRoomLobby();
   setTimeout(()=>startOnlineGame(),300);
 }
@@ -4291,6 +4289,8 @@ function handleGuestAction(msg, senderIdx){
     case 'tsumo':     remoteWin(msg.pidx, true, -1); break;
     case 'ron':       remoteRon(msg.pidx, msg.tile, msg.from); break;
     case 'skipRon':   remoteSkipRon(msg.from); break;
+    case 'skipRonToPon': if(amIHost()){ pendingAction=null; handlePon(msg.pidx,msg.tile,msg.from); broadcastState(); } break;
+    case 'skipRonToKan': if(amIHost()){ pendingAction=null; handleMinkan(msg.pidx,msg.tile,msg.from); broadcastState(); } break;
     case 'pon':       handlePon(msg.pidx, msg.tile, msg.from); broadcastState(); break;
     case 'skipPon':   remoteSkipPon(msg.from); break;
     case 'kakan':     if(amIHost()){handleKakan(msg.pidx,msg.handIdx);broadcastState();} break;
@@ -4637,7 +4637,7 @@ function remoteKita(pidx){
       if(isMe || isOnlineGuestIdx(ci)){
         pendingAction={type:'ron',tile:kt,from:pidx,target:ci};
         G.phase='pending_ron';renderAll();broadcastState();
-        if(isMe){ setTimeout(()=>{ if(G.phase==='pending_ron'&&autoWinEnabled) humanRon(); },250); }
+        if(isMe){ timerOnMyTurn(); setTimeout(()=>{ if(G.phase==='pending_ron'&&autoWinEnabled) humanRon(); },250); }
         return;
       } else if(cpuDecideRon(ci,kt)){handleRon(ci,kt,pidx);return;}
     }
@@ -5007,7 +5007,7 @@ function discardAction(pidx,tidx,isYami=false){ if(pidx===NET.myIdx){ _timerSave
       if(isMe || isOnlineGuestIdx(i)){
         pendingAction={type:'ron',tile,from:pidx,target:i};
         G.phase='pending_ron';renderAll();broadcastState();
-        if(isMe){ setTimeout(()=>{ if(G.phase==='pending_ron'&&autoWinEnabled) humanRon(); },250); }
+        if(isMe){ timerOnMyTurn(); setTimeout(()=>{ if(G.phase==='pending_ron'&&autoWinEnabled) humanRon(); },250); }
         return;
       }else if(cpuDecideRon(i,tile)){handleRon(i,tile,pidx);return;}
     }
@@ -5048,7 +5048,7 @@ function handleKakan(pidx, handIdx){
       if(isMe || isOnlineGuestIdx(i)){
         pendingAction={type:'ron',tile,from:pidx,target:i};
         G.phase='pending_ron';renderAll();broadcastState();
-        if(isMe){ setTimeout(()=>{ if(G.phase==='pending_ron'&&autoWinEnabled) humanRon(); },250); }
+        if(isMe){ timerOnMyTurn(); setTimeout(()=>{ if(G.phase==='pending_ron'&&autoWinEnabled) humanRon(); },250); }
         return;
       } else if(cpuDecideRon(i,tile)){
         handleRon(i,tile,pidx);return;
@@ -5271,6 +5271,11 @@ function _timerStep(){
 
 function _timerAutoAct(){
   const myIdx=NET.myIdx;
+  // pending_ron/pon はG.currentが他プレイヤーのままなので別判定
+  if(G.phase==='pending_ron'){
+    humanSkipRon();
+    return;
+  }
   if(G.current!==myIdx) return;
   _timerAutoActFired=true;
   _timerDebt=999; // 時間切れ: 以降ターンは最低1秒
@@ -5970,10 +5975,42 @@ function humanRon(){
 
 function humanSkipRon(){
   if(!pendingAction)return;
+  const tile=pendingAction.tile;
   const f=pendingAction.from;
   if(NET.online&&!amIHost()){netSend({type:'skipRon',from:f});pendingAction=null;return;}
   pendingAction=null;
-  nextTurn((f+1)%numPlayers);
+  G.phase='discard'; // pending_ron を解除してからcheckPon
+  if(!checkPon(f, tile)){
+    nextTurn((f+1)%numPlayers);
+  }
+}
+
+// ロンをスキップしてポンに進む
+function humanRonSkipToPon(){
+  if(G.phase!=='pending_ron'||!pendingAction)return;
+  const tile=pendingAction.tile;
+  const from=pendingAction.from;
+  if(NET.online&&!amIHost()){
+    netSend({type:'skipRonToPon',pidx:NET.myIdx,tile,from});
+    pendingAction=null;
+    return;
+  }
+  pendingAction=null;
+  handlePon(NET.myIdx,tile,from);
+}
+
+// ロンをスキップしてカンに進む
+function humanRonSkipToKan(){
+  if(G.phase!=='pending_ron'||!pendingAction)return;
+  const tile=pendingAction.tile;
+  const from=pendingAction.from;
+  if(NET.online&&!amIHost()){
+    netSend({type:'skipRonToKan',pidx:NET.myIdx,tile,from});
+    pendingAction=null;
+    return;
+  }
+  pendingAction=null;
+  handleMinkan(NET.myIdx,tile,from);
 }
 
 function humanPon(){
@@ -6045,7 +6082,7 @@ function humanKita(){
       if(isMe || isOnlineGuestIdx(i)){
         pendingAction={type:'ron',tile:kitaTile,from:myIdx,target:i};
         G.phase='pending_ron';renderAll();broadcastState();
-        if(isMe){ setTimeout(()=>{ if(G.phase==='pending_ron'&&autoWinEnabled) humanRon(); },250); }
+        if(isMe){ timerOnMyTurn(); setTimeout(()=>{ if(G.phase==='pending_ron'&&autoWinEnabled) humanRon(); },250); }
         return;
       } else if(cpuDecideRon(i,kitaTile)){handleRon(i,kitaTile,myIdx);return;}
     }
@@ -6220,42 +6257,75 @@ function showFinalResult(){
       if(d.ok && d.changes) _showRatingChanges(d.changes);
     }).catch(()=>{});
   }
-  // ゲスト側: ランクマッチ結果をサーバーから取得
-  if(NET.isRankMatch && !NET.isHost && RANK.matchId){
-    setTimeout(_fetchRankResultForGuest, 3000);
-  }
 
   document.getElementById('resultOverlay').classList.add('show');
   broadcastState({finalResult:sorted.map(p=>({name:p.name,wind:p.wind,score:p.score}))});
 }
 
-async function _fetchRankResultForGuest(){
-  try{
-    const r=await fetch('/rank/result-view?matchId='+encodeURIComponent(RANK.matchId));
-    if(r.ok){const d=await r.json();if(d.changes) _showRatingChanges(d.changes);}
-  }catch(e){}
-}
 
 function _showRatingChanges(changes){
   const box=document.getElementById('resultRatingBox');
   const tbl=document.getElementById('resultRatingTable');
   if(!box||!tbl) return;
-  tbl.innerHTML=changes.map(c=>{
-    const sign=c.change>=0?'+':'';
-    const col=c.change>=0?'#5adb9a':'#ff7a7a';
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid #1a3a2a;">
-      <span style="color:#c5e8d5;">${c.name}</span>
-      <span><strong style="color:#c5e8d5;">${c.before}</strong> → <strong style="color:${col};">${c.after}</strong>
-      <span style="color:${col};font-size:.85em;">(${sign}${c.change})</span></span>
+  const myName = G && G.players && G.players[NET.myIdx] ? G.players[NET.myIdx].name : '';
+  // 順位順に並んでいるので rank プロパティで並べ直す
+  const sorted = [...changes].sort((a,b)=>(a.rank||0)-(b.rank||0));
+  tbl.innerHTML=sorted.map(c=>{
+    const isMe = c.name === myName;
+    const sign = c.change >= 0 ? '+' : '';
+    const col  = c.change >= 0 ? '#5adb9a' : '#ff7a7a';
+    const rankMedal = ['🥇','🥈','🥉'][c.rank-1] || c.rank+'位';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 6px;border-radius:5px;margin-bottom:2px;${isMe?'background:#0d2a1a;border:1px solid #2a5a3a;':'border:1px solid transparent;'}">
+      <span style="color:${isMe?'var(--gold2)':'#c5e8d5'};font-weight:${isMe?700:400};">${rankMedal} ${c.name}${isMe?' 👈':''}</span>
+      <span style="white-space:nowrap;">
+        <span style="color:#7a9a8a;">${c.before}</span>
+        <span style="color:#4a6a5a;margin:0 3px;">→</span>
+        <strong style="color:${col};">${c.after}</strong>
+        <span style="color:${col};font-size:.85em;margin-left:3px;">(${sign}${c.change})</span>
+      </span>
     </div>`;
   }).join('');
   box.style.display='';
 }
 function showFinalResultData(sorted){
+  clearRejoinSession(); // 対局正常終了 → 復帰セッション不要
   document.getElementById('resultTable').innerHTML=sorted.map((p,i)=>
     `<tr class="${i===0?'result-winner':''}"><td>${i+1}位 ${p.name}</td><td>${p.wind}</td><td>${p.score.toLocaleString()}点</td></tr>`
   ).join('');
+
+  // コイン付与（ゲスト側）
+  const myPlayer = G && G.players ? G.players[NET.myIdx] : null;
+  const myRank = myPlayer ? sorted.findIndex(p=>p.name===myPlayer.name) : -1;
+  const earned = myRank===0 ? 20 : 10;
+  PROFILE.coins = (PROFILE.coins||0) + earned;
+  saveProfileSilent();
+  const rewardEl = document.getElementById('resultCoinReward');
+  if(rewardEl) rewardEl.innerHTML=`🪙 +${earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">${myRank===0?'1位ボーナス：+20枚':'参加報酬：+10枚'}</span>`;
+
+  // ランクマッチ: レート変動をサーバーから取得（ホストのPOSTが完了するまで少し待つ）
+  const ratingBox = document.getElementById('resultRatingBox');
+  if(ratingBox) ratingBox.style.display='none';
+  if(NET.isRankMatch && !NET.isHost && RANK.matchId){
+    _fetchRankResultForGuestWithRetry(0);
+  }
+
   document.getElementById('resultOverlay').classList.add('show');
+}
+
+async function _fetchRankResultForGuestWithRetry(attempt){
+  if(attempt > 6) return;
+  try{
+    const r = await fetch('/rank/result-view?matchId='+encodeURIComponent(RANK.matchId));
+    if(r.ok){
+      const d = await r.json();
+      if(d.changes && d.changes.length > 0){
+        _showRatingChanges(d.changes);
+        return;
+      }
+    }
+  }catch(e){}
+  // まだ結果がなければリトライ（ホストのPOSTが遅れている場合に対応）
+  setTimeout(()=>_fetchRankResultForGuestWithRetry(attempt+1), 1500);
 }
 function setAbilityMode(on){
   G_ABILITY_MODE=on;
@@ -6273,9 +6343,13 @@ function confirmBackToTitle(){
   document.getElementById('titleConfirmOverlay').classList.add('show');
 }
 function backToLobby(){
+  // 全オーバーレイを確実に閉じる
   document.getElementById('resultOverlay').classList.remove('show');
   document.getElementById('winOverlay').classList.remove('show');
   document.getElementById('titleConfirmOverlay').classList.remove('show');
+  hideReconnectOverlay(); // ★ reconnectOverlay を閉じる（z-index:300 で lobby を覆う問題の修正）
+  // 動的に生成されたオーバーレイも除去（light-peek-overlay など）
+  document.querySelectorAll('.light-peek-overlay').forEach(el => el.remove());
   document.getElementById('gameScreen').classList.remove('active');
   hideRoomLobby();
   document.getElementById('lobby').style.display='flex';
@@ -6283,14 +6357,20 @@ function backToLobby(){
   clearRejoinSession(); // 正常終了・離脱時はセッションを消す
   // ホストが部屋を持っていた場合はサーバーから削除する
   if(NET.isHost && NET.roomCode) fetch('/room/'+NET.roomCode, {method:'DELETE'}).catch(()=>{});
+  const wasRankMatch = NET.isRankMatch;
   if(NET.peer){try{NET.peer.destroy();}catch(e){} NET.peer=null;NET.conn=null;NET.conns=[];NET.online=false;}
-  NET.roomCode=null; NET.isHost=false; NET.isRankMatch=false;
+  NET.roomCode=null; NET.isHost=false; NET.isRankMatch=false; NET.roomTimeMode=false;
   NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
   RANK.matchId=null; RANK.connectedGuests=0;
   setOnlineStatus('');
   document.getElementById('roomCodeBox').style.display='none';
   document.getElementById('waitingDots').style.display='';
-  showSolo();
+  // ランクマッチから戻った場合はランクロビーに戻り、レートを再取得して反映する
+  if(wasRankMatch){
+    showRank();
+  } else {
+    showSolo();
+  }
   bgmToTitle();
 }
 
@@ -7620,7 +7700,7 @@ function renderTable(){
       if(G.phase==='pending_pon' && ponTarget===NET.myIdx){
         const pb=document.createElement('button');
         pb.className='quick-btn quick-btn-pon';
-        pb.textContent='ポン '+emj(pendingAction?.tile||{suit:'honor',num:'東'});
+        pb.textContent='ポン ['+tileLabel(pendingAction?.tile||{suit:'honor',num:'東'})+']';
         pb.onclick=humanPon;
         qb.appendChild(pb);
         // ポン対象牌でカンできる場合もボタン表示
@@ -7630,7 +7710,7 @@ function renderTable(){
           if((cnt[tk(ponTile)]||0)>=3){
             const kb=document.createElement('button');
             kb.className='quick-btn quick-btn-kan';
-            kb.textContent='カン '+emj(ponTile);
+            kb.textContent='カン ['+tileLabel(ponTile)+']';
             kb.onclick=()=>humanMinkan();
             qb.appendChild(kb);
           }
@@ -7644,7 +7724,7 @@ function renderTable(){
           if(hasPon){
             const kab=document.createElement('button');
             kab.className='quick-btn quick-btn-kan';
-            kab.textContent='加槓 '+emj(kt);
+            kab.textContent='加槓 ['+tileLabel(kt)+']';
             kab.onclick=()=>humanKakan(ki);
             qb.appendChild(kab);
           }
@@ -7654,7 +7734,7 @@ function renderTable(){
         for(const a of ankans){
           const kab=document.createElement('button');
           kab.className='quick-btn quick-btn-kan';
-          kab.textContent='暗槓 '+emj(a.tile);
+          kab.textContent='暗槓 ['+tileLabel(a.tile)+']';
           const akey=a.key;
           kab.onclick=()=>humanAnkan(akey);
           qb.appendChild(kab);
@@ -7760,21 +7840,24 @@ function renderActions(){
       const drn=p.hand[p.hand.length-1];
       const pinzuNoTsumo=G_ABILITY_MODE&&PROFILE.ability==="pinzu"&&p.isDealer;
 if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanTsumo()">ツモ上がり！</button>`;
-      html+=`<button class="btn btn-primary" onclick="humanDiscard()">ツモ切り [${emj(drn)}]</button>`;
-      if(hasKita)html+=`<button class="btn btn-kita" onclick="humanKita()">北抜き ${emj({suit:'honor',num:'北'})}</button>`;
+      html+=`<button class="btn btn-primary" onclick="humanDiscard()">ツモ切り [${tileLabel(drn)}]</button>`;
+      if(hasKita)html+=`<button class="btn btn-kita" onclick="humanKita()">北抜き [北]</button>`;
       // リーチ中の暗槓（待ちが変わらない場合のみ canAnkan が返す）
       // 暗槓は右下クイックボタンへ
     }else if(isPR){
       const sel=selIdx>=0?p.hand[selIdx]:null;
       const vs=sel&&G.riichiValidIdx&&G.riichiValidIdx.includes(selIdx);
       html+=`<span class="action-hint" style="color:#ff7777;">🀄 ${G.pendingRiichi==='open'?'オープン':''}リーチ — テンパイを保つ牌をダブルクリック or タップ→捨てる</span>`;
-      if(vs)html+=`<button class="btn btn-primary" onclick="humanDiscard()">捨てる [${emj(sel)}]</button>`;
+      if(vs){
+        const suitLabel={'man':'万','pin':'筒','sou':'索','honor':''}[sel.suit]||'';
+        html+=`<button class="btn btn-primary" onclick="humanDiscard()">捨てる [${sel.num}${suitLabel}]</button>`;
+      }
       html+=`<button class="btn btn-danger" onclick="humanCancelRiichi()">キャンセル</button>`;
     }else{
       const pinzuNoTsumo=G_ABILITY_MODE&&PROFILE.ability==="pinzu"&&p.isDealer;
 if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanTsumo()">ツモ上がり！</button>`;
 
-      if(hasKita&&!p.riichi)html+=`<button class="btn btn-kita" onclick="humanKita()">北抜き ${emj({suit:'honor',num:'北'})}</button>`;
+      if(hasKita&&!p.riichi)html+=`<button class="btn btn-kita" onclick="humanKita()">北抜き [北]</button>`;
       if(canRiichi){
         const dbl=canDoubleRiichi();
         html+=`<button class="btn btn-riichi" onclick="humanDeclareRiichi('riichi')">${dbl?'ダブルリーチ':'リーチ'}</button>`;
@@ -7793,13 +7876,13 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
       for(let ki=0;ki<p.hand.length;ki++){
         const kt=p.hand[ki];
         const hasPon=p.melds.some(m=>m.type==='pon'&&teq(m.tiles[0],kt));
-        if(hasPon)html+=`<button class="btn btn-default" onclick="humanKakan(${ki})">加槓 ${emj(kt)}</button>`;
+        if(hasPon)html+=`<button class="btn btn-default" onclick="humanKakan(${ki})">加槓 [${tileLabel(kt)}]</button>`;
       }
       // 暗槓チェック: 手牌に4枚同じ牌がある（リーチ中も待ちが変わらなければ可）
       if(!p.riichi||p.riichi){  // リーチ中も含めて canAnkan でフィルタ
         const ankans=canAnkan(NET.myIdx);
         for(const a of ankans){
-          html+=`<button class="btn btn-default" onclick="humanAnkan('${a.key}')">暗槓 ${emj(a.tile)}</button>`;
+          html+=`<button class="btn btn-default" onclick="humanAnkan('${a.key}')">暗槓 [${tileLabel(a.tile)}]</button>`;
         }
       }
       // action-hint removed
@@ -7808,7 +7891,20 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
     // ロン対象が自分の場合のみ表示（オンラインではtargetで判定）
     const ronTarget = pendingAction?.target ?? NET.myIdx;
     if(ronTarget===NET.myIdx){
-      html+=`<button class="btn btn-ron" onclick="humanRon()">ロン！ ${emj(pendingAction?.tile)}</button>`;
+      html+=`<button class="btn btn-ron" onclick="humanRon()">ロン！ [${tileLabel(pendingAction?.tile)}]</button>`;
+      // ロンをスキップ後にポン/カンできる場合は一緒に表示
+      const _ronTile = pendingAction?.tile;
+      const _ronFrom = pendingAction?.from;
+      if(_ronTile && !p.riichi){
+        const _cnt = cntMap(p.hand);
+        const _c = _cnt[tk(_ronTile)] || 0;
+        if(_c >= 2){
+          html+=`<button class="btn btn-default" onclick="humanRonSkipToPon()">ポン [${tileLabel(_ronTile)}]</button>`;
+        }
+        if(_c >= 3){
+          html+=`<button class="btn btn-default" onclick="humanRonSkipToKan()">カン [${tileLabel(_ronTile)}]</button>`;
+        }
+      }
       html+=`<button class="btn btn-danger" onclick="humanSkipRon()">スキップ</button>`;
     }
   }
@@ -7817,8 +7913,8 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
     // ポン対象が自分の場合のみ表示（オンラインではtargetで判定）
     const ponTarget = pendingAction?.target ?? NET.myIdx;
     if(ponTarget===NET.myIdx){
-      html+=`<button class="btn btn-default" onclick="humanPon()">ポン ${emj(pendingAction?.tile)}</button>`;
-      {const _pt=pendingAction?.tile;const _p=G.players[NET.myIdx];if(_pt&&_p){const _cnt=cntMap(_p.hand);if((_cnt[tk(_pt)]||0)>=3)html+=`<button class="btn btn-default" onclick="humanMinkan()">カン ${emj(_pt)}</button>`;}}
+      html+=`<button class="btn btn-default" onclick="humanPon()">ポン [${tileLabel(pendingAction?.tile)}]</button>`;
+      {const _pt=pendingAction?.tile;const _p=G.players[NET.myIdx];if(_pt&&_p){const _cnt=cntMap(_p.hand);if((_cnt[tk(_pt)]||0)>=3)html+=`<button class="btn btn-default" onclick="humanMinkan()">カン [${tileLabel(_pt)}]</button>`;}}
       html+=`<button class="btn btn-danger" onclick="humanSkipPon()">スキップ</button>`;
     }
   }else if(G.phase==='draw_wait'&&G.current===NET.myIdx){
