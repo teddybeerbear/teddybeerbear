@@ -323,7 +323,7 @@ body::before{
 .p-name{font-size:.68rem;font-weight:700;color:var(--gold);white-space:nowrap;}
 .p-score{font-size:.6rem;color:#6a8a7a;margin-left:auto;white-space:nowrap;}
 .p-badges{display:flex;gap:3px;align-items:center;}
-.badge{font-size:.5rem;padding:1px 4px;border-radius:2px;font-weight:600;white-space:nowrap;}
+.badge{font-size:1.25rem;padding:2px 7px;border-radius:3px;font-weight:600;white-space:nowrap;}
 .badge-riichi{background:#2a0808;border:1px solid #cc4444;color:#cc4444;}
 .badge-tenpai{background:#1a1a00;border:1px solid #999900;color:#cccc33;}
 .badge-dora{background:#001828;border:1px solid #3377aa;color:#55aaff;}
@@ -2820,7 +2820,12 @@ function evalYaku(hand5,winTile,isTsumo,player,roundWind){
 
   // Normal
   if(player.riichi){
-    if(player.doubleRiichi&&player.openRiichi)yakus.push({name:'ダブルオープンリーチ',han:3});
+    if(player.doubleRiichi&&player.openRiichi){
+      if(player._openRiichiRon){
+        yakus.push({name:'ダブルオープンリーチ振り込み',han:13});return yakus;
+      }
+      yakus.push({name:'ダブルオープンリーチ',han:3});
+    }
     else if(player.doubleRiichi)yakus.push({name:'ダブルリーチ',han:2});
     else if(player.openRiichi){
       if(player._openRiichiRon){
@@ -2918,6 +2923,10 @@ function evalYaku(hand5,winTile,isTsumo,player,roundWind){
     Object.values(allCnt).filter(v=>v===2).length===1&&Object.values(allCnt).filter(v=>v>=3).length===1;
   const mAllT=melds.every(m=>['pon','ankan','minkan','kakan'].includes(m.type));
   if(allTP&&mAllT)yakus.push({name:'トイトイ',han:2});
+
+  // Shousangen
+  const dcnt=(['白','発','中'].map(d=>cnt[`honor_${d}`]||0)).reduce((a,b)=>a+b,0);
+  if(dcnt>=4)yakus.push({name:'小三元',han:2});
 
   // Honitsu / Chinitsu
   const numSuits=new Set(allTiles.filter(t=>t.suit!=='honor').map(t=>t.suit));
@@ -5773,9 +5782,11 @@ function handleWin(widx,winTile,isTsumo,losidx){
 function handleRon(widx,tile,fromidx){
   const winner=G.players[widx];
   winner.hand.push(tile);
-  // オープンリーチへの振り込みは役満（リーチしていない人が振り込んだ場合）
+  // オープンリーチへの振り込みは役満
+  // 「リーチしていない」または「リーチ宣言牌を振り込んだ（まだリーチ成立前）」場合に成立
   const loser=G.players[fromidx];
-  if(winner.openRiichi && !loser.riichi){
+  const loserJustDeclaredRiichi=loser.riichi&&loser.riichiDiscardIdx>=0&&loser.riichiDiscardIdx===loser.discards.length-1;
+  if(winner.openRiichi && (!loser.riichi||loserJustDeclaredRiichi)){
     winner._openRiichiRon=true; // evalYakuで参照
   }
   // 人和: 1巡目 かつ 自分がまだ一度も捨てていない（鳴きなし）
