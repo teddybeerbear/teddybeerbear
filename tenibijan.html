@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>手にビまーじゃん</title>
+<title>手にビまーじゃん (手牌左寄せ180px版)</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 function _centerHandSeats(table){ /* CSS固定値で処理 */ }
@@ -14,29 +14,86 @@ const _TABLE_W=1400, _TABLE_H=933;
 function scaleTable(){
   const w=document.getElementById('tableWrapper');
   if(!w||!document.getElementById('gameScreen').classList.contains('active')) return;
-  const s=Math.min(window.innerWidth/_TABLE_W, window.innerHeight/_TABLE_H);
-  const ox=(window.innerWidth  - _TABLE_W*s)/2;
-  const oy=(window.innerHeight - _TABLE_H*s)/2;
-  w.style.cssText='position:fixed;left:'+ox+'px;top:'+oy+'px;width:'+_TABLE_W+'px;height:'+_TABLE_H+'px;transform:scale('+s+');transform-origin:0 0;';
+  const table=document.getElementById('mahjongTable');
+
+  const isPortrait = window.innerWidth < window.innerHeight && window.innerWidth < 768;
+  let s, tableH, ox, oy;
+
+  if(isPortrait){
+    // 幅いっぱいにスケール
+    s = window.innerWidth / _TABLE_W;
+    // 上下150pxずつ（計300px）引いた分にする
+    tableH = Math.round((window.innerHeight - 300) / s);
+    ox = 0; 
+    // 開始位置を150px下にずらす
+    oy = 150; 
+  } else {
+    tableH = _TABLE_H;
+    s = Math.min(window.innerWidth/_TABLE_W, window.innerHeight/_TABLE_H);
+    ox = (window.innerWidth - _TABLE_W*s)/2;
+    oy = (window.innerHeight - _TABLE_H*s)/2;
+  }
+
+  w.style.cssText='position:fixed;left:'+ox+'px;top:'+oy+'px;width:'+_TABLE_W+'px;height:'+tableH+'px;transform:scale('+s+');transform-origin:0 0;';
+
+  if(table){
+    if(isPortrait){
+      // max-height:95vw と aspect-ratio:3/2 を !important で無効化し高さを強制
+      table.style.setProperty('height', tableH+'px', 'important');
+      table.style.setProperty('max-height', 'none', 'important');
+      table.style.setProperty('aspect-ratio', 'unset', 'important');
+    } else {
+      table.style.removeProperty('height');
+      table.style.removeProperty('max-height');
+      table.style.removeProperty('aspect-ratio');
+    }
+  }
+
+  // 縦画面: 左右プレイヤーを垂直中央から上下にオフセット配置、上下プレイヤーも調整
+  let ps=document.getElementById('_portraitSeatStyle');
+  if(isPortrait){
+    const v=tableH/_TABLE_H;
+    if(!ps){ps=document.createElement('style');ps.id='_portraitSeatStyle';document.head.appendChild(ps);}
+    // 修正: 左右プレイヤーを垂直中央から上下にオフセット
+    // 上: (168 + 100 - 80)v  ※80px上に移動
+    // 下: (58 + 200 - 130)v ※130px下に移動
+    ps.textContent=
+      '.seat-top .seat-inner{top:'+Math.round((168 + 100 - 80)*v)+'px !important;}'+
+      '.seat-right .seat-inner{top:calc(50% + 300px) !important;transform:rotate(-90deg) translateY(-50%) !important;transform-origin:0 0;}'+
+      '.seat-left .seat-inner{top:calc(50% - 300px) !important;transform:rotate(90deg) translateY(-50%) !important;transform-origin:0 0;}'+
+      '.seat-bottom .seat-inner{bottom:'+Math.round((58 + 200 - 130)*v)+'px !important; left: calc(391px - 180px) !important;}'+ /* 手牌全体を左に180px移動 */
+      /* 下プレイヤーの手牌を3倍に拡大 (36x48 -> 108x144) */
+      '.seat-bottom .tile { width: 108px !important; height: 144px !important; font-size: 8.4rem !important; border-width: 4.5px !important; border-radius: 12px !important; }' +
+      '.seat-bottom .hand-wrap { height: 160px !important; gap: 6px !important; padding: 10px 15px !important; }' +
+      '.seat-bottom .drawn-sep { width: 12px !important; }' +
+      /* 左右のUI（鳴き・北出し）を牌に被らないよう外側に逃がす */
+      '.seat-bottom .melds-wrap { margin-bottom: 20px !important; }' +
+      '#meldKitaArea { margin-bottom: 160px !important; }'+
+      /* 字風点数パネルを手牌に被らないよう右端に絶対配置 */
+      '.bottom-score-panel { position: absolute !important; left: 1020px !important; top: 56px !important; margin-left: 0 !important; }'+
+      /* 縦画面: 能力ボタン(右下)を5倍スケール・手牌より下に配置 */
+      '#tableCornerLeft { bottom: 55px !important; left: 12px !important; transform: scale(3) !important; transform-origin: bottom left !important; }'+
+      '#tableCornerRight { bottom: 55px !important; right: 12px !important; transform: scale(2.5) !important; transform-origin: bottom right !important; }'+
+      /* 縦画面: アクションエリア(ロン/ツモ/鳴きボタン等)を5/3倍スケール */
+      '.action-area { transform: translateX(-50%) scale(1.667) !important; transform-origin: bottom center !important; bottom: 55px !important; }';
+  } else {
+    if(ps) ps.textContent='';
+  }
+
   if(typeof G!=='undefined'&&G&&G.players) requestAnimationFrame(()=>{
-    const t=document.getElementById('mahjongTable');
-    if(t&&typeof _positionDiscards==='function') _positionDiscards(t);
+    if(table&&typeof _positionDiscards==='function') _positionDiscards(table);
   });
 }
 window.addEventListener('resize', scaleTable);
 
 // ── ブラウザ閉じ・タブ閉じ時にピアを確実に閉じる ──────────
-// pagehide はモバイル含め最も信頼性が高い
 window.addEventListener('pagehide', ()=>{
   if(NET.peer){
-    // ゲーム中なら復帰セッションを保存（ホスト・ゲスト両方）
     try{ if(typeof saveRejoinSession==='function') saveRejoinSession(); }catch(e){}
-    // 全ゲストにdisconnectを明示送信
     try{ netBroadcastAll({type:'hostDisconnect'}); }catch(e){}
     try{ NET.peer.destroy(); }catch(e){}
   }
 });
-// beforeunload はデスクトップブラウザ用の保険
 window.addEventListener('beforeunload', ()=>{
   if(NET.peer){
     try{ if(typeof saveRejoinSession==='function') saveRejoinSession(); }catch(e){}
@@ -520,6 +577,13 @@ body::before{
   border-color:#3ada8a;color:#3ada8a;
   box-shadow:0 0 8px #3ada8a44;
 }
+/* 能力ボタン共通 */
+.corner-ability-btn{
+  background:#030a10;border-radius:7px;border-width:1.5px;border-style:solid;
+  font-family:inherit;font-size:.85rem;padding:8px 14px;cursor:pointer;
+  transition:all .2s;letter-spacing:.04em;white-space:nowrap;font-weight:600;
+}
+.corner-ability-btn:hover{filter:brightness(1.3);transform:translateY(-1px);}
 
 /* ===== YAMI (闇) ABILITY ===== */
 .btn-yami{background:linear-gradient(135deg,#100818,#080410);border-color:#553377;color:#cc99ff;font-weight:700;}
@@ -6502,9 +6566,7 @@ function renderCornerAbilityBtns(){
     b.className='corner-ability-btn';
     b.textContent=label; b.title=title;
     b.onclick=onclick;
-    b.style.cssText=`font-size:.85rem;padding:8px 14px;border-radius:7px;border:1.5px solid ${borderColor};` +
-      `cursor:pointer;background:#030a10;transition:all .2s;white-space:nowrap;` +
-      `letter-spacing:.04em;color:${color};`;
+    b.style.cssText=`color:${color};border-color:${borderColor};`;
     cb.insertBefore(b,penBtn);
     return b;
   };
@@ -7484,6 +7546,7 @@ function renderTable(){
     // ── 右パネル: 場風・持ち点横並び(牌と同高48px) + 能力縦 ──
     const rightPanel = document.createElement('div');
     rightPanel.style.cssText='display:flex;flex-direction:column;align-items:flex-start;gap:3px;margin-left:8px;flex-shrink:0;';
+    if(si===0) rightPanel.classList.add('bottom-score-panel');
 
     // 場風・持ち点: 横並び・高さ48px
     const scoreRow = document.createElement('div');
