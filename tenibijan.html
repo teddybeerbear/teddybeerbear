@@ -4358,6 +4358,13 @@ function updateGuestMemberList(count){
 
 // Host: receive action from guest, execute, broadcast state
 function handleGuestAction(msg, senderIdx){
+  // winReady と nextRound は win/end フェーズでも処理する
+  if(msg.type==='winReady'){
+    WIN_READY.readySet.add(senderIdx);
+    _checkAllWinReady();
+    return;
+  }
+  if(msg.type==='nextRound'){ nextRound(); return; }
   if(G.phase==='win'||G.phase==='end')return;
   switch(msg.type){
     case 'pong':
@@ -5832,13 +5839,14 @@ function resolveYamiChallenge(pidx, action){
     if(action==='ron'){
       pendingAction={type:'ron',tile,from,target:pidx};
       G.phase='pending_ron';
-      G._yamiRonChallenge=true; // 役なし時に罰符処理するフラグ
+      G._yamiRonChallenge=true;
       handleRon(pidx,tile,from);
       G._yamiRonChallenge=false;
       pendingAction=null;
+      return; // handleWin内で全処理完結
     }
-    else if(action==='pon'){ handlePon(pidx,tile,from); }
-    else if(action==='kan'){ handleMinkan(pidx,tile,from); }
+    else if(action==='pon'){ handlePon(pidx,tile,from); return; }
+    else if(action==='kan'){ handleMinkan(pidx,tile,from); return; }
   } else {
     // 不当: 罰符-80点、捨てた側に+80点、局終了
     const loser=G.players[from];
@@ -6530,10 +6538,13 @@ function onWinOk(){
 
 function _checkAllWinReady(){
   if(WIN_READY.proceeded) return;
-  const total = numPlayers || 1;
+  // オンライン接続中の人間プレイヤー数（CPU除く）
+  const humanCount = NET.online
+    ? 1 + (NET.conns ? NET.conns.filter(c=>c&&c.open).length : 0)
+    : 1;
   const statusEl = document.getElementById('winReadyStatus');
-  if(statusEl) statusEl.textContent = `${WIN_READY.readySet.size}/${total}人 OK`;
-  if(WIN_READY.readySet.size >= total){
+  if(statusEl) statusEl.textContent = humanCount > 1 ? `${WIN_READY.readySet.size}/${humanCount}人 OK` : '';
+  if(WIN_READY.readySet.size >= humanCount){
     nextRound();
   }
 }
