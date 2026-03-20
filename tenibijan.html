@@ -4692,14 +4692,8 @@ function applyHostState(msg){
       // 引いた牌を選択状態にする（リーチ中は除く）
       const _gp=G.players[NET.myIdx];
       if(_gp&&!_gp.riichi&&selIdx<0) selIdx=_gp.hand.length-1;
-      // 自動北抜き・自動ツモ切りトリガー（北がある場合のみ北抜き、それ以外は自動捨てON時のみ）
-      if(_gp){
-        const _hasKita = !_gp.riichi && _gp.hand.some(t=>t.suit==='honor'&&t.num==='北');
-        const _shouldAuto = (autoWinEnabled && canWin(_gp.hand))
-          || (autoKitaEnabled && _hasKita)
-          || autoDiscardEnabled;
-        if(_shouldAuto) setTimeout(()=>{ if(G.current===NET.myIdx&&G.phase==='discard') humanAutoDiscard(); }, 350);
-      }
+      // 自動発火
+      _triggerAutoAction(NET.myIdx, 350);
     }
     renderAll();
     if(s.winModal){
@@ -4798,7 +4792,15 @@ function remoteWallPick(pidx,slotIdx){
   // 地和: 非親 かつ 1巡目 かつ 全員が未捨て
   if(!p.isDealer&&G.firstRound&&(p.turnCount||0)===0&&G.players.every(pl=>(pl.turnCount||0)===0)&&canWin(p.hand))p.isChiihou=true;
   updateTenpai(p);
-  if(canWin(p.hand)){addLog(`${emj(tile)} ツモ！上がれます`,'log-tsumo');renderAll();broadcastState();return;}
+  if(canWin(p.hand)){
+    addLog(`${emj(tile)} ツモ！上がれます`,'log-tsumo');renderAll();broadcastState();
+    // 自動上がりON→自動ツモ
+    if(autoWinEnabled){
+      const pinzuNoTsumo=G_ABILITY_MODE&&PROFILE.ability==='pinzu'&&p.isDealer;
+      if(!pinzuNoTsumo){ setTimeout(()=>{ if(G.current===myIdx&&G.phase==='discard'&&canWin(G.players[myIdx].hand)) humanTsumo(); },200); }
+    }
+    return;
+  }
   const drawnIsKita=tile.suit==='honor'&&tile.num==='北';
   if(p.riichi&&!drawnIsKita){
     addLog(`${emj(tile)} ツモ切り（リーチ中）`,'log-riichi');
@@ -5516,7 +5518,9 @@ function _timerAutoAct(){
   const myIdx=NET.myIdx;
   // pending_ron/pon はG.currentが他プレイヤーのままなので別判定
   if(G.phase==='pending_ron'){
-    humanSkipRon();
+    // 自動上がりONならロン、OFFならスキップ
+    if(autoWinEnabled && pendingAction?.target===myIdx) humanRon();
+    else humanSkipRon();
     return;
   }
   if(G.current!==myIdx) return;
@@ -5617,6 +5621,28 @@ function toggleNoMeld(){
   updateAutoMenuLabel();
 }
 
+
+// 自動上がり・自動北抜き・自動捨てを統一的にトリガーする
+function _triggerAutoAction(myIdx, delay=200){
+  setTimeout(()=>{
+    if(G.current!==myIdx || G.phase!=='discard') return;
+    const p=G.players[myIdx];
+    if(!p) return;
+    // 自動上がり
+    if(autoWinEnabled && canWin(p.hand)){
+      const pinzuNoTsumo=G_ABILITY_MODE&&PROFILE.ability==='pinzu'&&p.isDealer;
+      if(!pinzuNoTsumo){ humanTsumo(); return; }
+    }
+    // 自動北抜き
+    if(autoKitaEnabled && !p.riichi && p.hand.some(t=>t.suit==='honor'&&t.num==='北')){
+      humanKita();
+      if(autoDiscardEnabled) setTimeout(()=>{ if(G.current===myIdx&&G.phase==='discard') _triggerAutoAction(myIdx,200); },400);
+      return;
+    }
+    // 自動捨て
+    if(autoDiscardEnabled) humanAutoDiscard();
+  }, delay);
+}
 // 自動ツモ切り: リーチ中はドロー牌を切る、それ以外は最後の牌を切る
 function humanAutoDiscard(){
   const myIdx=NET.myIdx;
@@ -5795,8 +5821,8 @@ function toggleAutoDiscard(){
   autoDiscardEnabled=!autoDiscardEnabled;
   _updateAutoDiscardBtn();
   updateAutoMenuLabel();
-  if(autoDiscardEnabled && G.phase==='discard' && G.current===NET.myIdx){
-    setTimeout(()=>{ if(G.current===NET.myIdx&&G.phase==='discard') humanAutoDiscard(); }, 120);
+  if(G.phase==='discard' && G.current===NET.myIdx){
+    _triggerAutoAction(NET.myIdx, 120);
   }
 }
 
@@ -5842,7 +5868,7 @@ function humanPickWall(slotIdx){
   if(p.isDealer&&G.firstRound&&(p.turnCount||0)===0&&canWin(p.hand))p.isTenhou=true;
   // 地和: 非親 かつ 1巡目 かつ 自分より前の全員が未捨て（誰も鳴いていない）
   if(!p.isDealer&&G.firstRound&&(p.turnCount||0)===0&&G.players.every(pl=>(pl.turnCount||0)===0)&&canWin(p.hand))p.isChiihou=true;
-  if(canWin(p.hand)){addLog(`${emj(tile)} ツモ！上がれます`,'log-tsumo');renderAll();broadcastState();return;}
+  if(canWin(p.hand)){addLog(`${emj(tile)} ツモ！上がれます`,'log-tsumo');renderAll();broadcastState();_triggerAutoAction(myIdx,200);return;}
   const drawnIsKita=tile.suit==='honor'&&tile.num==='北';
   if(p.riichi&&!drawnIsKita){
     addLog(`${emj(tile)} ツモ切り（リーチ中）`,'log-riichi');
@@ -5855,14 +5881,8 @@ function humanPickWall(slotIdx){
   else if(p.tenpai)addLog(`${emj(tile)} ツモ。テンパイ中。`,'log-new');
   else addLog(`${emj(tile)} ツモ`,'log-new');
   renderAll();broadcastState();
-  // 自動発火: 上がれる・北がある・autoDiscardON の時のみ
-  if(G.current===myIdx && G.phase==='discard'){
-    const pp=G.players[myIdx];
-    const shouldAuto = (autoWinEnabled && canWin(pp.hand))
-      || (autoKitaEnabled && !pp.riichi && pp.hand.some(t=>t.suit==='honor'&&t.num==='北'))
-      || autoDiscardEnabled;
-    if(shouldAuto) setTimeout(()=>{ if(G.current===myIdx&&G.phase==='discard') humanAutoDiscard(); }, 350);
-  }
+  // 自動発火
+  if(G.current===myIdx && G.phase==='discard') _triggerAutoAction(myIdx, 350);
 }
 
 // ============================================================
