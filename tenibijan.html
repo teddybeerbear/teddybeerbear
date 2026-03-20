@@ -369,7 +369,7 @@ body::before{
 .tile.selected{transform:translateY(-11px);border-color:#f0d47a;box-shadow:0 9px 18px #c9a84c55;background:linear-gradient(160deg,#fffce0,#f5e890);}
 .tile.drawn{border-color:transparent;box-shadow:none;}
 .tile.riichi-discard{transform:rotate(90deg);margin:0 5px;}
-.tile-dora{position:absolute;top:1px;left:1px;width:7px;height:7px;background:#cc4400;border-radius:50%;font-size:.3rem;color:#fff;display:flex;align-items:center;justify-content:center;}
+.tile-dora-glow{box-shadow:0 0 8px 3px #ffcc0099,0 0 2px 1px #ffaa00cc !important;border-color:#f0c030 !important;background:linear-gradient(160deg,#fffbe8,#f5e87a) !important;}
 /* 同種牌ハイライト */
 .tile.same-highlight{
   border-color:#55ddff !important;
@@ -633,7 +633,7 @@ body::before{
 .btn-yami.active{border-color:#aa66ff;animation:btnYamiPulse .7s ease-in-out infinite;}
 @keyframes btnYamiPulse{0%,100%{box-shadow:0 0 6px #aa66ff44;}50%{box-shadow:0 0 14px #aa66ff88;}}
 .tile.yami-hidden{background:linear-gradient(160deg,#1a0a2a,#0d0518)!important;border-color:#553377!important;color:#553377!important;}
-.tile.yami-hidden .tile-dora{display:none;}
+
 .tile.yami-marked{border-color:#aa66ff!important;box-shadow:0 0 8px #aa66ff66!important;background:linear-gradient(160deg,#1a0a2a,#150a24)!important;}
 .tile.yami-marked::after{content:'🌑';position:absolute;top:1px;right:1px;font-size:.45em;opacity:.8;}
 
@@ -1086,6 +1086,8 @@ body::before{
 
 /* Light mode: opponent hand tile selectable */
 .light-target-tile{border-color:#ffee22!important;cursor:pointer!important;animation:lightPulse 1s ease-in-out infinite;}
+.light-selected-tile{border-color:#ffffff!important;border-width:2.5px!important;background:rgba(255,238,68,0.18)!important;box-shadow:0 0 10px #ffee6688!important;cursor:pointer!important;animation:none!important;}
+.light-selected-tile::after{content:'✓';position:absolute;top:1px;right:3px;font-size:.6rem;color:#ffee44;font-weight:700;pointer-events:none;z-index:1;}
 @keyframes lightPulse{0%,100%{border-color:#887722;}50%{border-color:#ffee44;box-shadow:0 0 8px #ffee2288;}}
 
 /* Light peek overlay */
@@ -1167,7 +1169,7 @@ body::before{
     transform:translate(-50%,-50%);
   }
   .tile:has(.tile-img){font-size:0;overflow:hidden;}
-  .tile:has(.tile-img) .tile-dora{font-size:6px;z-index:2;}
+
   /* dora pile cells with images */
   .dp-cell.face{position:relative;overflow:hidden;}
   .dp-cell.face .tile-img{
@@ -1863,6 +1865,7 @@ body::before{
     <div class="modal-title" id="mTitle">上がり！</div>
     <div class="modal-sub" id="mSub"></div>
     <div class="modal-hand" id="mHand"></div>
+    <div id="mDoraArea" style="margin-bottom:8px;display:none;"></div>
     <table class="yaku-table"><thead><tr><th>役</th><th>翻</th></tr></thead><tbody id="mYakuBody"></tbody></table>
     <div class="score-display" id="mScore"></div>
     <div class="score-sub" id="mScoreSub"></div>
@@ -2981,6 +2984,7 @@ function doraFromIndicator(ind){
 // ============================================================
 let G={};
 let selIdx=-1;
+let _lightPending=null; // 光能力: 選択中の牌 {type,si/di/pidx/idx}
 let autoDrawEnabled=false;  // 自動ツモON/OFF
 let autoDiscardEnabled=false; // 自動切りON/OFF
 let autoKitaEnabled=false;    // 自動北抜きON/OFF
@@ -4447,6 +4451,12 @@ function handleGuestAction(msg, senderIdx){
           G.lightRevealedSlots['dc_'+di]=true;
           if(!G.lightExtraDora) G.lightExtraDora=[];
           G.lightExtraDora.push({suit:tile.suit,num:tile.num});
+          // ドラ表示牌を表にした場合はカンドラと同様にdoraInds/uraIndsに追加
+          if(di>=7&&di<=10){
+            G.doraInds.push(tile);
+            const uraIdx=4+(di-7);
+            if(G.doraPile[uraIdx]) G.uraInds.push(G.doraPile[uraIdx]);
+          }
           const ui=msg.userIdx??senderIdx;
           if(ui!=null&&G.players[ui]) G.players[ui].abilityUsed=true;
           G.lightMode=false;
@@ -4484,6 +4494,9 @@ function handleGuestAction(msg, senderIdx){
           broadcastState();
         }
       }
+      break;
+    case 'yamiChallenge':
+      if(amIHost()){ resolveYamiChallenge(msg.pidx, msg.action); broadcastState(); }
       break;
     case 'lightRevealMine':
       if(amIHost()){
@@ -4582,7 +4595,7 @@ function applyHostState(msg){
     G.phase=s.phase;G.firstRound=s.firstRound;G.log=s.log;
     G.savedScores=s.savedScores;G._dealerWon=s._dealerWon;
     G.pendingRiichi=s.pendingRiichi;G.riichiValidIdx=s.riichiValidIdx;
-    G.mineSlots=s.mineSlots??[];G.mineRinshanIdxs=s.mineRinshanIdxs??[];G.mineOwners=s.mineOwners??{};G.mineRinshanOwners=s.mineRinshanOwners??{};G.mineCount=s.mineCount??0;G.yamiSelectMode=s.yamiSelectMode??false;G.hakuSelectMode=s.hakuSelectMode??false;G.stealMode=s.stealMode??false;G.lightMode=s.lightMode??false;G.lightUserIdx=s.lightUserIdx??null;G.lightRevealedSlots=s.lightRevealedSlots??{};G.lightRevealedHand=s.lightRevealedHand??{};G.lightExtraDora=s.lightExtraDora??[];G.penDrawings=s.penDrawings??{};
+    G.mineSlots=s.mineSlots??[];G.mineRinshanIdxs=s.mineRinshanIdxs??[];G.mineOwners=s.mineOwners??{};G.mineRinshanOwners=s.mineRinshanOwners??{};G.mineCount=s.mineCount??0;G.yamiSelectMode=s.yamiSelectMode??false;G.hakuSelectMode=s.hakuSelectMode??false;G.stealMode=s.stealMode??false;G.lightMode=s.lightMode??false;G.lightUserIdx=s.lightUserIdx??null;G.yamiChallenge=s.yamiChallenge??null;G.lightRevealedSlots=s.lightRevealedSlots??{};G.lightRevealedHand=s.lightRevealedHand??{};G.lightExtraDora=s.lightExtraDora??[];G.penDrawings=s.penDrawings??{};
     G.players=s.players;
     numPlayers=s.numPlayers;
     pendingAction=s.pendingAction;
@@ -4644,7 +4657,7 @@ function _buildStateSnapshot(extra={}){
     phase:G.phase,firstRound:G.firstRound,log:G.log,
     savedScores:G.savedScores,_dealerWon:G._dealerWon,
     pendingRiichi:G.pendingRiichi,riichiValidIdx:G.riichiValidIdx,
-    mineSlots:G.mineSlots,mineRinshanIdxs:G.mineRinshanIdxs,mineOwners:G.mineOwners??{},mineRinshanOwners:G.mineRinshanOwners??{},mineCount:G.mineCount,yamiSelectMode:G.yamiSelectMode,hakuSelectMode:G.hakuSelectMode,stealMode:G.stealMode,lightMode:G.lightMode,lightUserIdx:G.lightUserIdx??null,lightRevealedSlots:G.lightRevealedSlots,lightRevealedHand:G.lightRevealedHand,lightExtraDora:G.lightExtraDora??[],penDrawings:G.penDrawings??{},
+    mineSlots:G.mineSlots,mineRinshanIdxs:G.mineRinshanIdxs,mineOwners:G.mineOwners??{},mineRinshanOwners:G.mineRinshanOwners??{},mineCount:G.mineCount,yamiSelectMode:G.yamiSelectMode,hakuSelectMode:G.hakuSelectMode,stealMode:G.stealMode,lightMode:G.lightMode,lightUserIdx:G.lightUserIdx??null,yamiChallenge:G.yamiChallenge??null,lightRevealedSlots:G.lightRevealedSlots,lightRevealedHand:G.lightRevealedHand,lightExtraDora:G.lightExtraDora??[],penDrawings:G.penDrawings??{},
     players:G.players,numPlayers,pendingAction,
     guestPeerIds:NET.guestPeerIds,
     tobiMode:G_TOBI_MODE,
@@ -4800,7 +4813,7 @@ function startOnlineGame(){
   document.getElementById('lobby').style.display='none';
   document.getElementById('gameScreen').classList.add('active');
   scaleTable();
-  G={players:[],deck:[],deckSlots:[],doraInds:[],uraInds:[],doraPile:[],rinshan:[],rinshanIdx:6,kanDoraCount:0,lightMode:false,lightUserIdx:null,lightRevealedSlots:{},lightRevealedHand:{},stealMode:false,mineSlots:[],mineRinshanIdxs:[],mineOwners:{},mineRinshanOwners:{},mineCount:0,penDrawings:{},
+  G={players:[],deck:[],deckSlots:[],doraInds:[],uraInds:[],doraPile:[],rinshan:[],rinshanIdx:6,kanDoraCount:0,lightMode:false,lightUserIdx:null,lightRevealedSlots:{},lightRevealedHand:{},stealMode:false,mineSlots:[],mineRinshanIdxs:[],mineOwners:{},mineRinshanOwners:{},mineCount:0,penDrawings:{},yamiChallenge:null,
      dealer:Math.floor(Math.random()*numPlayers),current:0,roundNum:1,roundWind:'東',honba:0,riichiPot:0,
      pendingRiichi:null,riichiValidIdx:null,
      phase:'idle',firstRound:true,log:[],savedScores:null,_dealerWon:false};
@@ -4826,7 +4839,7 @@ function initGame(){
   document.getElementById('lobby').style.display='none';
   document.getElementById('gameScreen').classList.add('active');
   scaleTable();
-  G={players:[],deck:[],deckSlots:[],doraInds:[],uraInds:[],doraPile:[],rinshan:[],rinshanIdx:6,kanDoraCount:0,lightMode:false,lightUserIdx:null,lightRevealedSlots:{},lightRevealedHand:{},stealMode:false,mineSlots:[],mineRinshanIdxs:[],mineOwners:{},mineRinshanOwners:{},mineCount:0,penDrawings:{},
+  G={players:[],deck:[],deckSlots:[],doraInds:[],uraInds:[],doraPile:[],rinshan:[],rinshanIdx:6,kanDoraCount:0,lightMode:false,lightUserIdx:null,lightRevealedSlots:{},lightRevealedHand:{},stealMode:false,mineSlots:[],mineRinshanIdxs:[],mineOwners:{},mineRinshanOwners:{},mineCount:0,penDrawings:{},yamiChallenge:null,
      dealer:Math.floor(Math.random()*numPlayers),current:0,roundNum:1,roundWind:'東',honba:0,riichiPot:0,
      pendingRiichi:null,riichiValidIdx:null,
      phase:'idle',firstRound:true,log:[],savedScores:null,_dealerWon:false};
@@ -5089,17 +5102,21 @@ function discardAction(pidx,tidx,isYami=false){ if(pidx===NET.myIdx){ _timerSave
   const pd=G.players[pidx];
   if(pd&&pd._cpuNextYami){isYami=true;pd._cpuNextYami=false;}
   const p=G.players[pidx];
+  // splice前に闇指定牌のオブジェクト参照を保存（spliceでインデックスがズレる前に）
+  const yamiTileObj = (p.yamiTileIdx>=0 && p.yamiTileIdx<p.hand.length) ? p.hand[p.yamiTileIdx] : null;
   const tile=p.hand.splice(tidx,1)[0];
   p.drawnTile=null;
   // 闇捨て: タイルに印をつける＋abilityUsedをセット
   if(isYami){ tile._yami=true; p.abilityUsed=true; }
   p.discards.push(tile);
-  // ソート前に闇指定牌を記憶して、ソート後に再検索
-  const yamiTile = (p.yamiTileIdx>=0 && p.yamiTileIdx<p.hand.length) ? p.hand[p.yamiTileIdx] : null;
-  p.hand=sortTiles(p.hand);
-  // ソート後に闇指定牌のインデックスを再計算
-  if(yamiTile) p.yamiTileIdx=p.hand.findIndex(t=>t===yamiTile);
-  else p.yamiTileIdx=-1;
+  // 闇指定牌を捨てた場合はyamiTileIdxをリセット、そうでなければソート後に再計算
+  if(isYami || tile===yamiTileObj){
+    p.yamiTileIdx=-1;
+    p.hand=sortTiles(p.hand);
+  } else {
+    p.hand=sortTiles(p.hand);
+    p.yamiTileIdx = yamiTileObj ? p.hand.findIndex(t=>t===yamiTileObj) : -1;
+  }
   updateTenpai(p);
   p.turnCount=(p.turnCount||0)+1;
   // 全員が1回以上捨てたら1巡目終了
@@ -5108,6 +5125,32 @@ function discardAction(pidx,tidx,isYami=false){ if(pidx===NET.myIdx){ _timerSave
 
   if(isYami) addLog(`${p.name} → 🌑 を捨てた`,'log-new');
   else addLog(`${p.name} → ${emj(tile)} を捨てた`,'log-new');
+  // 闇牌が捨てられた場合: 全プレイヤーにチャレンジ選択肢を提示
+  if(isYami){
+    G.phase='pending_yami_challenge';
+    G.yamiChallenge={from:pidx, tile, answered:[], totalAnswers:0};
+    renderAll();broadcastState();
+    // CPU/オフラインプレイヤーは自動的にスキップ（できる形があればチャレンジ）
+    if(!NET.online){
+      for(let i=0;i<numPlayers;i++){
+        if(i===pidx)continue;
+        const op=G.players[i];
+        const cnt=cntMap(op.hand);
+        const hasTwoPlus=(cnt[tk(tile)]||0)>=2;
+        const canRonNow=op.tenpai&&op.waits.some(w=>teq(w,tile));
+        // CPU: ロン/ポン/カンできる形なら宣言、できなければスキップ
+        if(canRonNow){ resolveYamiChallenge(i,'ron'); return; }
+        if(hasTwoPlus&&!op.riichi){
+          const hasThree=(cnt[tk(tile)]||0)>=3;
+          if(hasThree) resolveYamiChallenge(i,'kan');
+          else resolveYamiChallenge(i,'pon');
+          return;
+        }
+        resolveYamiChallenge(i,'skip');
+      }
+    }
+    return;
+  }
   // Check ron
   for(let i=0;i<numPlayers;i++){
     if(i===pidx)continue;
@@ -5567,6 +5610,7 @@ function timerOnMyTurn(){
 
 function autoPickWall(){
   if(G.phase!=='draw_wait'||G.current!==NET.myIdx)return;
+  if(G.lightMode)return; // 光モード中はツモ不可
   const available=G.deckSlots.map((t,i)=>t?i:-1).filter(i=>i>=0);
   if(available.length===0)return;
   const slotIdx=available[Math.floor(Math.random()*available.length)];
@@ -5658,6 +5702,7 @@ function toggleAutoDiscard(){
 
 function humanPickWall(slotIdx){
   if(G.phase!=='draw_wait'||G.current!==NET.myIdx)return;
+  if(G.lightMode)return; // 光モード中はツモ不可
   SFX.draw();
   if(G.deckSlots[slotIdx]===null)return;
   if(NET.online&&!amIHost()){
@@ -5720,6 +5765,80 @@ function humanPickWall(slotIdx){
   }
 }
 
+// ============================================================
+// YAMI CHALLENGE (闇牌へのロン/ポン/カン)
+// ============================================================
+function resolveYamiChallenge(pidx, action){
+  if(G.phase!=='pending_yami_challenge'||!G.yamiChallenge) return;
+  const {from, tile} = G.yamiChallenge;
+  const op = G.players[pidx];
+  if(!op) return;
+
+  if(action==='skip'){
+    // スキップ: 次のプレイヤーへ、全員スキップなら通常フロー
+    G.yamiChallenge.answered.push(pidx);
+    if(G.yamiChallenge.answered.length >= numPlayers-1){
+      // 全員スキップ → 通常のロン/ポンチェックへ
+      G.phase='discard'; // 一時的に戻す
+      G.yamiChallenge=null;
+      // 通常のロン/ポンチェック
+      let ponFound=false;
+      for(let i=0;i<numPlayers;i++){
+        if(i===from)continue;
+        if((G.players[i].hand.length===4||G.players[i].hand.length===1)&&G.players[i].tenpai&&G.players[i].waits.some(w=>teq(w,tile))){
+          const isMe=(i===NET.myIdx);
+          if(isMe||isOnlineGuestIdx(i)){
+            pendingAction={type:'ron',tile,from,target:i};
+            G.phase='pending_ron';renderAll();broadcastState();
+            if(isMe){timerOnMyTurn();setTimeout(()=>{if(G.phase==='pending_ron'&&autoWinEnabled)humanRon();},250);}
+            return;
+          } else if(cpuDecideRon(i,tile)){handleRon(i,tile,from);return;}
+        }
+      }
+      if(!checkPon(from,tile)) nextTurn((from+1)%numPlayers);
+      broadcastState();
+    } else {
+      renderAll();broadcastState();
+    }
+    return;
+  }
+
+  // ロン/ポン/カン宣言: 実際の牌と照合
+  const cnt=cntMap(op.hand);
+  const hasTile=(cnt[tk(tile)]||0);
+  let valid=false;
+  if(action==='ron') valid=op.tenpai&&op.waits.some(w=>teq(w,tile));
+  else if(action==='pon') valid=hasTile>=2&&!op.riichi;
+  else if(action==='kan') valid=hasTile>=3&&!op.riichi;
+
+  G.yamiChallenge=null;
+  if(valid){
+    // 正当: 通常処理
+    addLog(`🌑 闇！${op.name}の${action==='ron'?'ロン':action==='pon'?'ポン':'カン'}成立！`,'log-win');
+    if(action==='ron'){ handleRon(pidx,tile,from); }
+    else if(action==='pon'){ handlePon(pidx,tile,from); }
+    else if(action==='kan'){ handleMinkan(pidx,tile,from); }
+  } else {
+    // 不当: 罰符-80点で局終了
+    addLog(`🌑 闇チャレンジ失敗！${op.name} に罰符-80点`,'log-win');
+    op.score-=80;
+    G.phase='end';
+    G.honba++;saveScores();renderAll();broadcastState();
+    if(checkTobi()) return;
+    setTimeout(()=>advanceRound(false),2800);
+  }
+  broadcastState();renderAll();
+}
+
+function humanYamiChallenge(action){
+  if(G.phase!=='pending_yami_challenge'||!G.yamiChallenge) return;
+  if(NET.online&&!amIHost()){
+    netSend({type:'yamiChallenge',pidx:NET.myIdx,action});
+    return;
+  }
+  resolveYamiChallenge(NET.myIdx, action);
+}
+
 function handleExhausted(){
   G.phase='end';
   addLog('山牌が尽きました。流局です。','log-draw');
@@ -5746,13 +5865,11 @@ function handleWin(widx,winTile,isTsumo,losidx){
   const isYakumanPlus=yakus.some(y=>y.han>=13);
   if(!isYakumanPlus){
     const dc=countDoras(displayHand,w);
-    if(dc>0){
-      if(w.riichi){
-        const ud=G.uraInds.map(doraFromIndicator);
-        let uc=0;displayHand.forEach(t=>ud.forEach(d=>{if(teq(t,d))uc++;}));
-        if(uc>0)yakus.push({name:`裏ドラ×${uc}`,han:uc});
-      }
-      yakus.push({name:`ドラ×${dc}`,han:dc});
+    if(dc>0) yakus.push({name:`ドラ×${dc}`,han:dc});
+    if(w.riichi){
+      const ud=G.uraInds.map(doraFromIndicator);
+      let uc=0;displayHand.forEach(t=>ud.forEach(d=>{if(teq(t,d))uc++;}));
+      if(uc>0)yakus.push({name:`裏ドラ×${uc}`,han:uc});
     }
   }
   if(yakus.length===0){addLog('役なし。','log-new');G.phase='discard';renderAll();return;}
@@ -6042,6 +6159,7 @@ function humanSelect(idx){
 function humanDiscard(){
   const myTurn = NET.online ? G.current===NET.myIdx : G.current===0;
   if(!myTurn||G.phase!=='discard')return;
+  if(G.yamiSelectMode)return; // 闇選択中は切り不可
   const p=G.players[NET.myIdx];
   let idx=selIdx;
   if(p.riichi)idx=p.hand.length-1;
@@ -6488,6 +6606,8 @@ function confirmBackToTitle(){
   document.getElementById('titleConfirmOverlay').classList.add('show');
 }
 function backToLobby(){
+  // Gをリセットして次のゲームで能力フラグが残らないようにする
+  G={};
   // ── ペン描画状態を完全リセット ──
   _penModeOn = false;
   _wallCanvasInited = false;
@@ -6550,13 +6670,34 @@ function showWinModal(winner,hand,winTile,isTsumo,losidx,yakus,score,han){
   document.getElementById('mHand').innerHTML=sortTiles(hand).map(t=>{
     const id=doras.some(d=>teq(d,t));
     const iw=teq(t,winTile);
-    return`<div class="tile ${tc(t)}${iw?' selected':''}">${emj(t)}${id?'<div class="tile-dora"></div>':''}</div>`;
+    return`<div class="tile ${tc(t)}${iw?' selected':''}${id?' tile-dora-glow':''}">${emj(t)}</div>`;
   }).join('');
   document.getElementById('mYakuBody').innerHTML=yakus.map(y=>
     `<tr><td>${y.name}</td><td>${y.han>=52?'４倍役満':y.han>=39?'３倍役満':y.han>=26?'２倍役満':y.han>=13?'役満':y.han+'翻'}</td></tr>`
   ).join('');
   document.getElementById('mScore').textContent=`+${score.toLocaleString()} 点`;
   document.getElementById('mScoreSub').textContent=`${han}翻 / ${winner.isDealer?'親':'子'}`;
+  // ドラ・裏ドラ表示
+  const mDoraArea=document.getElementById('mDoraArea');
+  if(mDoraArea){
+    const doraInds=G.doraInds||[];
+    const uraInds=(winner.riichi&&G.uraInds)||[];
+    if(doraInds.length>0||uraInds.length>0){
+      const tileHtml=t=>`<div class="tile ${tc(t)}" style="width:28px;height:38px;font-size:1.8rem;">${emj(t)}</div>`;
+      let html='<div style="display:flex;gap:12px;justify-content:center;align-items:flex-start;flex-wrap:wrap;">';
+      if(doraInds.length>0){
+        html+=`<div style="text-align:center;"><div style="font-size:.52rem;color:#5a8a7a;margin-bottom:3px;letter-spacing:.08em;">ドラ表示牌</div><div style="display:flex;gap:2px;">${doraInds.map(tileHtml).join('')}</div></div>`;
+      }
+      if(uraInds.length>0){
+        html+=`<div style="text-align:center;"><div style="font-size:.52rem;color:#5a8a7a;margin-bottom:3px;letter-spacing:.08em;">裏ドラ表示牌</div><div style="display:flex;gap:2px;">${uraInds.map(tileHtml).join('')}</div></div>`;
+      }
+      html+='</div>';
+      mDoraArea.innerHTML=html;
+      mDoraArea.style.display='';
+    } else {
+      mDoraArea.style.display='none';
+    }
+  }
   timerStop(); document.getElementById('winOverlay').classList.add('show');
   _startWinTimer();
 }
@@ -6575,6 +6716,7 @@ function addLog(msg,cls){
 // RENDER
 // ============================================================
 function renderAll(){
+  if(!G.lightMode) _lightPending=null; // lightMode解除時にペンディングをリセット
   renderHeader();renderTable();renderActions();
   // ペンボタン: 能力モードONかつペン能力所持時のみ表示
   const ptb=document.getElementById('penToggleBtn');
@@ -6720,7 +6862,7 @@ function renderCornerAbilityBtns(){
     if(!G.yamiSelectMode){
       const yamiSet=p.yamiTileIdx>=0&&p.yamiTileIdx<p.hand.length;
       if(!yamiSet)
-        add('🌑 闇','#cc99ff','#7744aa',()=>{G.yamiSelectMode=true;renderAll();},'捨て牌を裏向  に');
+        add('🌑 闇','#cc99ff','#7744aa',()=>{G.yamiSelectMode=true;G.players[myIdx].yamiTileIdx=-1;renderAll();},'捨て牌を裏向きに');
     }
   }
 }
@@ -6918,6 +7060,10 @@ function _initWallExpandEvents(ec){
     if(si < 0 || G.deckSlots[si] === null) return;
     if(G.minePlantMode){ plantMine(si); renderWallExpand(); }
     else if(G.lightMode === 'pick'){ lightRevealWall(si); renderWallExpand(); }
+    else if(G.lightMode==='pick'){
+      if(_lightPending&&_lightPending.type==='wall'&&_lightPending.si===si){ lightRevealWall(si); _lightPending=null; closeWallExpand(); }
+      else { _lightPending={type:'wall',si}; renderWallExpand(); renderActions(); }
+    }
     else if(G.phase === 'draw_wait' && G.current === NET.myIdx){
       humanPickWall(si);
       closeWallExpand(); // ツモったら閉じる
@@ -7061,6 +7207,17 @@ const _doraImgCache={};
       }
     }
 
+    // 選択中牌: 白枠+黄色オーバーレイ
+    const isWallSelected=!!(_lightPending&&_lightPending.type==='wall'&&_lightPending.si===i);
+    if(isWallSelected){
+      ctx.fillStyle='rgba(255,238,68,0.18)';
+      _roundRect(ctx,r.x,r.y,r.w,r.h,3,true,false);
+      ctx.strokeStyle='#ffffff'; ctx.lineWidth=2.5;
+      _roundRect(ctx,r.x,r.y,r.w,r.h,3,false,true);
+      ctx.fillStyle='#ffee44'; ctx.font='bold 11px sans-serif';
+      ctx.textAlign='right'; ctx.textBaseline='top';
+      ctx.fillText('✓',r.x+r.w-2,r.y+2);
+    }
     // 表にした牌: 発光ボーダー
     if(isRevealed){
       ctx.strokeStyle='#ffee22'; ctx.lineWidth=2;
@@ -7075,7 +7232,7 @@ const _doraImgCache={};
       if(imgUrl){
         const cached=_wallImgCache[imgUrl];
         if(cached&&cached.complete){
-          ctx.drawImage(cached,r.x+2,r.y+2,r.w-4,r.h-4);
+          const _dw1=48,_dh1=48;ctx.drawImage(cached,r.x+(r.w-_dw1)/2,r.y+(r.h-_dh1)/2,_dw1,_dh1);
         } else if(!cached){
           const img=new Image();
           _wallImgCache[imgUrl]=img;
@@ -7204,7 +7361,10 @@ function _initWallCanvasEvents(wc){
     if(si<0||G.deckSlots[si]===null) return;
     const plantMode=!!G.minePlantMode;
     if(plantMode){ plantMine(si); }
-    else if(G.lightMode==='pick'){ lightRevealWall(si); }
+    else if(G.lightMode==='pick'){
+      if(_lightPending&&_lightPending.type==='wall'&&_lightPending.si===si){ lightRevealWall(si); _lightPending=null; }
+      else { _lightPending={type:'wall',si}; renderWall(); renderActions(); }
+    }
     else if(G.phase==='draw_wait'&&G.current===NET.myIdx){ humanPickWall(si); }
   };
 
@@ -7423,7 +7583,14 @@ function renderDoraCanvas(){
     const isLightPickable=G.lightMode==='pick'&&di>=7&&di<=10&&!isLightRevealed; // ドラ表示牌（裏含む）
     const isLightPickableBack=G.lightMode==='pick'&&isBack&&di<7&&di>=usedR; // 嶺上牌
     const isAlreadyRevealed=isLightRevealed; // 表になった牌は発光ボーダー
-    if(isAlreadyRevealed){ ctx.strokeStyle='#ffee22'; ctx.lineWidth=2; }
+    const isLightSelected=!!(_lightPending&&_lightPending.type==='dora'&&_lightPending.di===di);
+    if(isLightSelected){
+      // 選択中: 白枠+オーバーレイで強調
+      ctx.fillStyle='rgba(255,238,68,0.18)';
+      _roundRect(ctx,r.x,r.y,r.w,r.h,3,true,false);
+      ctx.strokeStyle='#ffffff'; ctx.lineWidth=2.5;
+    }
+    else if(isAlreadyRevealed){ ctx.strokeStyle='#ffee22'; ctx.lineWidth=2; }
     else if(isLightPickable||isLightPickableBack){ ctx.strokeStyle='#ffee22'; ctx.lineWidth=2; }
     else if(isDoraMark) { ctx.strokeStyle='#c9a84c'; ctx.lineWidth=1.5; }
     else if(isMine){ ctx.strokeStyle='#cc4422'; ctx.lineWidth=1; }
@@ -7431,6 +7598,13 @@ function renderDoraCanvas(){
     else if(hasPen&&_penModeOn){ ctx.strokeStyle='#3ada8a55'; ctx.lineWidth=1; }
     else           { ctx.strokeStyle='#2a5a70'; ctx.lineWidth=1; }
     _roundRect(ctx,r.x,r.y,r.w,r.h,3,false,true);
+    // 選択中: チェックマークを右上に描画
+    if(isLightSelected){
+      ctx.fillStyle='#ffee44';
+      ctx.font='bold 11px sans-serif';
+      ctx.textAlign='right'; ctx.textBaseline='top';
+      ctx.fillText('✓',r.x+r.w-2,r.y+2);
+    }
 
     // ペン描画を復元
     if(penImg){
@@ -7460,12 +7634,13 @@ function renderDoraCanvas(){
       if(_dUrl){
         const _dCached=_doraImgCache[_dUrl];
         if(_dCached&&_dCached.complete&&_dCached.naturalWidth>0){
-          const pad=3;ctx.drawImage(_dCached,r.x+pad,r.y+pad,r.w-pad*2,r.h-pad*2);
+          const _dw2=48,_dh2=48;ctx.drawImage(_dCached,r.x+(r.w-_dw2)/2,r.y+(r.h-_dh2)/2,_dw2,_dh2);
         } else if(!_dCached){
           const _dImg=new Image();_doraImgCache[_dUrl]=_dImg;
           _dImg.onload=()=>renderDoraCanvas();_dImg.src=_dUrl;
         }
-      } else {
+      } else if(!(_tileForDraw.suit==='honor'&&_tileForDraw.num==='白')){
+        // 白は無地（絵文字なし）
         const _dEmoji=(EMJ[_tileForDraw.suit]&&EMJ[_tileForDraw.suit][_tileForDraw.num])||(_tileForDraw.num||'?');
         ctx.font='44px serif';ctx.textAlign='center';ctx.textBaseline='middle';
         ctx.fillStyle=isDora?'#111':'#ff4422';ctx.fillText(_dEmoji,r.x+r.w/2,r.y+r.h/2);
@@ -7563,11 +7738,19 @@ function _initDoraCanvasEvents(dc){
     if(di<0) return;
     // 光: 山を表にする（嶺上牌 di=0-6、ドラ表示牌 di=7-10）
     if(G.lightMode==='pick'){
+      const isAlreadyRevealed=!!(G.lightRevealedSlots?.['dc_'+di]);
+      if(isAlreadyRevealed) return;
       if(di<7){
         const usedR=G.rinshanIdx;
-        if(di>=usedR) lightRevealDoraCanvas(di); // 未使用嶺上牌
+        if(di<usedR) return;
+        // 1回目選択、2回目決定
+        if(_lightPending&&_lightPending.type==='dora'&&_lightPending.di===di){ lightRevealDoraCanvas(di); _lightPending=null; }
+        else { _lightPending={type:'dora',di}; renderDoraCanvas(); renderActions(); }
       } else if(di>=7&&di<=10){
-        lightRevealDoraCanvas(di); // ドラ表示牌
+        const alreadyOpen=(di===7)||(di>=8&&(di-8)<G.kanDoraCount);
+        if(alreadyOpen) return;
+        if(_lightPending&&_lightPending.type==='dora'&&_lightPending.di===di){ lightRevealDoraCanvas(di); _lightPending=null; }
+        else { _lightPending={type:'dora',di}; renderDoraCanvas(); renderActions(); }
       }
       return;
     }
@@ -7748,7 +7931,7 @@ function renderTable(){
       }
       if(p.kitaCount>0){
         const kw=document.createElement('div');kw.className='kita-wrap';
-        kw.innerHTML=Array(p.kitaCount).fill(`<div class="tile honor kita-tile">${EMJ.honor['北']}</div>`).join('');
+        kw.innerHTML=Array(p.kitaCount).fill(`<div class="tile honor kita-tile">${emj({suit:'honor',num:'北'})}</div>`).join('');
         mw.appendChild(kw);
       }
       // 自分の席はmeldKitaArea(マット右)のみ表示、innerには追加しない
@@ -7766,7 +7949,7 @@ function renderTable(){
           if(p.kitaCount>0){
             const kw2=document.createElement('div');
             kw2.style.cssText='display:flex;gap:1px;flex-wrap:wrap;justify-content:flex-end;';
-            kw2.innerHTML=Array(p.kitaCount).fill(`<div class="tile honor kita-tile" style="transform:scale(.8);transform-origin:right center;">${EMJ.honor['北']}</div>`).join('');
+            kw2.innerHTML=Array(p.kitaCount).fill(`<div class="tile honor kita-tile" style="transform:scale(.8);transform-origin:right center;">${emj({suit:'honor',num:'北'})}</div>`).join('');
             mka.appendChild(kw2);
           }
         }
@@ -7910,17 +8093,17 @@ function renderTable(){
         tileEl.dataset.num=String(t.num);
         if(isDimmed)tileEl.style.opacity='0.32', tileEl.style.cursor='not-allowed';
         // オープンリーチ中の闇牌: 本物は見えるが薄暗く（裏向きになることを示す）
-        tileEl.innerHTML=(isYamiOpenHide?'🌑':'')+(isDimmed?'':emj(t))+(isDora&&!isDimmed?'<div class="tile-dora"></div>':'');
-        if(!isDimmed&&!isYamiOpenHide) tileEl.innerHTML=emj(t)+(isDora?'<div class="tile-dora"></div>':'');
+        if(isDora&&!isDimmed) tileEl.classList.add('tile-dora-glow');
+        tileEl.innerHTML=(isYamiOpenHide?'🌑':'')+(isDimmed?'':emj(t));
+        if(!isDimmed&&!isYamiOpenHide) tileEl.innerHTML=emj(t);
         if(isYamiOpenHide) tileEl.innerHTML=`<span style="font-size:.55em;opacity:.5;">${emj(t)}</span>`;
 
-        if(canSel){
+        if(canSel||canSelYami||isHakuSelectable){
           tileEl.addEventListener('click',()=>{
-            if(selIdx===i) humanDiscard();
+            if(G.yamiSelectMode||G.hakuSelectMode) humanSelect(i);
+            else if(selIdx===i) humanDiscard();
             else humanSelect(i);
           });
-        } else if(canSelYami||isHakuSelectable){
-          tileEl.addEventListener('click',()=>humanSelect(i));
         }
         handWrap.appendChild(tileEl);
         // タイマーはdrawn牌の上にabsolute配置（drawn牌の処理後に一度だけ追加）
@@ -7971,7 +8154,8 @@ function renderTable(){
           bt.className=`tile ${tc(t)}`;
           bt.innerHTML=emj(t);
         } else if(isLightHandMode&&pidx!==NET.myIdx){
-          bt.className='tile back light-target-tile';
+          const isHandSelected=!!(_lightPending&&_lightPending.type==='hand'&&_lightPending.pidx===pidx&&_lightPending.idx===i);
+          bt.className=`tile back ${isHandSelected?'light-selected-tile':'light-target-tile'}`;
           bt.textContent='🀫';
           bt.dataset.lpidx=pidx;
           bt.dataset.lidx=i;
@@ -8021,7 +8205,7 @@ function renderTable(){
       }
       const isStealTarget = G.stealMode && pidx!==NET.myIdx && !t._yami;
       const isDoraDiscard = getDoras().some(d=>teq(d,t));
-      return`<div class="tile ${tc(t)}${isLast?' last-discard':''}${isRiichiTile?' riichi-discard':''}${isStealTarget?' steal-target':''}" data-suit="${t.suit}" data-num="${t.num}" ${isStealTarget?`onclick="humanSteal(${pidx},${di})"`:''} style="position:relative;">${emj(t)}${isDoraDiscard?'<div class="tile-dora"></div>':''}</div>`;
+      return`<div class="tile ${tc(t)}${isLast?' last-discard':''}${isRiichiTile?' riichi-discard':''}${isStealTarget?' steal-target':''}${isDoraDiscard?' tile-dora-glow':''}" data-suit="${t.suit}" data-num="${t.num}" ${isStealTarget?`onclick="humanSteal(${pidx},${di})"`:''} style="position:relative;">${emj(t)}</div>`;
     }).join('');
     dw.appendChild(dg);
     // ドラ山は doraPileFixed に固定表示（seat-innerには追加しない）
@@ -8179,7 +8363,14 @@ function _positionDiscards(table){
       el.addEventListener('click',()=>{
         const pidx=parseInt(el.dataset.lpidx);
         const idx=parseInt(el.dataset.lidx);
-        lightRevealHand(pidx,idx);
+        if(_lightPending&&_lightPending.type==='hand'&&_lightPending.pidx===pidx&&_lightPending.idx===idx){
+          lightRevealHand(pidx,idx); _lightPending=null;
+        } else {
+          // 前の選択を解除して新しい牌を選択
+          table.querySelectorAll('.light-selected-tile').forEach(t=>t.classList.replace('light-selected-tile','light-target-tile'));
+          el.classList.replace('light-target-tile','light-selected-tile');
+          _lightPending={type:'hand',pidx,idx}; renderActions();
+        }
       });
     });
   }
@@ -8217,22 +8408,23 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
       html+=`<button class="btn btn-danger" onclick="humanCancelRiichi()">キャンセル</button>`;
     }else{
       const pinzuNoTsumo=G_ABILITY_MODE&&PROFILE.ability==="pinzu"&&p.isDealer;
+      if(!G.yamiSelectMode){
 if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanTsumo()">ツモ上がり！</button>`;
-
-      if(hasKita&&!p.riichi)html+=`<button class="btn btn-kita" onclick="humanKita()">北抜き [北]</button>`;
-      if(canRiichi){
-        const dbl=canDoubleRiichi();
-        html+=`<button class="btn btn-riichi" onclick="humanDeclareRiichi('riichi')">${dbl?'ダブルリーチ':'リーチ'}</button>`;
-        html+=`<button class="btn btn-open-riichi" onclick="humanDeclareRiichi('open')">${dbl?'ダブルオープンリーチ':'オープンリーチ'}</button>`;
+        if(hasKita&&!p.riichi)html+=`<button class="btn btn-kita" onclick="humanKita()">北抜き [北]</button>`;
+        if(canRiichi){
+          const dbl=canDoubleRiichi();
+          html+=`<button class="btn btn-riichi" onclick="humanDeclareRiichi('riichi')">${dbl?'ダブルリーチ':'リーチ'}</button>`;
+          html+=`<button class="btn btn-open-riichi" onclick="humanDeclareRiichi('open')">${dbl?'ダブルオープンリーチ':'オープンリーチ'}</button>`;
+        }
       }
       // 白・闇: セレクトモード中のヒント+キャンセルのみ（ボタン本体はcornerBtns）
       if(G_ABILITY_MODE&&PROFILE.ability==='haku'&&G.hakuSelectMode){
-        html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変   る手牌をクリック！</span>`;
+        html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変える手牌をクリック！</span>`;
         html+=`<button class="btn btn-danger" onclick="G.hakuSelectMode=false;renderAll();">キャンセル</button>`;
       }
       if(G_ABILITY_MODE&&PROFILE.ability==='yami'&&G.yamiSelectMode){
         html+=`<span class="action-hint" style="color:#cc99ff;">🌑 闇にする手牌をクリック！</span>`;
-        html+=`<button class="btn btn-danger" onclick="G.yamiSelectMode=false;renderAll();">キャ   セル</button>`;
+        html+=`<button class="btn btn-danger" onclick="G.yamiSelectMode=false;renderAll();">キャンセル</button>`;
       }
       // 加槓チェック(右下ボタンへ移動済み): ポン済み牌と同じ牌が手牌にある
       for(let ki=0;ki<p.hand.length;ki++){
@@ -8248,6 +8440,19 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
         }
       }
       // action-hint removed
+    }
+  }else if(G.phase==='pending_yami_challenge'&&G.yamiChallenge){
+    const yc=G.yamiChallenge;
+    if(!yc.answered.includes(NET.myIdx)&&NET.myIdx!==yc.from){
+      html+=`<span class="action-hint" style="color:#cc99ff;">🌑 闇牌が捨てられた！</span>`;
+      html+=`<button class="btn btn-yami-ron" onclick="humanYamiChallenge('ron')">ロン</button>`;
+      if(!G.players[NET.myIdx].riichi){
+        const _cnt=cntMap(G.players[NET.myIdx].hand);
+        const _t=yc.tile;
+        if((_cnt[tk(_t)]||0)>=2) html+=`<button class="btn btn-default" onclick="humanYamiChallenge('pon')">ポン</button>`;
+        if((_cnt[tk(_t)]||0)>=3) html+=`<button class="btn btn-default" onclick="humanYamiChallenge('kan')">カン</button>`;
+      }
+      html+=`<button class="btn btn-danger" onclick="humanYamiChallenge('skip')">スキップ</button>`;
     }
   }else if(G.phase==='pending_ron'){
     // ロン対象が自分の場合のみ表示（オンラインではtargetで判定）
@@ -8285,11 +8490,14 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
       html+=`<span class="action-hint" style="color:#ff8844;">💣 地雷を仕掛ける山牌をクリック！</span>`;
       html+=`<button class="btn btn-danger" onclick="G.minePlantMode=false;renderAll();">キャンセル</button>`;
     } else if(G.lightMode==='pick'){
-      html+=`<span class="action-hint" style="color:#ffee66;">☀️ 表にする山牌をクリック！</span>`;
-      html+=`<button class="btn btn-danger" onclick="G.lightMode=false;renderAll();">キャンセル</button>`;
-    } else if(G.lightMode==='pick'){
-      html+=`<span class="action-hint" style="color:#ffee66;">☀️ 表にする相手の手牌をクリック！</span>`;
-      html+=`<button class="btn btn-danger" onclick="G.lightMode=false;renderAll();">キャンセル</button>`;
+      if(_lightPending){
+        html+=`<span class="action-hint" style="color:#ffee44;">☀️ もう一度クリックで決定！</span>`;
+        html+=`<button class="btn btn-primary" onclick="${_lightPending.type==='wall'?`lightRevealWall(${_lightPending.si});_lightPending=null;renderAll()`:_lightPending.type==='dora'?`lightRevealDoraCanvas(${_lightPending.di});_lightPending=null;renderAll()`:`lightRevealHand(${_lightPending.pidx},${_lightPending.idx});_lightPending=null;renderAll()`}">決定</button>`;
+        html+=`<button class="btn btn-danger" onclick="_lightPending=null;renderAll();">選択解除</button>`;
+      } else {
+        html+=`<span class="action-hint" style="color:#ffee66;">☀️ 表にする牌をクリック！</span>`;
+      }
+      html+=`<button class="btn btn-danger" onclick="G.lightMode=false;_lightPending=null;renderAll();">キャンセル</button>`;
     } else if(G.lightMode==='yami'){
       html+=`<span class="action-hint" style="color:#cc99ff;">☀️ 解除する闇牌をクリック！</span>`;
       html+=`<button class="btn btn-danger" onclick="G.lightMode=false;renderAll();">キャンセル</button>`;
@@ -8305,11 +8513,13 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
       html+=`<span class="action-hint" style="color:#ff8844;">💣 地雷を仕掛ける山牌をクリック！</span>`;
       html+=`<button class="btn btn-danger" onclick="G.minePlantMode=false;renderAll();">キャンセル</button>`;
     } else if(G.lightMode==='pick'){
-      html+=`<span class="action-hint" style="color:#ffee66;">☀️ 表にする山牌をクリック！</span>`;
-      html+=`<button class="btn btn-danger" onclick="G.lightMode=false;renderAll();">キャンセル</button>`;
-    } else if(G.lightMode==='pick'){
-      html+=`<span class="action-hint" style="color:#ffee66;">☀️ 表にする相手の手牌をクリック！</span>`;
-      html+=`<button class="btn btn-danger" onclick="G.lightMode=false;renderAll();">キャンセル</button>`;
+      if(_lightPending){
+        html+=`<span class="action-hint" style="color:#ffee44;">☀️ もう一度クリックで決定！</span>`;
+        html+=`<button class="btn btn-danger" onclick="_lightPending=null;renderAll();">選択解除</button>`;
+      } else {
+        html+=`<span class="action-hint" style="color:#ffee66;">☀️ 表にする牌をクリック！</span>`;
+      }
+      html+=`<button class="btn btn-danger" onclick="G.lightMode=false;_lightPending=null;renderAll();">キャンセル</button>`;
     } else if(G.stealMode){
       html+=`<span class="action-hint" style="color:#88ff88;">🃏 盗む捨て牌をクリック！</span>`;
       html+=`<button class="btn btn-danger" onclick="G.stealMode=false;renderAll();">キャンセル</button>`;
@@ -9184,6 +9394,12 @@ function lightRevealDoraCanvas(di){
   G.lightRevealedSlots['dc_'+di]=true;
   if(!G.lightExtraDora) G.lightExtraDora=[];
   G.lightExtraDora.push({suit:tile.suit,num:tile.num});
+  // ドラ表示牌を表にした場合はカンドラと同様にdoraInds/uraIndsに追加
+  if(di>=7&&di<=10){
+    G.doraInds.push(tile);
+    const uraIdx=4+(di-7);
+    if(G.doraPile[uraIdx]) G.uraInds.push(G.doraPile[uraIdx]);
+  }
   if(G.lightUserIdx!=null&&G.players[G.lightUserIdx])G.players[G.lightUserIdx].abilityUsed=true;
   G.lightMode=false;
   addLog(`☀️ 光！${label}を表にした: ${emj(tile)}（ドラ追加）`,'log-dora');
