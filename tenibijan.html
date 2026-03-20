@@ -5000,6 +5000,17 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; _wallEx
   // SFX.gameStart();
   addLog(`=== ${G.roundWind}${G.roundNum}局${G.honba>0?` ${G.honba}本場`:''} 開始 ===`,'log-win');
   addLog(`${dealer.name}（親）の番です。山牌を引いてください。`,'log-new');
+  // ホスト: peerId を確実に再設定（startRound後のmakePlayerでリセットされる可能性に備える）
+  if(NET.online && amIHost()){
+    if(G.players[NET.myIdx]) G.players[NET.myIdx].peerId = NET.peer?.id||'';
+    // ゲストのpeerIdをNET.guestPeerIdsから再設定
+    NET.conns.forEach((c,i)=>{
+      const pidx=c?._playerIdx;
+      if(pidx!=null && G.players[pidx] && !G.players[pidx].peerId){
+        G.players[pidx].peerId = NET.guestPeerIds[pidx-1]||'';
+      }
+    });
+  }
   cpuPlantMines(); // CPU地雷能力: 1巡目に即設置
   renderAll();
   broadcastState();
