@@ -4360,8 +4360,9 @@ function updateGuestMemberList(count){
 function handleGuestAction(msg, senderIdx){
   // winReady と nextRound は win/end フェーズでも処理する
   if(msg.type==='winReady'){
-    // ゲストがOKを押した → ホストが次局を進める
-    if(!WIN_READY.proceeded) nextRound();
+    // ゲストがOKを押した → readySetに追加して全員待ち
+    WIN_READY.readySet.add(senderIdx);
+    _checkAllWinReady();
     return;
   }
   if(msg.type==='nextRound'){ nextRound(); return; }
@@ -6542,10 +6543,10 @@ function _startWinTimer(){
     if(WIN_READY.countdown <= 0){
       clearInterval(WIN_READY.timer); WIN_READY.timer=null;
       if(!NET.online || amIHost()){
+        // タイムアウト: 強制進行（全員ready扱い）
         nextRound();
       } else {
-        // ゲスト: タイムアウト時もwinReadyを送ってホストに委ねる
-        // モーダルはホストのbroadcastStateで閉じる
+        // ゲスト: タイムアウト時はwinReadyを送る
         if(!WIN_READY.selfReady && !WIN_READY.proceeded){
           WIN_READY.selfReady=true;
           netSend({type:'winReady'});
@@ -6563,14 +6564,25 @@ function onWinOk(){
   if(NET.online && !amIHost()){
     // ゲスト: ホストに通知して待機
     netSend({type:'winReady'});
+  } else if(NET.online && amIHost()){
+    // ホスト: 自分をreadySetに追加してチェック
+    WIN_READY.readySet.add(NET.myIdx ?? 0);
+    _checkAllWinReady();
   } else {
-    // ホスト or ソロ: 即次局へ（ゲストのモーダルはstateUpdateで閉じる）
+    // ソロ: 即次局へ
     nextRound();
   }
 }
 
 function _checkAllWinReady(){
-  // ホスト主導のため現在は使用しない（将来のマルチOK対応用に残す）
+  if(WIN_READY.proceeded) return;
+  // 接続中の人間プレイヤー数（ホスト1 + 接続中ゲスト数）
+  const humanCount = 1 + (NET.conns ? NET.conns.filter(c=>c&&c.open).length : 0);
+  const statusEl = document.getElementById('winReadyStatus');
+  if(statusEl) statusEl.textContent = `${WIN_READY.readySet.size}/${humanCount}人 OK`;
+  if(WIN_READY.readySet.size >= humanCount){
+    nextRound();
+  }
 }
 
 function nextRound(){
