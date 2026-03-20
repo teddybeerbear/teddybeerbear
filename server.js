@@ -145,26 +145,18 @@ app.get("/api/profile", requireAuth, async (req, res) => {
       "SELECT * FROM user_profiles WHERE google_id = $1",
       [uid]
     );
+    // google_name を常に最新のGoogle表示名で更新（レコードがある場合のみ）
     if (result.rows.length === 0) {
-      // 初回: デフォルト値でレコード作成
-      await pool.query(
-        `INSERT INTO user_profiles (google_id, google_name, name, email, abilities)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (google_id) DO UPDATE SET
-           google_name = EXCLUDED.google_name,
-           updated_at  = NOW()`,
-        [uid, req.user.name, req.user.name, req.user.email, JSON.stringify(["ペン"])]
-      );
       return res.json({
-        coins: 0,
-        abilities: ["ペン"],
-        totalPulls: 0,
-        gachaIcons: [],
-        iconId: "",
-        ability: "",
-        name: req.user.name,
+        coins: 0, abilities: ["ペン"], totalPulls: 0,
+        gachaIcons: [], iconId: "", ability: "",
+        name: req.user.name, googleName: req.user.name,
       });
     }
+    await pool.query(
+      `UPDATE user_profiles SET google_name = $1, updated_at = NOW() WHERE google_id = $2`,
+      [req.user.name, uid]
+    );
     const row = result.rows[0];
     res.json({
       coins:      row.coins,
