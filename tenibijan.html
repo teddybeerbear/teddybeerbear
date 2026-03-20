@@ -2830,16 +2830,20 @@ function evalYaku(hand5,winTile,isTsumo,player,roundWind){
   if(player.riichi){
     if(player.doubleRiichi&&player.openRiichi){
       if(player._openRiichiRon){
-        yakus.push({name:'ダブルオープンリーチ振り込み',han:13});return yakus;
+        yakus.push({name:'ダブルオープンリーチ振り込み',han:13});
+        // 他の役満とも重複するため return しない
+      } else {
+        yakus.push({name:'ダブルオープンリーチ',han:3});
       }
-      yakus.push({name:'ダブルオープンリーチ',han:3});
     }
     else if(player.doubleRiichi)yakus.push({name:'ダブルリーチ',han:2});
     else if(player.openRiichi){
       if(player._openRiichiRon){
-        yakus.push({name:'オープンリーチ振り込み',han:13});return yakus;
+        yakus.push({name:'オープンリーチ振り込み',han:13});
+        // 他の役満とも重複するため return しない
+      } else {
+        yakus.push({name:'オープンリーチ',han:2});
       }
-      yakus.push({name:'オープンリーチ',han:2});
     }
     else yakus.push({name:'リーチ',han:1});
   }
