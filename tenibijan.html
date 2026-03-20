@@ -4695,8 +4695,8 @@ function remoteDiscard(pidx,tidx,isYami=false){
   if(G.pendingRiichi) commitRiichi(G.players[pidx]);
   discardAction(pidx,tidx,isYami);
 }
-function remoteWin(pidx,isTsumo,losidx){ handleWin(pidx,G.players[pidx].drawnTile,isTsumo,losidx); broadcastState(); }
-function remoteRon(pidx,tile,from){ handleRon(pidx,tile,from); broadcastState(); }
+function remoteWin(pidx,isTsumo,losidx){ handleWin(pidx,G.players[pidx].drawnTile,isTsumo,losidx); } // broadcastState は handleWin内で winModal付きで呼ばれる
+function remoteRon(pidx,tile,from){ handleRon(pidx,tile,from); }  // broadcastState は handleWin内で winModal付きで呼ばれる
 function remoteSkipRon(from){ pendingAction=null; nextTurn((from+1)%numPlayers); }
 function remoteSkipPon(from){ pendingAction=null; nextTurn((from+1)%numPlayers); }
 function remoteWallPick(pidx,slotIdx){
@@ -4953,9 +4953,11 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; _wallEx
     const p=makePlayer(i,i===G.dealer);
     p.wind=WINDS[(i-G.dealer+numPlayers)%numPlayers];
     if(G.savedScores)p.score=G.savedScores[i]||0;
-    // 前局の peerId・ability・name・iconId を引き継ぐ
+    // 前局の状態を引き継ぐ
     if(_prevPlayers[i]){
       if(NET.online && _prevPlayers[i].peerId) p.peerId = _prevPlayers[i].peerId;
+      // isCpu: 切断中は次局もCPU継続
+      if(NET.online && _prevPlayers[i].isCpu) p.isCpu = true;
       // CPU能力は毎局固定（ソロ・オンライン共通）
       if(_prevPlayers[i].ability) p.ability = _prevPlayers[i].ability;
     }
