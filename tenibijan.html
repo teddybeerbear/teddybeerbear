@@ -4681,20 +4681,34 @@ function applyHostState(msg){
       }
       addLog('山牌を選んでクリックしてください','log-new');
     }
+    // ゲスト: pending_ron で自動上がりON → 自動ロン
+    if(G.phase==='pending_ron' && pendingAction?.target===NET.myIdx){
+      timerOnMyTurn();
+      if(autoWinEnabled) setTimeout(()=>{ if(G.phase==='pending_ron'&&pendingAction?.target===NET.myIdx) humanRon(); }, 250);
+    }
     // ゲスト: 自分のターンでdiscardフェーズ（ツモ済み）の場合もタイマーを起動
     if(G.phase==='discard' && G.current===NET.myIdx){
       timerOnMyTurn();
       // 引いた牌を選択状態にする（リーチ中は除く）
       const _gp=G.players[NET.myIdx];
       if(_gp&&!_gp.riichi&&selIdx<0) selIdx=_gp.hand.length-1;
+      // 自動北抜き・自動ツモ切りトリガー（北がある場合のみ北抜き、それ以外は自動捨てON時のみ）
+      if(_gp){
+        const _hasKita = !_gp.riichi && _gp.hand.some(t=>t.suit==='honor'&&t.num==='北');
+        const _shouldAuto = (autoWinEnabled && canWin(_gp.hand))
+          || (autoKitaEnabled && _hasKita)
+          || autoDiscardEnabled;
+        if(_shouldAuto) setTimeout(()=>{ if(G.current===NET.myIdx&&G.phase==='discard') humanAutoDiscard(); }, 350);
+      }
     }
     renderAll();
     if(s.winModal){
       showWinModalData(s.winModal);
     } else {
-      // 勝利モーダルが表示中なら閉じる（ホストが次局へ進めた）
+      // 勝利モーダルが表示中なら閉じる（ホストが次局へ進めた場合のみ）
+      // ただし win/end フェーズの場合はまだリザルト表示中なので閉じない
       const wo = document.getElementById('winOverlay');
-      if(wo && wo.classList.contains('show')){
+      if(wo && wo.classList.contains('show') && s.phase !== 'win' && s.phase !== 'end'){
         wo.classList.remove('show');
         if(WIN_READY.timer){ clearInterval(WIN_READY.timer); WIN_READY.timer=null; }
         WIN_READY.proceeded = true;
@@ -5222,22 +5236,10 @@ function discardAction(pidx,tidx,isYami=false){ if(pidx===NET.myIdx){ _timerSave
     G.phase='pending_yami_challenge';
     G.yamiChallenge={from:pidx, tile, answered:[], totalAnswers:0};
     renderAll();broadcastState();
-    // CPU/オフラインプレイヤーは自動的にスキップ（できる形があればチャレンジ）
+    // CPU/オフラインプレイヤーは常にスキップ
     if(!NET.online){
       for(let i=0;i<numPlayers;i++){
         if(i===pidx)continue;
-        const op=G.players[i];
-        const cnt=cntMap(op.hand);
-        const hasTwoPlus=(cnt[tk(tile)]||0)>=2;
-        const canRonNow=op.tenpai&&op.waits.some(w=>teq(w,tile));
-        // CPU: ロン/ポン/カンできる形なら宣言、できなければスキップ
-        if(canRonNow){ resolveYamiChallenge(i,'ron'); return; }
-        if(hasTwoPlus&&!op.riichi){
-          const hasThree=(cnt[tk(tile)]||0)>=3;
-          if(hasThree) resolveYamiChallenge(i,'kan');
-          else resolveYamiChallenge(i,'pon');
-          return;
-        }
         resolveYamiChallenge(i,'skip');
       }
     }
@@ -5651,14 +5653,20 @@ function humanAutoDiscard(){
     if(!pinzuNoTsumo){ humanTsumo(); return; }
   }
 
-  // 北抜き可能: 鳴き無しON→止まらない / 自動北抜きON→先に抜く / OFF→止まる
+  // 北抜き可能: リーチ中は不可 / 自動北抜きON→先に抜く（noMeldEnabled関係なし）/ OFF+鳴きなしOFF→止まる
   const hasKita=!p.riichi && p.hand.some(t=>t.suit==='honor'&&t.num==='北');
-  if(hasKita && !noMeldEnabled){
+  if(hasKita){
     if(autoKitaEnabled){
       humanKita();
-      setTimeout(()=>{ if(G.current===myIdx&&G.phase==='discard') humanAutoDiscard(); }, 400);
+      // 北抜き後の再帰: 自動捨てONの場合のみ続行（OFFなら嶺上牌で止まる）
+      if(autoDiscardEnabled){
+        setTimeout(()=>{ if(G.current===myIdx&&G.phase==='discard') humanAutoDiscard(); }, 400);
+      }
+      return;
+    } else if(!noMeldEnabled){
+      return; // autoKitaOFF かつ noMeldOFF → 止まる
     }
-    return; // autoKitaOFFでも止まる
+    // noMeldON かつ autoKitaOFF → 北を無視してそのまま通過
   }
 
   // カン可能（加槓・暗槓）→鳴き無しONなら止まらない
@@ -6094,13 +6102,7 @@ function cpuAction(){
       const op=G.players[idx];
       const cnt=cntMap(op.hand);
       const tile=yc.tile;
-      const canRonNow=op.tenpai&&op.waits.some(w=>teq(w,tile));
-      const hasTwoPlus=(cnt[tk(tile)]||0)>=2;
-      const hasThreePlus=(cnt[tk(tile)]||0)>=3;
-      if(canRonNow){ scheduleForPlayer(idx,600,()=>resolveYamiChallenge(idx,'ron')); return; }
-      if(hasTwoPlus&&!op.riichi){
-        scheduleForPlayer(idx,600,()=>resolveYamiChallenge(idx,hasThreePlus?'kan':'pon')); return;
-      }
+      // CPUは闇牌へのロン/ポン/カンを行わない（常にスキップ）
       scheduleForPlayer(idx,600,()=>resolveYamiChallenge(idx,'skip')); return;
     }
   }
@@ -6665,8 +6667,23 @@ function checkTobi(){
   showFinalResult();
   return true;
 }
+function isOyaFirst(){
+  // ラス親（現在の親）が1位かどうか
+  const dealer=G.players[G.dealer];
+  if(!dealer) return false;
+  const maxScore=Math.max(...G.players.map(p=>p.score));
+  return dealer.score>=maxScore;
+}
 function checkEnd(){
-  if(G.roundWind==='南'&&G.roundNum>=numPlayers){showFinalResult();return true;}
+  if(G.roundWind==='南'&&G.roundNum>=numPlayers){
+    // オーラスでラス親が上がった場合: ラス親が1位でなければ継続
+    if(G._dealerWon && !isOyaFirst()){
+      // 連荘して試合継続（南を超えて延長戦）
+      addLog('📌 オーラス連荘：ラス親がトップでないため継続','log-win');
+      return false;
+    }
+    showFinalResult();return true;
+  }
   return false;
 }
 function showFinalResult(){
@@ -8601,7 +8618,7 @@ function renderActions(){
       const pinzuNoTsumo=G_ABILITY_MODE&&PROFILE.ability==="pinzu"&&p.isDealer;
 if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanTsumo()">ツモ上がり！</button>`;
       html+=`<button class="btn btn-primary" onclick="humanDiscard()">ツモ切り [${tileLabel(drn)}]</button>`;
-      if(hasKita)html+=`<button class="btn btn-kita" onclick="humanKita()">北抜き [北]</button>`;
+      if(hasKita&&!p.riichi)html+=`<button class="btn btn-kita" onclick="humanKita()">北抜き [北]</button>`;
       // リーチ中の暗槓（待ちが変わらない場合のみ canAnkan が返す）
       // 暗槓は右下クイックボタンへ
     }else if(isPR){
