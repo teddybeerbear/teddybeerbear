@@ -660,6 +660,7 @@ app.get("/", (req, res) => {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>手にビじゃん</title>
+<link rel="icon" type="image/png" href="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/fabi.png">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box;margin:0;padding:0;}
