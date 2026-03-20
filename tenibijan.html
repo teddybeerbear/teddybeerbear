@@ -3592,7 +3592,7 @@ function _reconnectToNewHost(newHostPeerId, retryCount=0){
     hideReconnectOverlay();
   });
 
-  conn.on('data', msg=>onNetData(msg, null));
+  conn.on('data', msg=>onNetData(msg, conn._playerIdx ?? null));
 
   // close/error時: 未openなら再試行（新ホストがまだ準備中の可能性）
   const onFail = () => {
@@ -3657,8 +3657,15 @@ function _doPromoteToHost(disconnectedPidx){
       // ★ 満員チェック: rejoin かどうかを先に判別するため open 後にメッセージを待つ
       // 通常の新規接続は conns.length>=2 で弾く。rejoin は満員でも受け入れる。
       const isGameActive = NET.online && G && G.players && G.players.length > 0;
-      // 仮インデックスを振っておく（rejoin でなければこのままになる）
-      const assignedIdx = NET.conns.length + 1;
+      // 仮インデックス: CPU化しているプレイヤーの中で最も若いidxを使う（再接続の場合）
+      let assignedIdx = NET.conns.length + 1;
+      if(isGameActive && G.players){
+        // isCpu=true かつ NET.conns に対応接続がないプレイヤーを優先
+        const cpuSlot = G.players.findIndex((p,i)=>
+          i !== NET.myIdx && p.isCpu && !NET.conns.some(c=>c&&c._playerIdx===i)
+        );
+        if(cpuSlot >= 0) assignedIdx = cpuSlot;
+      }
       conn._playerIdx = assignedIdx;
 
       if(conn.peer) peerRegistryAdd(conn.peer, assignedIdx, conn);
@@ -3668,10 +3675,15 @@ function _doPromoteToHost(disconnectedPidx){
         conn._playerIdx = pidx;
         const pr = NET.peerRegistry.find(p=>p.conn===conn);
         if(pr) pr.playerIdx = pidx;
-        
+
+        // NET.conns に確実に追加（reconnect時はタイムアウト前に来るため）
+        if(!NET.conns.includes(conn)) NET.conns.push(conn);
+
         // 切断フラグを解除
         if(G && G.players && G.players[pidx]){
           G.players[pidx].isCpu = false;
+          // peerId も再設定
+          if(conn.peer) G.players[pidx].peerId = conn.peer;
         }
 
         // インデックス確定後に joined を送る
