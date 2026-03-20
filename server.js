@@ -35,6 +35,7 @@ async function initDB() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS user_profiles (
         google_id    TEXT PRIMARY KEY,
+        google_name  TEXT,
         name         TEXT,
         email        TEXT,
         coins        INTEGER NOT NULL DEFAULT 0,
@@ -45,6 +46,10 @@ async function initDB() {
         ability      TEXT NOT NULL DEFAULT '',
         updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
+    `);
+    // 既存テーブルに google_name カラムがなければ追加
+    await pool.query(`
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS google_name TEXT
     `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS rank_ratings (
@@ -143,10 +148,12 @@ app.get("/api/profile", requireAuth, async (req, res) => {
     if (result.rows.length === 0) {
       // 初回: デフォルト値でレコード作成
       await pool.query(
-        `INSERT INTO user_profiles (google_id, name, email, abilities)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (google_id) DO NOTHING`,
-        [uid, req.user.name, req.user.email, JSON.stringify(["ペン"])]
+        `INSERT INTO user_profiles (google_id, google_name, name, email, abilities)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (google_id) DO UPDATE SET
+           google_name = EXCLUDED.google_name,
+           updated_at  = NOW()`,
+        [uid, req.user.name, req.user.name, req.user.email, JSON.stringify(["ペン"])]
       );
       return res.json({
         coins: 0,
@@ -167,6 +174,7 @@ app.get("/api/profile", requireAuth, async (req, res) => {
       iconId:     row.icon_id,
       ability:    row.ability,
       name:       row.name || req.user.name,
+      googleName: row.google_name || req.user.name,
     });
   } catch (err) {
     console.error("プロフィール取得エラー:", err.message);
