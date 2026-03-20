@@ -1826,7 +1826,7 @@ body::before{
     <!-- 捨て牌拡大モーダル -->
     <div id="discardZoomOverlay" style="
       display:none;position:fixed;inset:0;z-index:200;
-      background:rgba(0,0,0,.88);backdrop-filter:blur(4px);
+      background:rgba(0,0,0,.88);
       display:none;flex-direction:column;
     ">
       <!-- ヘッダー -->
@@ -1835,7 +1835,7 @@ body::before{
         <button onclick="closeDiscardZoom()" style="background:none;border:1px solid #2a4a3a;border-radius:6px;color:#5a8a7a;padding:3px 10px;cursor:pointer;font-size:.7rem;">✕ 閉じる</button>
       </div>
       <!-- 捨て牌コンテンツ（スクロール可能） -->
-      <div id="discardZoomContent" style="flex:1;overflow-y:auto;padding:12px 14px;"></div>
+      <div id="discardZoomContent" style="flex:1;overflow-y:auto;padding:12px 14px 120px 14px;"></div>
       <!-- アクションエリア（能力ボタン等） -->
       <div id="discardZoomActionWrap" style="flex-shrink:0;border-top:1px solid #1a3a2a;padding:6px 10px;display:flex;justify-content:center;min-height:40px;">
       </div>
@@ -7201,6 +7201,9 @@ function toggleDiscardZoom(){
 }
 function openDiscardZoom(){
   if(!G||!G.players) return;
+  // 山牌拡大が開いていたら先に完全に閉じる（_restoreCornerLeftを確実に呼ぶ）
+  const wallOv=document.getElementById('wallExpandOverlay');
+  if(wallOv&&wallOv.classList.contains('show')) closeWallExpand();
   renderDiscardZoom();
   document.getElementById('discardZoomOverlay').style.display='flex';
   _moveCornerLeftTo('discardZoomOverlay');
@@ -7281,29 +7284,22 @@ function toggleWallExpand(){
 function _moveCornerLeftTo(targetId){
   const cl=document.getElementById('tableCornerLeft');
   if(!cl) return;
-  const target=document.getElementById(targetId);
-  if(!target) return;
-  if(!target.contains(cl)){
-    cl._origParent=cl.parentElement;
-    cl._origNextSibling=cl.nextSibling;
-    cl._origStyle=cl.getAttribute('style')||'';
-    cl.style.position='fixed';
-    cl.style.bottom='8px';
-    cl.style.left='8px';
-    cl.style.zIndex='9999';
-    target.appendChild(cl);
-  }
+  // position:fixedに変更してオーバーレイの上に表示
+  cl.style.position='fixed';
+  cl.style.zIndex='9999';
 }
 function _restoreCornerLeft(){
   const cl=document.getElementById('tableCornerLeft');
-  if(!cl||!cl._origParent) return;
-  cl.setAttribute('style', cl._origStyle||'');
-  cl._origParent.insertBefore(cl, cl._origNextSibling||null);
-  delete cl._origParent; delete cl._origNextSibling; delete cl._origStyle;
+  if(!cl) return;
+  cl.style.position='';
+  cl.style.zIndex='';
 }
 function openWallExpand(){
   const ov = document.getElementById('wallExpandOverlay');
   if(!ov) return;
+  // 捨て牌拡大が開いていたら閉じる
+  const discardOv=document.getElementById('discardZoomOverlay');
+  if(discardOv&&discardOv.style.display==='flex'){ discardOv.style.display='none'; _restoreDiscardZoomCorner(); }
   _moveCornerLeftTo('wallExpandOverlay');
   // 前回のペン確定バッファをリセット（再オープン時に二重合成を防ぐ）
   window._activePenOC = null;
@@ -7969,25 +7965,8 @@ function renderDoraCanvas(){
 
     if(gone){ continue; } // 使用済み嶺上牌は空白
 
-    // 裏ドラ: 透明（枠のみ薄く）
-    if(isUra){
-      // ペン描画のみ描く（枠を薄く）
-      if(penImg){
-        const _ucached=penKey?_penImgCache[penKey]:null;
-        if(_ucached&&_ucached.complete&&_ucached._src===penImg){
-          ctx.globalAlpha=0.9; ctx.drawImage(_ucached,r.x,r.y,r.w,r.h); ctx.globalAlpha=1.0;
-        } else {
-          const img=new Image(); img._src=penImg;
-          if(penKey)_penImgCache[penKey]=img;
-          img.onload=()=>{ if(penKey)_penImgCache[penKey]=img; renderDoraCanvas(); };
-          img.src=penImg;
-        }
-      } else {
-        ctx.strokeStyle='#1a3a5044'; ctx.lineWidth=1;
-        _roundRect(ctx,r.x,r.y,r.w,r.h,3,false,true);
-      }
-      continue;
-    }
+    // 裏ドラ: 対戦中は完全非表示
+    if(isUra){ continue; }
 
     // 背景
     if(isBack){
@@ -8248,7 +8227,7 @@ function renderDpCell(cell){
     case 'rinshan':
       return `<div class="dp-cell back"></div>`;
     case 'ura':
-      return `<div class="dp-cell back"></div>`;
+      return ''; // 対戦中は裏ドラ非表示
     case 'kan':
       if(cell.revealed && cell.tile)
         return `<div class="dp-cell face dora-ind">${emj(cell.tile)}</div>`;
