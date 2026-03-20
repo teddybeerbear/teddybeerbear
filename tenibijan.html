@@ -6557,6 +6557,8 @@ function nextRound(){
   document.getElementById('winOverlay').classList.remove('show');
   // mScoreの色をリセット（罰符表示後に通常の金色に戻す）
   const ms=document.getElementById('mScore');if(ms)ms.style.color='';
+  // ゲストはstartRoundを実行しない（ホストからのstateUpdateを待つ）
+  if(NET.online && !amIHost()) return;
   if(checkTobi())return;
   if(checkEnd())return;
   advanceRound(G._dealerWon);G._dealerWon=false;
