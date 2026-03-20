@@ -4784,7 +4784,7 @@ function remoteKita(pidx){
     }
   }
   const rep=drawRinshanTile(pidx);
-  revealKanDora();
+  // 北抜きはカンドラを開かない
   if(!rep){handleExhausted();broadcastState();return;}
   updateTenpai(p);
   if(canWin(p.hand)){handleWin(pidx,rep,true,-1);broadcastState();return;}
@@ -5041,14 +5041,19 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; _wallEx
 function getDoras(){return G.doraInds.map(doraFromIndicator);}
 function countDoras(hand,p){
   const doras=getDoras();
-  let n=p.kitaCount||0;
+  let n=p.kitaCount||0; // 北抜き枚数は常にドラ+1
   // 手牌
   for(const t of hand)for(const d of doras)if(teq(t,d))n++;
   // 鳴き面子
   for(const m of (p.melds||[])){
     for(const t of (m.tiles||[]))for(const d of doras)if(teq(t,d))n++;
   }
-  // 北抜き牌自体もドラ対象（kitaCount分は上で加算済み、ここでは牌固有のドラを確認）
+  // 北がドラの時は抜いた北もさらにドラとして加算
+  if((p.kitaCount||0)>0){
+    const kitaTile={suit:'honor',num:'北'};
+    const kitaIsDora=doras.some(d=>teq(d,kitaTile));
+    if(kitaIsDora) n+=(p.kitaCount||0);
+  }
   return n;
 }
 
@@ -5885,12 +5890,14 @@ function resolveYamiChallenge(pidx, action){
     if(loser) loser.score+=80;
     G.phase='end';
     G.honba++;saveScores();
-    // 罰符リザルト表示
+    // 罰符リザルト表示（ホスト）
     showYamiPenaltyModal(op, loser, 80);
-    renderAll();broadcastState();
+    renderAll();
+    // ゲストにも罰符モーダルを表示させる
+    const _pmd={yamiPenalty:true, loserId:op.id, receiverId:loser?loser.id:null, penalty:80};
+    broadcastState({winModal:_pmd});
     if(checkTobi()) return;
   }
-  broadcastState();renderAll();
 }
 
 function showYamiPenaltyModal(loser, receiver, penalty){
@@ -5961,7 +5968,9 @@ function handleWin(widx,winTile,isTsumo,losidx){
       G._yamiRonChallenge=false;
       G.phase='end';G.honba++;saveScores();
       showYamiPenaltyModal(w,chalLoser,80);
-      renderAll();broadcastState();checkTobi();
+      renderAll();
+      const _pmd2={yamiPenalty:true,loserId:w.id,receiverId:chalLoser?chalLoser.id:null,penalty:80};
+      broadcastState({winModal:_pmd2});checkTobi();
       return;
     }
     addLog('役なし。','log-new');G.phase='discard';renderAll();return;
@@ -6815,6 +6824,12 @@ function backToLobby(){
 // WIN MODAL
 // ============================================================
 function showWinModalData(d){
+  if(d.yamiPenalty){
+    const loser=G.players.find(p=>p.id===d.loserId)||G.players[0];
+    const receiver=d.receiverId!=null?G.players.find(p=>p.id===d.receiverId):null;
+    showYamiPenaltyModal(loser, receiver, d.penalty||80);
+    return;
+  }
   const w=G.players.find(p=>p.id===d.winnerId)||G.players[0];
   showWinModal(w,d.hand,d.winTile,d.isTsumo,d.losidx,d.yakus,d.score,d.han);
 }
