@@ -73,7 +73,7 @@ function scaleTable(){
       '.player-score-panel { transform: scale(2.3) !important; transform-origin: left center !important; }'+
       /* 縦画面: アイコン+名前を2倍（席ごとに回転維持）*/
       '.seat-bottom .player-icon-panel { transform: scale(2) !important; transform-origin: center bottom !important; }'+
-      '.seat-top .player-icon-panel { transform: rotate(180deg) scale(2) !important; transform-origin: center top !important; }'+
+      '.seat-top .player-icon-panel { transform: rotate(180deg) scale(2) !important; transform-origin: center top !important; position: relative !important; top: '+Math.round((100 + 100 - 80)*v)+'px !important; }'+
       '.seat-right .player-icon-panel { transform: translateX(50px) translateY(-100px) rotate(90deg) scale(2) !important; transform-origin: left center !important; }'+
       '.seat-left .player-icon-panel { transform: translateX(-10px) translateY(-100px) rotate(-90deg) scale(2) !important; transform-origin: right center !important; }'+
       '.bottom-score-panel { position: absolute !important; left: 850px !important; top: 36px !important; margin-left: 0 !important; transform-origin: left top !important; }'+
@@ -278,7 +278,7 @@ body::before{
 /* top: 卓内端から牌1個(48px)内側 */
 .seat-top .seat-inner{
   left:1009px;
-  top:168px;
+  top:218px;
   transform:rotate(180deg);
   transform-origin:0 0;
   white-space:nowrap;
@@ -4862,14 +4862,30 @@ function makePlayer(id,dealer){
       pname = (G && G.players && G.players[id] && G.players[id].name) || `CPU${id}`;
     }
   } else {
-    const soloNames=[PROFILE.name||'あなた','CPU南','CPU西','CPU北'];
-    pname = soloNames[id];
+    pname = (PROFILE.name||'あなた'); // 自分の名前、CPU名は後でpAbilityから設定
+    if(id !== 0) pname = ''; // CPU側は後で上書き
   }
   const cpuAbilities=['mine','light','yami','haku','sanctuary','pinzu','steal'];
   const pAbility = !G_ABILITY_MODE ? '' : (id===NET.myIdx) ? (PROFILE.ability||'') : (NET.isHost && NET.guestAbilities[id-1]!==undefined) ? NET.guestAbilities[id-1] : cpuAbilities[Math.floor(Math.random()*cpuAbilities.length)];
-  
+
+  // 能力別CPU名とアイコン
+  const CPU_PROFILE = {
+    'mine':      {name:'地雷師ミナ',    icon:'C01'},
+    'light':     {name:'光の探偵ヒカル', icon:'C02'},
+    'yami':      {name:'闇使いカゲ',    icon:'C03'},
+    'haku':      {name:'白術士ハク',    icon:'C04'},
+    'sanctuary': {name:'聖域守りセイ',  icon:'C05'},
+    'pinzu':     {name:'筒子教ピン',    icon:'C06'},
+    'steal':     {name:'盗賊スティール', icon:'C07'},
+    '':          {name:'CPU',          icon:'C08'},
+  };
+  // ソロCPU名をpAbilityから設定
+  if(!NET.online && id !== NET.myIdx){
+    pname = (G_ABILITY_MODE && CPU_PROFILE[pAbility]) ? CPU_PROFILE[pAbility].name : ['CPU南','CPU西','CPU北'][id-1]||'CPU';
+  }
+
   // アイコンIDはゲーム開始後に myName 受信時に上書きされるため、ここでは暫定値のみ
-  const pIconId = (id === NET.myIdx) ? (PROFILE.iconId || '') : '';
+  const pIconId = (id === NET.myIdx) ? (PROFILE.iconId || '') : (CPU_PROFILE[pAbility]?.icon || 'C01');
 
   return{id,name:pname,iconId:pIconId,
     peerId:'', // 接続PeerID（オンライン時に設定）
@@ -4930,13 +4946,11 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; _wallEx
     const p=makePlayer(i,i===G.dealer);
     p.wind=WINDS[(i-G.dealer+numPlayers)%numPlayers];
     if(G.savedScores)p.score=G.savedScores[i]||0;
-    // ★修正: オンライン時は前局の peerId・ability・name を引き継ぐ
-    // startRound で G.players を全再生成すると peerId が '' にリセットされ
-    // isOnlineGuestIdx の判定が壊れる。名前は makePlayer で既に修正済みだが
-    // peerId は makePlayer では設定されないためここで明示的に引き継ぐ。
-    if(NET.online && _prevPlayers[i]){
-      if(_prevPlayers[i].peerId) p.peerId = _prevPlayers[i].peerId;
-      if(_prevPlayers[i].ability && !p.ability) p.ability = _prevPlayers[i].ability;
+    // 前局の peerId・ability・name・iconId を引き継ぐ
+    if(_prevPlayers[i]){
+      if(NET.online && _prevPlayers[i].peerId) p.peerId = _prevPlayers[i].peerId;
+      // CPU能力は毎局固定（ソロ・オンライン共通）
+      if(_prevPlayers[i].ability) p.ability = _prevPlayers[i].ability;
     }
     return p;
   });
@@ -5815,19 +5829,47 @@ function resolveYamiChallenge(pidx, action){
   if(valid){
     // 正当: 通常処理
     addLog(`🌑 闇！${op.name}の${action==='ron'?'ロン':action==='pon'?'ポン':'カン'}成立！`,'log-win');
-    if(action==='ron'){ handleRon(pidx,tile,from); }
+    if(action==='ron'){
+      pendingAction={type:'ron',tile,from,target:pidx};
+      G.phase='pending_ron';
+      G._yamiRonChallenge=true; // 役なし時に罰符処理するフラグ
+      handleRon(pidx,tile,from);
+      G._yamiRonChallenge=false;
+      pendingAction=null;
+    }
     else if(action==='pon'){ handlePon(pidx,tile,from); }
     else if(action==='kan'){ handleMinkan(pidx,tile,from); }
   } else {
-    // 不当: 罰符-80点で局終了
-    addLog(`🌑 闇チャレンジ失敗！${op.name} に罰符-80点`,'log-win');
+    // 不当: 罰符-80点、捨てた側に+80点、局終了
+    const loser=G.players[from];
+    addLog(`🌑 闇チャレンジ失敗！${op.name} に罰符-80点、${loser?loser.name:''}に+80点`,'log-win');
     op.score-=80;
+    if(loser) loser.score+=80;
     G.phase='end';
-    G.honba++;saveScores();renderAll();broadcastState();
+    G.honba++;saveScores();
+    // 罰符リザルト表示
+    showYamiPenaltyModal(op, loser, 80);
+    renderAll();broadcastState();
     if(checkTobi()) return;
-    setTimeout(()=>advanceRound(false),2800);
   }
   broadcastState();renderAll();
+}
+
+function showYamiPenaltyModal(loser, receiver, penalty){
+  document.getElementById('mTitle').textContent='🌑 闇チャレンジ失敗！';
+  document.getElementById('mSub').textContent=`${loser.name} の宣言が不成立`;
+  document.getElementById('mHand').innerHTML='';
+  document.getElementById('mDoraArea').style.display='none';
+  document.getElementById('mYakuBody').innerHTML=
+    `<tr><td>罰符</td><td style="color:#ff8866;">-${penalty}点</td></tr>`;
+  document.getElementById('mScore').textContent=`-${penalty} 点`;
+  document.getElementById('mScore').style.color='#ff8866';
+  document.getElementById('mScoreSub').textContent=
+    `${loser.name}: ${(loser.score).toLocaleString()}点　${receiver?receiver.name+': +'+penalty+'点':''}`;
+  timerStop();
+  const wo=document.getElementById('winOverlay');
+  wo.classList.add('show');
+  _startWinTimer();
 }
 
 function humanYamiChallenge(action){
@@ -5872,7 +5914,20 @@ function handleWin(widx,winTile,isTsumo,losidx){
       if(uc>0)yakus.push({name:`裏ドラ×${uc}`,han:uc});
     }
   }
-  if(yakus.length===0){addLog('役なし。','log-new');G.phase='discard';renderAll();return;}
+  if(yakus.length===0){
+    // 闇チャレンジ経由のロンで役なしの場合は罰符
+    if(G._yamiRonChallenge){
+      const chalLoser=G.players[losidx];
+      addLog(`🌑 闇ロン成立だが役なし！${w.name}に罰符-80点、${chalLoser?chalLoser.name:''}に+80点`,'log-win');
+      w.score-=80; if(chalLoser) chalLoser.score+=80;
+      G._yamiRonChallenge=false;
+      G.phase='end';G.honba++;saveScores();
+      showYamiPenaltyModal(w,chalLoser,80);
+      renderAll();broadcastState();checkTobi();
+      return;
+    }
+    addLog('役なし。','log-new');G.phase='discard';renderAll();return;
+  }
 
   const{score,han}=calcScore(yakus,w.isDealer,isTsumo);
   const rb=G.riichiPot;
@@ -5949,6 +6004,23 @@ function cpuAction(){
   if(NET.online && G.current === NET.myIdx) return;
   const idx=G.current;const p=G.players[idx];
   if(['end','win','idle'].includes(G.phase))return;
+  // 闇チャレンジ: CPUは自動判断
+  if(G.phase==='pending_yami_challenge'&&G.yamiChallenge){
+    const yc=G.yamiChallenge;
+    if(!yc.answered.includes(idx)&&idx!==yc.from){
+      const op=G.players[idx];
+      const cnt=cntMap(op.hand);
+      const tile=yc.tile;
+      const canRonNow=op.tenpai&&op.waits.some(w=>teq(w,tile));
+      const hasTwoPlus=(cnt[tk(tile)]||0)>=2;
+      const hasThreePlus=(cnt[tk(tile)]||0)>=3;
+      if(canRonNow){ scheduleForPlayer(idx,600,()=>resolveYamiChallenge(idx,'ron')); return; }
+      if(hasTwoPlus&&!op.riichi){
+        scheduleForPlayer(idx,600,()=>resolveYamiChallenge(idx,hasThreePlus?'kan':'pon')); return;
+      }
+      scheduleForPlayer(idx,600,()=>resolveYamiChallenge(idx,'skip')); return;
+    }
+  }
   if(G.phase==='draw'){
     G._mineHit=null;
     // スチール: 山から引く前にチェック（引く代わりに捨て牌から盗む）
@@ -6004,27 +6076,53 @@ function cpuTryAbility(idx){
   const ab=p.ability;
 
   // 💣 地雷: startRoundで一括設置するのでここではスキップ
-  // (cpuPlantMines()がstartRound後に呼ばれる)
 
-  // 🃏 スチール: cpuActionのdrawフェーズ前に移動済み（drawTileの前にチェック）
+  // 🃏 スチール: cpuActionのdrawフェーズ前に移動済み
 
-  // 🌑 闇: リーチ後の捨て牌を30%で闇に（discardActionの後から難しいので、捨て時に適用）
-  // → cpuDiscard側で処理するためここではスキップ
+  // 🌑 闇: cpuDiscard側で処理
+
+  // ☀️ 光: ツモ後50%で山牌を1枚表にする（ドラ追加狙い）
+  if(ab==='light' && !p.abilityUsed && G.phase==='discard' && Math.random()<0.5){
+    // 未使用嶺上牌かドラ表示牌を優先的に選ぶ
+    const wallAvail=G.deckSlots.map((s,i)=>s?i:-1).filter(i=>i>=0);
+    if(wallAvail.length>0){
+      const si=wallAvail[Math.floor(Math.random()*wallAvail.length)];
+      if(NET.online&&!amIHost()){
+        // ゲストCPUはホストへ通知（通常CPUはホスト側で処理）
+      } else {
+        const tile=G.deckSlots[si];
+        if(tile&&tile.suit){
+          if(!G.lightRevealedSlots) G.lightRevealedSlots={};
+          G.lightRevealedSlots[si]=true;
+          if(!G.lightExtraDora) G.lightExtraDora=[];
+          G.lightExtraDora.push({suit:tile.suit,num:tile.num});
+          G.doraInds.push(tile);
+          p.abilityUsed=true;
+          G.lightMode=false;
+          addLog(`☀️ ${p.name}が光を使った！ ${emj(tile)}（ドラ追加）`,'log-dora');
+          flashLightEffect();SFX.light();
+          broadcastState();renderAll();
+        }
+      }
+    }
+    return false;
+  }
 
   // 🀆 白: 手牌に使えない牌があれば30%で白に変換
   if(ab==='haku' && G.phase==='discard' && !p.riichi && !p.abilityUsed && Math.random()<0.3){
-    // 最も価値の低い牌を白に（自分の手牌のみ）
     const idx2=cpuWorstTileIdx(p);
     if(idx2>=0 && !p.hand[idx2]._isHaku){
       const t=p.hand[idx2];
       t._isHaku=true;t._hakuOriginal={suit:t.suit,num:t.num};
       t.suit='honor';t.num='白';
-      p.hakuTileId=t._id; // リセット用に保存
+      p.hakuTileId=t._id;
       p.abilityUsed=true;
       addLog(`🀆 ${p.name}が白を使った！`,'log-dora');
       updateTenpai(p);renderAll();broadcastState();
     }
   }
+
+  // 🏛️ 聖域: 親番中は失点を受けない（evalYakuで参照、CPU側では何もしない）
 
   return false;
 }
@@ -6444,6 +6542,8 @@ function nextRound(){
   WIN_READY.proceeded = true;
   if(WIN_READY.timer){ clearInterval(WIN_READY.timer); WIN_READY.timer=null; }
   document.getElementById('winOverlay').classList.remove('show');
+  // mScoreの色をリセット（罰符表示後に通常の金色に戻す）
+  const ms=document.getElementById('mScore');if(ms)ms.style.color='';
   if(checkTobi())return;
   if(checkEnd())return;
   advanceRound(G._dealerWon);G._dealerWon=false;
