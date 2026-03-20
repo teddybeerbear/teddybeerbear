@@ -4585,6 +4585,11 @@ function handleGuestAction(msg, senderIdx){
 // Guest: full state pushed by host → apply and render
 function applyHostState(msg){
   // sync メッセージ: actionId が自分より新しい場合のみ適用
+  if(msg.type==='nextRound'){
+    // ホストが次局へ進めた → ゲストのモーダルを閉じる
+    nextRound();
+    return;
+  }
   if(msg.type==='sync'){
     if(msg.state && msg.state._lastActionId > NET._lastActionId){
       NET._lastActionId = msg.state._lastActionId;
@@ -6528,7 +6533,12 @@ function _startWinTimer(){
       if(!NET.online || amIHost()){
         nextRound();
       } else {
-        onWinOk();
+        // ゲスト: タイムアウト時もwinReadyを送ってホストに委ねる
+        // モーダルはホストのbroadcastStateで閉じる
+        if(!WIN_READY.selfReady && !WIN_READY.proceeded){
+          WIN_READY.selfReady=true;
+          netSend({type:'winReady'});
+        }
       }
     }
   }, 1000);
@@ -6560,6 +6570,8 @@ function nextRound(){
   const ms=document.getElementById('mScore');if(ms)ms.style.color='';
   // ゲストはstartRoundを実行しない（ホストからのstateUpdateを待つ）
   if(NET.online && !amIHost()) return;
+  // ホスト: ゲストのモーダルも閉じるよう通知
+  if(NET.online && amIHost()) netSend({type:'nextRound'});
   if(checkTobi())return;
   if(checkEnd())return;
   advanceRound(G._dealerWon);G._dealerWon=false;
