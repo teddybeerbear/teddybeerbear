@@ -4365,6 +4365,17 @@ function handleGuestAction(msg, senderIdx){
     return;
   }
   if(msg.type==='nextRound'){ nextRound(); return; }
+  // pong は win/end フェーズでも処理する（ping タイムアウト誤判定防止）
+  if(msg.type==='pong'){
+    if(senderIdx !== undefined){
+      const conn = NET.conns.find(c=>c&&c._playerIdx===senderIdx);
+      if(conn&&conn.peer&&_pingTimers[conn.peer]){
+        clearTimeout(_pingTimers[conn.peer]);
+        delete _pingTimers[conn.peer];
+      }
+    }
+    return;
+  }
   if(G.phase==='win'||G.phase==='end')return;
   switch(msg.type){
     case 'pong':
