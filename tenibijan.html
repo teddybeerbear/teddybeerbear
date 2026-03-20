@@ -3536,15 +3536,17 @@ function promoteGuestToHost(disconnectedPidx = 0){
   NET._promotingToHost = true;
 
   if(NET.myIdx > 1){
-    // currentHostPeerId が更新されていればそちらを優先（newHost 通知で追従している）
+    // 新ホスト候補: myIdx=1（P1）のPeerIDを複数ソースから取得
     const newHostPeerId = NET.currentHostPeerId
-      || NET.guestPeerIds[0];
+      || NET.guestPeerIds[0]
+      || (G && G.players && G.players[1] && G.players[1].peerId)
+      || null;
     // 接続先が切断者と同じでなければ再接続を試みる
     if(newHostPeerId && newHostPeerId !== G.players[disconnectedPidx]?.peerId){
       addLog('🔄 新しいホストに再接続中…','log-new');
       if(NET.conn){ try{ NET.conn.close(); }catch(e){} NET.conn=null; }
       NET.online = false;
-      setTimeout(()=>_reconnectToNewHost(newHostPeerId), 800);
+      setTimeout(()=>_reconnectToNewHost(newHostPeerId, 0), 800);
     } else {
       addLog('⚠️ 新ホストPeerID不明のため自分がホスト昇格します','log-new');
       _doPromoteToHost(disconnectedPidx);
@@ -3556,28 +3558,31 @@ function promoteGuestToHost(disconnectedPidx = 0){
 }
 
 // 新ホスト(元guest1)への再接続
-function _reconnectToNewHost(newHostPeerId){
+function _reconnectToNewHost(newHostPeerId, retryCount=0){
   if(NET.isHost) return;
   if(NET.conn){ try{ NET.conn.close(); }catch(e){} NET.conn=null; }
 
-  // 接続先（新ホスト）のプレイヤーインデックスを今のうちに特定しておく
-  // conn.close 時に conn._playerIdx が未設定でも正しく特定できる
+  // 接続先（新ホスト）のプレイヤーインデックスを特定
   let newHostIdx = NET.guestPeerIds.indexOf(newHostPeerId);
-  if(newHostIdx >= 0) newHostIdx = newHostIdx + 1; // guestPeerIds は idx1以降
+  if(newHostIdx >= 0) newHostIdx = newHostIdx + 1;
   else {
-    // G.players の peerId から検索
     if(G && G.players){
       const byPeer = G.players.findIndex(p => p.peerId === newHostPeerId);
-      newHostIdx = byPeer >= 0 ? byPeer : 1; // デフォルト P1
+      newHostIdx = byPeer >= 0 ? byPeer : 1;
     } else {
       newHostIdx = 1;
     }
   }
 
   const myOriginalIdx = NET.myIdx;
+  showReconnectOverlay('新ホストに接続中…');
   const conn = NET.peer.connect(newHostPeerId, {reliable:true});
   NET.conn = conn;
+
+  let opened = false;
+
   conn.on('open', ()=>{
+    opened = true;
     NET.online = true;
     NET._promotingToHost = false;
     if(conn.peer) peerRegistryAdd(conn.peer, newHostIdx, conn);
@@ -3586,8 +3591,24 @@ function _reconnectToNewHost(newHostPeerId){
     addLog('✅ 新ホストに再接続しました','log-new');
     hideReconnectOverlay();
   });
+
   conn.on('data', msg=>onNetData(msg, null));
-  attachConnHandlers(conn, newHostIdx);
+
+  // close/error時: 未openなら再試行（新ホストがまだ準備中の可能性）
+  const onFail = () => {
+    if(opened) return; // open済みなら通常の切断処理
+    if(retryCount < 5){
+      addLog(`🔄 新ホスト接続待機中… (${retryCount+1}/5)`,'log-new');
+      NET._promotingToHost = false;
+      setTimeout(()=>_reconnectToNewHost(newHostPeerId, retryCount+1), 1500);
+    } else {
+      addLog('⚠️ 新ホストへの接続に失敗。自分がホスト昇格します。','log-new');
+      NET._promotingToHost = false;
+      _doPromoteToHost(newHostIdx);
+    }
+  };
+  conn.on('close', onFail);
+  conn.on('error', onFail);
 }
 
 // 全接続済みピアに新ホストの PeerID を通知する
@@ -4977,6 +4998,9 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; _wallEx
       if(NET.online && _prevPlayers[i].isCpu) p.isCpu = true;
       // CPU能力は毎局固定（ソロ・オンライン共通）
       if(_prevPlayers[i].ability) p.ability = _prevPlayers[i].ability;
+      // アイコン・名前: 自分以外は前局を引き継ぐ（CPUアイコンにリセットしない）
+      if(i !== NET.myIdx && _prevPlayers[i].iconId) p.iconId = _prevPlayers[i].iconId;
+      if(i !== NET.myIdx && _prevPlayers[i].name) p.name = _prevPlayers[i].name;
     }
     return p;
   });
@@ -8616,7 +8640,7 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
     const yc=G.yamiChallenge;
     if(!yc.answered.includes(NET.myIdx)&&NET.myIdx!==yc.from){
       html+=`<span class="action-hint" style="color:#cc99ff;">🌑 闇牌が捨てられた！</span>`;
-      html+=`<button class="btn btn-yami-ron" onclick="humanYamiChallenge('ron')">ロン</button>`;
+      if(G.players[NET.myIdx].tenpai) html+=`<button class="btn btn-yami-ron" onclick="humanYamiChallenge('ron')">ロン</button>`;
       if(!G.players[NET.myIdx].riichi){
         const _cnt=cntMap(G.players[NET.myIdx].hand);
         const _t=yc.tile;
