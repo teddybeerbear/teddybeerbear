@@ -1238,6 +1238,32 @@ body::before{
     font-size:.38rem;background:#2a1a00;color:#ffd700;
     border-radius:3px;padding:1px 3px;white-space:nowrap;
   }
+  /* エモートスロット */
+  .emote-slot-wrap{ display:flex;flex-direction:column;align-items:center; }
+  .emote-slot{
+    width:54px;height:54px;border-radius:8px;
+    border:2px dashed #2a4a3a;background:#030a10;
+    cursor:pointer;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+    transition:border-color .15s;position:relative;
+    font-size:.5rem;color:#3a5a4a;
+  }
+  .emote-slot:hover{ border-color:#5a9a7a; }
+  .emote-slot.filled{ border-style:solid;border-color:#3a7a5a; }
+  .emote-slot img{ width:100%;height:100%;object-fit:contain; }
+  .emote-slot .slot-num{
+    position:absolute;bottom:2px;right:4px;
+    font-size:.38rem;color:#3a6a4a;font-weight:700;
+  }
+  /* ピッカー内のエモートカード */
+  .emote-picker-card{
+    width:52px;height:52px;border-radius:8px;
+    border:2px solid #1a3a2a;background:#030a10;
+    cursor:pointer;overflow:hidden;padding:2px;
+    transition:border-color .15s;
+  }
+  .emote-picker-card:hover{ border-color:#5a9a7a; }
+  .emote-picker-card.selected-slot{ border-color:#ffd700;background:#1a1500; }
   </style>
 </head>
 <body>
@@ -1356,9 +1382,34 @@ body::before{
 
     <!-- エモート選択 -->
     <h3 style="margin-top:12px;">エモート</h3>
-    <p style="font-size:.55rem;color:#4a7a6a;margin:0 0 8px;">オンライン対戦中に送れるエモートを1つ装備</p>
-    <div id="emoteSelectWrap" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+    <p style="font-size:.55rem;color:#4a7a6a;margin:0 0 8px;">スロット1〜4にエモートをセット（ゲーム中に送信できます）</p>
+    <!-- 4スロット -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <div class="emote-slot-wrap" data-slot="0">
+        <div style="font-size:.48rem;color:#4a7a6a;text-align:center;margin-bottom:3px;">スロット1</div>
+        <div class="emote-slot" id="emoteSlot0" onclick="openEmoteSlotPicker(0)"></div>
+      </div>
+      <div class="emote-slot-wrap" data-slot="1">
+        <div style="font-size:.48rem;color:#4a7a6a;text-align:center;margin-bottom:3px;">スロット2</div>
+        <div class="emote-slot" id="emoteSlot1" onclick="openEmoteSlotPicker(1)"></div>
+      </div>
+      <div class="emote-slot-wrap" data-slot="2">
+        <div style="font-size:.48rem;color:#4a7a6a;text-align:center;margin-bottom:3px;">スロット3</div>
+        <div class="emote-slot" id="emoteSlot2" onclick="openEmoteSlotPicker(2)"></div>
+      </div>
+      <div class="emote-slot-wrap" data-slot="3">
+        <div style="font-size:.48rem;color:#4a7a6a;text-align:center;margin-bottom:3px;">スロット4</div>
+        <div class="emote-slot" id="emoteSlot3" onclick="openEmoteSlotPicker(3)"></div>
+      </div>
     </div>
+    <!-- スロット用ピッカー -->
+    <div id="emoteSlotPicker" style="display:none;background:#040d14;border:1px solid #1a3a2a;border-radius:10px;padding:10px;margin-bottom:10px;">
+      <div style="font-size:.55rem;color:#5a8a6a;margin-bottom:6px;">スロット<span id="emotePickerSlotNum"></span>に設定するエモートを選択</div>
+      <div id="emotePickerList" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+      <button onclick="clearEmoteSlot()" style="margin-top:8px;background:#030a10;border:1px solid #3a1a1a;border-radius:6px;color:#8a4a4a;font-size:.55rem;padding:4px 10px;cursor:pointer;">🗑 外す</button>
+      <button onclick="closeEmoteSlotPicker()" style="margin-top:8px;margin-left:6px;background:#030a10;border:1px solid #1a3a2a;border-radius:6px;color:#5a8a6a;font-size:.55rem;padding:4px 10px;cursor:pointer;">閉じる</button>
+    </div>
+    <div id="emoteSelectWrap" style="display:none;"></div>
 
     <button class="start-btn" onclick="saveProfile()">保存してロビーへ →</button>
   </div>
@@ -1762,7 +1813,7 @@ body::before{
         <button id="emoteBtn" onclick="toggleEmotePanel()">😊 エモート</button>
         <div id="emotePanel" style="display:none;position:absolute;bottom:calc(100% + 4px);left:0;
           background:#040d14;border:1px solid #1a3a2a;border-radius:10px;
-          padding:6px;gap:6px;z-index:60;flex-wrap:wrap;width:104px;">
+          padding:6px;gap:6px;z-index:60;flex-wrap:wrap;width:208px;">
         </div>
       </div>
       <div style="display:flex;gap:4px;align-items:center;">
@@ -3821,7 +3872,7 @@ function _reconnectToNewHost(newHostPeerId, retryCount=0){
     NET._promotingToHost = false;
     if(conn.peer) peerRegistryAdd(conn.peer, newHostIdx, conn);
     conn.send({type:'reconnect', originalIdx: myOriginalIdx, peerId: NET.peer?.id||''});
-    conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',emote:PROFILE.emote||'',peerId:NET.peer?.id||''});
+    conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',emote:PROFILE.emote||'',emotes:PROFILE.emotes||['','','',''],peerId:NET.peer?.id||''});
     addLog('✅ 新ホストに再接続しました','log-new');
     hideReconnectOverlay();
   });
@@ -4527,7 +4578,7 @@ function onNetData(msg, senderIdx){
         G_ABILITY_MODE=msg.abilityMode;
       }
       // 自分のプロフィール名・アイコン・PeerIDをホストに送信
-      if(NET.conn&&NET.conn.open) NET.conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',emote:PROFILE.emote||'',peerId:NET.peer?.id||''});
+      if(NET.conn&&NET.conn.open) NET.conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',emote:PROFILE.emote||'',emotes:PROFILE.emotes||['','','',''],peerId:NET.peer?.id||''});
       if(isReconnecting){
         // 再接続完了：ゲーム状態は次の stateUpdate で同期される
         addLog('🔄 新ホストと同期中…','log-new');
@@ -4612,8 +4663,11 @@ function onNetData(msg, senderIdx){
       setTimeout(saveRejoinSession, 600);
       // ゲスト: ホストに自分のアイコン情報とPeerIDを送信（makePlayer後に反映させるため）
       setTimeout(()=>{
-        if(NET.conn&&NET.conn.open) NET.conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',emote:PROFILE.emote||'',peerId:NET.peer?.id||''});
+        if(NET.conn&&NET.conn.open) NET.conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',emote:PROFILE.emote||'',emotes:PROFILE.emotes||['','','',''],peerId:NET.peer?.id||''});
       }, 400);
+    } else if(msg.type==='emote'){
+      // ホストから転送されたエモートをゲスト側で表示
+      showEmoteOverlay(msg.pidx, msg.emoteId);
     } else {
       applyHostState(msg);
     }
@@ -4845,6 +4899,7 @@ function handleGuestAction(msg, senderIdx){
       NET.guestAbilities[senderIdx-1]=msg.ability??'';
       NET.guestIconIds[senderIdx-1]=msg.iconId||'';
       NET.guestEmotes[senderIdx-1]=msg.emote||'';
+      if(msg.emotes) NET.guestEmotesSlots = NET.guestEmotesSlots||{}; if(msg.emotes) NET.guestEmotesSlots[senderIdx] = msg.emotes;
       if(msg.peerId) NET.guestPeerIds[senderIdx-1]=msg.peerId;
       // ゲーム中ならG.playersにも即反映
       if(NET.online && G && G.players && G.players[senderIdx]){
@@ -5312,6 +5367,8 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; _wallEx
       if(i !== NET.myIdx && _prevPlayers[i].iconId) p.iconId = _prevPlayers[i].iconId;
       if(i !== NET.myIdx && _prevPlayers[i].name) p.name = _prevPlayers[i].name;
     }
+    // ★ オンライン: NET.guestIconIds から iconId を確実に反映（初回・再局問わず）
+    if(NET.online && i !== NET.myIdx && NET.guestIconIds[i-1]) p.iconId = NET.guestIconIds[i-1];
     return p;
   });
 
@@ -9809,11 +9866,13 @@ function _playIconSe(iconId, action, fallback) {
 
 // pidxからiconIdを取得するヘルパー
 function _getPlayerIconId(pidx) {
-  if (!G || !G.players || !G.players[pidx]) return '';
-  const p = G.players[pidx];
-  // 自分自身はPROFILEから（ゲスト側でG.players反映が遅れる場合の保険）
+  // 自分自身はPROFILEから確実に取得
   if (pidx === NET.myIdx) return PROFILE.iconId || '';
-  return p.iconId || '';
+  // 他プレイヤー: G.playersを優先、空ならNET.guestIconIds[pidx-1]で補完
+  const fromG = (G && G.players && G.players[pidx]) ? (G.players[pidx].iconId || '') : '';
+  if (fromG) return fromG;
+  // NET.guestIconIds は [idx1のID, idx2のID, idx3のID]（0始まりでpidx-1）
+  return (NET.guestIconIds && NET.guestIconIds[pidx - 1]) ? NET.guestIconIds[pidx - 1] : '';
 }
 
 // アイコンSEを鳴らす（なければ通常SE）
@@ -10184,26 +10243,74 @@ const EMOTES = [
 ];
 function emoteUrl(id){ return EMOTE_BASE + id + '.png'; }
 
-// プロフィール画面のエモート選択UI
+// プロフィール画面のエモート選択UI（4スロット）
+let _emotePickerSlot = -1; // 現在編集中のスロット番号
+
 function renderEmoteSelect(){
-  const wrap = document.getElementById('emoteSelectWrap');
-  if(!wrap) return;
-  const equipped = PROFILE.emote || '';
-  wrap.innerHTML = EMOTES.map(e => {
-    const isEq = equipped === e.id;
-    return `<div class="emote-col-card ${isEq?'equipped-emote':''}" onclick="selectEmote('${e.id}')" title="${e.label}">
-      <img src="${emoteUrl(e.id)}" alt="${e.label}">
-      ${isEq ? '<div class="ec-equip-badge">装備中</div>' : ''}
+  _renderEmoteSlots();
+}
+
+function _renderEmoteSlots(){
+  const slots = PROFILE.emotes || ['','','',''];
+  for(let i=0;i<4;i++){
+    const el = document.getElementById('emoteSlot'+i);
+    if(!el) continue;
+    const id = slots[i] || '';
+    if(id){
+      el.classList.add('filled');
+      el.innerHTML = `<img src="${emoteUrl(id)}" alt="emote"><span class="slot-num">${i+1}</span>`;
+    } else {
+      el.classList.remove('filled');
+      el.innerHTML = `<span style="font-size:.6rem;color:#2a5a3a;">＋</span><span class="slot-num">${i+1}</span>`;
+    }
+  }
+}
+
+function openEmoteSlotPicker(slot){
+  _emotePickerSlot = slot;
+  const picker = document.getElementById('emoteSlotPicker');
+  const numEl  = document.getElementById('emotePickerSlotNum');
+  const list   = document.getElementById('emotePickerList');
+  if(!picker||!list) return;
+  numEl.textContent = slot+1;
+  const slots = PROFILE.emotes || ['','','',''];
+  const current = slots[slot] || '';
+  list.innerHTML = EMOTES.map(e => {
+    const isCurrent = e.id === current;
+    return `<div class="emote-picker-card ${isCurrent?'selected-slot':''}" onclick="pickEmoteForSlot('${e.id}')" title="${e.label}">
+      <img src="${emoteUrl(e.id)}" alt="${e.label}" style="width:100%;height:100%;object-fit:contain;">
     </div>`;
   }).join('');
+  picker.style.display = 'block';
 }
+
+function pickEmoteForSlot(id){
+  if(!PROFILE.emotes) PROFILE.emotes = ['','','',''];
+  PROFILE.emotes[_emotePickerSlot] = id;
+  // 旧来の PROFILE.emote も先頭スロットで互換維持
+  PROFILE.emote = PROFILE.emotes[0] || '';
+  closeEmoteSlotPicker();
+  _renderEmoteSlots();
+}
+
+function clearEmoteSlot(){
+  if(!PROFILE.emotes) PROFILE.emotes = ['','','',''];
+  PROFILE.emotes[_emotePickerSlot] = '';
+  PROFILE.emote = PROFILE.emotes[0] || '';
+  closeEmoteSlotPicker();
+  _renderEmoteSlots();
+}
+
+function closeEmoteSlotPicker(){
+  const picker = document.getElementById('emoteSlotPicker');
+  if(picker) picker.style.display = 'none';
+  _emotePickerSlot = -1;
+}
+
 function selectEmote(id){
-  if(PROFILE.emote === id){
-    PROFILE.emote = ''; // 再クリックで外す
-  } else {
-    PROFILE.emote = id;
-  }
-  renderEmoteSelect();
+  // 旧来互換（未使用になるが残しておく）
+  PROFILE.emote = (PROFILE.emote === id) ? '' : id;
+  _renderEmoteSlots();
 }
 
 // ゲーム内エモートパネルの表示切り替え
@@ -10217,13 +10324,18 @@ function toggleEmotePanel(){
 function renderEmotePanel(){
   const panel = document.getElementById('emotePanel');
   if(!panel) return;
-  const myEmoteId = PROFILE.emote || '';
-  if(!myEmoteId){ panel.innerHTML = '<div style="font-size:.55rem;color:#4a7a6a;padding:4px;">エモート未装備<br>プロフィールで設定</div>'; return; }
-  // 装備中の1つだけ大きく表示してすぐ送れるように
-  panel.innerHTML = EMOTES.map(e => {
-    const owned = e.id === myEmoteId;
-    return `<button class="emote-pick-btn" ${!owned?'style="opacity:.35;pointer-events:none;"':''} onclick="sendEmote('${e.id}')" title="${e.label}">
-      <img src="${emoteUrl(e.id)}" alt="${e.label}">
+  const slots = PROFILE.emotes || ['','','',''];
+  const hasAny = slots.some(s=>s);
+  if(!hasAny){
+    panel.innerHTML = '<div style="font-size:.55rem;color:#4a7a6a;padding:4px;">エモート未設定<br>プロフィールで設定</div>';
+    return;
+  }
+  panel.innerHTML = slots.map((id, i) => {
+    if(!id) return `<button class="emote-pick-btn" style="opacity:.2;pointer-events:none;" title="未設定">
+      <span style="font-size:.5rem;color:#2a4a3a;">${i+1}</span>
+    </button>`;
+    return `<button class="emote-pick-btn" onclick="sendEmote('${id}')" title="スロット${i+1}">
+      <img src="${emoteUrl(id)}" alt="emote">
     </button>`;
   }).join('');
 }
