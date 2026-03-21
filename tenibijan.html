@@ -1869,6 +1869,8 @@ body::before{
         ">⚙️</button>
         <button id="wallExpandBtn" onclick="toggleWallExpand()" style="font-size:.62rem;padding:4px 7px;background:#030a10;border:1px solid #1a3a2a;border-radius:6px;color:#5a8a7a;cursor:pointer;transition:all .2s;">🔎山</button>
         <button id="discardZoomBtn" onclick="toggleDiscardZoom()" style="font-size:.62rem;padding:4px 7px;background:#030a10;border:1px solid #1a3a2a;border-radius:6px;color:#5a8a7a;cursor:pointer;transition:all .2s;">🔎捨</button>
+        <span style="display:inline-block;width:6px;"></span>
+        <button id="kiruBtn" onclick="humanDiscard()" style="display:none;font-size:.62rem;padding:4px 9px;background:#030a10;border:1px solid #c9a84c;border-radius:6px;color:#c9a84c;cursor:pointer;transition:all .2s;font-weight:bold;">切る</button>
       </div>
       <!-- 設定パネル -->
       <div id="settingsPanel" style="
@@ -7608,6 +7610,17 @@ function renderAll(){
   renderWallExpand();
   // 選択中牌の同種ハイライト更新
   updateSelHighlight();
+  // 「切る」ボタン: 自分のターン・捨てフェーズ・牌選択中・リーチなし・リーチ宣言中でない場合のみ表示
+  const kiruBtn=document.getElementById('kiruBtn');
+  if(kiruBtn){
+    const _kp=G&&G.players&&G.players[NET&&NET.myIdx];
+    const _show=!!(G&&G.phase==='discard'&&G.current===NET.myIdx&&_kp&&!_kp.riichi&&!G.pendingRiichi&&selIdx>=0&&selIdx<(_kp.hand||[]).length);
+    kiruBtn.style.display=_show?'':'none';
+    if(_show&&_kp){
+      const _kt=_kp.hand[selIdx];
+      kiruBtn.textContent=_kt?`切る [${tileLabel(_kt)}]`:'切る';
+    }
+  }
 }
 
 // ── 同種牌ハイライト ─────────────────────────────────────────
