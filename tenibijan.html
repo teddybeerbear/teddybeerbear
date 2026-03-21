@@ -2815,9 +2815,30 @@ function isStdWin(hand){
 // 副露（暗槓含む）の全牌で条件チェックする役満判定
 // allTilesは hand5 + melds.tiles の全枚数（9枚や13枚もある）
 // 条件: 全牌が指定スートのみ かつ canWin(hand5)
-function isZiiso(allTiles, hand5){
+function isZiiso(allTiles, hand5, melds){
+  // 全牌が字牌であること
   if(!allTiles.every(t=>t.suit==='honor')) return false;
-  return hand5 ? canWin(hand5) : isStdWin(allTiles);
+  // 国士無双とは複合しない
+  if(hand5 && isKokushi(hand5)) return false;
+  // 鳴きがある場合、チー（順子）は不可。ポン・カン（刻子）のみ許可
+  if(melds && melds.length>0){
+    if(melds.some(m=>m.type==='chi')) return false;
+  }
+  // 手牌部分が暗刻+対子 か 対子のみ の形（順子を含まない）
+  if(hand5){
+    const cnt=cntMap(hand5);
+    const vals=Object.values(cnt);
+    if(hand5.length===5){
+      const pairs=vals.filter(v=>v===2).length;
+      const trips=vals.filter(v=>v>=3).length;
+      if(!(pairs===1&&trips===1)) return false;
+    } else if(hand5.length===2){
+      if(!(vals.length===1&&vals[0]===2)) return false;
+    } else {
+      return false;
+    }
+  }
+  return true;
 }
 function isChinroutou(allTiles, hand5){
   const T=new Set(['man_1','man_9','pin_1','pin_9','sou_1','sou_9']);
@@ -2854,7 +2875,7 @@ function isToitoiHand(hand){
 function canWin(hand){
   // 有効な手牌長: 2(ポン2回後), 5(鳴きなし)
   if(hand.length!==2&&hand.length!==5)return false;
-  return isStdWin(hand)||isZiiso(hand)||isChinroutou(hand)||isRyuuiisou(hand)||isKokushi(hand);
+  return isStdWin(hand)||isZiiso(hand,hand)||isChinroutou(hand)||isRyuuiisou(hand)||isKokushi(hand);
 }
 
 // ============================================================
@@ -2973,7 +2994,7 @@ function evalYaku(hand5,winTile,isTsumo,player,roundWind){
   if(player.isTenhou&&isTsumo)ymList.push({name:'天和',han:26});
   if(player.isChiihou&&isTsumo)ymList.push({name:'地和',han:13});
   if(player.isRenhou&&!isTsumo)ymList.push({name:'人和',han:13});
-  if(isZiiso(allTiles,hand5))ymList.push({name:'字一色',han:13});
+  if(isZiiso(allTiles,hand5,melds))ymList.push({name:'字一色',han:13});
   if(isChinroutou(allTiles,hand5))ymList.push({name:'清老頭',han:13});
   if(isRyuuiisou(allTiles,hand5))ymList.push({name:'緑一色',han:13});
   if(isKokushi(hand5))ymList.push({name:'国士無双（東南西北中）',han:13});
