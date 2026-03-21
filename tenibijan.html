@@ -1191,6 +1191,53 @@ body::before{
   /* light-peek tile with image */
   .light-peek-tile{display:flex;align-items:center;justify-content:center;min-height:60px;}
   .light-peek-tile .tile-img{position:static;width:48px;height:64px;}
+
+  /* ── エモートシステム ── */
+  #emoteBtn{
+    background:#030a10;border:1px solid #2a4a3a;border-radius:7px;
+    color:#7acc99;font-size:.6rem;padding:5px 9px;cursor:pointer;
+    transition:all .2s;letter-spacing:.04em;white-space:nowrap;
+  }
+  #emoteBtn:hover{border-color:#4a8a6a;color:#aaffcc;}
+  #emotePanel{
+    display:none;position:absolute;bottom:calc(100% + 4px);left:0;
+    background:#040d14;border:1px solid #1a3a2a;border-radius:10px;
+    padding:6px;gap:6px;z-index:60;
+    display:none;flex-wrap:wrap;width:100px;
+  }
+  .emote-pick-btn{
+    width:42px;height:42px;border-radius:7px;
+    border:1px solid #1a3a2a;background:#030a10;
+    cursor:pointer;overflow:hidden;padding:2px;
+    transition:border-color .15s;
+  }
+  .emote-pick-btn:hover{border-color:#5a9a7a;}
+  .emote-pick-btn img{width:100%;height:100%;object-fit:contain;}
+  /* アイコンの上に重なるエモート表示 */
+  .emote-overlay{
+    position:absolute;top:-8px;left:50%;transform:translateX(-50%);
+    width:84px;height:84px;
+    pointer-events:none;z-index:20;
+    animation:emoteIn .25s ease-out;
+  }
+  .emote-overlay img{width:100%;height:100%;object-fit:contain;}
+  @keyframes emoteIn{from{opacity:0;transform:translateX(-50%) scale(.5);}to{opacity:1;transform:translateX(-50%) scale(1);}}
+
+  /* プロフィール内エモート選択 */
+  .emote-col-card{
+    width:60px;height:60px;border-radius:8px;
+    border:2px solid #1a3a2a;background:#030a10;
+    cursor:pointer;overflow:hidden;padding:3px;
+    transition:border-color .15s;display:inline-flex;align-items:center;justify-content:center;
+    position:relative;
+  }
+  .emote-col-card img{width:100%;height:100%;object-fit:contain;}
+  .emote-col-card.equipped-emote{border-color:#ffd700;background:#1a1500;}
+  .emote-col-card .ec-equip-badge{
+    position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
+    font-size:.38rem;background:#2a1a00;color:#ffd700;
+    border-radius:3px;padding:1px 3px;white-space:nowrap;
+  }
   </style>
 </head>
 <body>
@@ -1273,7 +1320,7 @@ body::before{
 <div id="profileScreen">
   <div class="lobby-title">
     <h1 style="font-size:clamp(1.4rem,4vw,2.2rem);">プロフィール</h1>
-    <p>名前と能力を設定してください</p>
+
   </div>
   <div class="profile-card">
     <!-- アイコン選択 -->
@@ -1306,6 +1353,13 @@ body::before{
     <h3 style="margin-top:12px;">マット</h3>
     <div id="matSelectWrap" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
     </div>
+
+    <!-- エモート選択 -->
+    <h3 style="margin-top:12px;">エモート</h3>
+    <p style="font-size:.55rem;color:#4a7a6a;margin:0 0 8px;">オンライン対戦中に送れるエモートを1つ装備</p>
+    <div id="emoteSelectWrap" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+    </div>
+
     <button class="start-btn" onclick="saveProfile()">保存してロビーへ →</button>
   </div>
 </div>
@@ -1703,6 +1757,14 @@ body::before{
       position:absolute;bottom:8px;left:8px;z-index:30;
       display:flex;flex-direction:column;gap:4px;align-items:flex-start;
     ">
+      <!-- エモートボタン（オンライン時のみ表示） -->
+      <div id="emoteArea" style="display:none;position:relative;">
+        <button id="emoteBtn" onclick="toggleEmotePanel()">😊 エモート</button>
+        <div id="emotePanel" style="display:none;position:absolute;bottom:calc(100% + 4px);left:0;
+          background:#040d14;border:1px solid #1a3a2a;border-radius:10px;
+          padding:6px;gap:6px;z-index:60;flex-wrap:wrap;width:104px;">
+        </div>
+      </div>
       <div style="display:flex;gap:4px;align-items:center;">
         <button id="autoDrawBtn" onclick="toggleAutoDraw()" style="
           background:#030a10;border:1px solid #1a4a2a;border-radius:7px;
@@ -2076,6 +2138,7 @@ const SFX = (() => {
   return {
     setVol(v)   { vol   = v; },
     setSeVol(v) { seVol = v; },
+    getSeVol()  { return seVol; },
     setSeScale(key, v) { if(key in seScale) seScale[key]=v; },
     getSeScale(key) { return seScale[key]??1; },
 
@@ -3181,6 +3244,7 @@ let NET={
   guestNames:[],    // ゲストのプロフィール名 [idx1の名前, idx2の名前, idx3の名前]
   guestAbilities:[], // ゲストの能力 [idx1の能力, idx2の能力, idx3の能力]
   guestIconIds:[],  // ゲストのアイコンID [idx1, idx2, idx3]
+  guestEmotes:[],   // ゲストの装備エモート [idx1, idx2, idx3]
   guestPeerIds:[],  // ゲストのPeerID [idx1のPeerID, idx2のPeerID, idx3のPeerID]
   _memberDataCache:[], // ゲスト側: ホストから受け取ったメンバーデータのキャッシュ
   // ── P2P分散アーキテクチャ ──
@@ -3757,7 +3821,7 @@ function _reconnectToNewHost(newHostPeerId, retryCount=0){
     NET._promotingToHost = false;
     if(conn.peer) peerRegistryAdd(conn.peer, newHostIdx, conn);
     conn.send({type:'reconnect', originalIdx: myOriginalIdx, peerId: NET.peer?.id||''});
-    conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',peerId:NET.peer?.id||''});
+    conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',emote:PROFILE.emote||'',peerId:NET.peer?.id||''});
     addLog('✅ 新ホストに再接続しました','log-new');
     hideReconnectOverlay();
   });
@@ -4203,6 +4267,7 @@ function kickPlayer(connIdx){
   NET.guestNames.splice(connIdx, 1);
   NET.guestAbilities.splice(connIdx, 1);
   NET.guestIconIds.splice(connIdx, 1);
+  NET.guestEmotes.splice(connIdx, 1);
   _broadcastMemberUpdate();
   updateRoomLobbyUI();
 }
@@ -4217,7 +4282,7 @@ function leaveRoomLobby(){
   if(NET.peer){ try{NET.peer.destroy();}catch(e){} NET.peer=null; }
   hideRoomLobby();
   NET.conns=[]; NET.conn=null; NET.roomCode=null; NET.isHost=false;
-  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
+  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
   setOnlineStatus('');
   document.getElementById('lobby').style.display='flex';
   document.getElementById('roomCodeBox').style.display='none';
@@ -4462,7 +4527,7 @@ function onNetData(msg, senderIdx){
         G_ABILITY_MODE=msg.abilityMode;
       }
       // 自分のプロフィール名・アイコン・PeerIDをホストに送信
-      if(NET.conn&&NET.conn.open) NET.conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',peerId:NET.peer?.id||''});
+      if(NET.conn&&NET.conn.open) NET.conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',emote:PROFILE.emote||'',peerId:NET.peer?.id||''});
       if(isReconnecting){
         // 再接続完了：ゲーム状態は次の stateUpdate で同期される
         addLog('🔄 新ホストと同期中…','log-new');
@@ -4547,7 +4612,7 @@ function onNetData(msg, senderIdx){
       setTimeout(saveRejoinSession, 600);
       // ゲスト: ホストに自分のアイコン情報とPeerIDを送信（makePlayer後に反映させるため）
       setTimeout(()=>{
-        if(NET.conn&&NET.conn.open) NET.conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',peerId:NET.peer?.id||''});
+        if(NET.conn&&NET.conn.open) NET.conn.send({type:'myName',name:PROFILE.name||'プレイヤー',ability:PROFILE.ability||'',iconId:PROFILE.iconId||'',emote:PROFILE.emote||'',peerId:NET.peer?.id||''});
       }, 400);
     } else {
       applyHostState(msg);
@@ -4779,6 +4844,7 @@ function handleGuestAction(msg, senderIdx){
       NET.guestNames[senderIdx-1]=msg.name||'プレイヤー';
       NET.guestAbilities[senderIdx-1]=msg.ability??'';
       NET.guestIconIds[senderIdx-1]=msg.iconId||'';
+      NET.guestEmotes[senderIdx-1]=msg.emote||'';
       if(msg.peerId) NET.guestPeerIds[senderIdx-1]=msg.peerId;
       // ゲーム中ならG.playersにも即反映
       if(NET.online && G && G.players && G.players[senderIdx]){
@@ -4791,6 +4857,11 @@ function handleGuestAction(msg, senderIdx){
       }
       updateRoomMemberList();
       _broadcastMemberUpdate();
+      break;
+    case 'emote':
+      // エモートを全員に転送（ホスト）してオーバーレイ表示
+      if(amIHost()) netBroadcastAll({type:'emote', pidx:msg.pidx, emoteId:msg.emoteId});
+      showEmoteOverlay(msg.pidx, msg.emoteId);
       break;
     case 'penSync':
       if(amIHost() && msg.changedKeys){
@@ -4889,6 +4960,7 @@ function applyHostState(msg){
     }
     if(s.finalResult)showFinalResultData(s.finalResult);
     _refreshRejoinSession();
+    updateEmoteAreaVisibility();
   }
 }
 
@@ -5095,6 +5167,7 @@ function startOnlineGame(){
   document.getElementById('lobby').style.display='none';
   document.getElementById('gameScreen').classList.add('active');
   scaleTable();
+  updateEmoteAreaVisibility();
   G={players:[],deck:[],deckSlots:[],doraInds:[],uraInds:[],doraPile:[],rinshan:[],rinshanIdx:6,kanDoraCount:0,lightMode:false,lightUserIdx:null,lightRevealedSlots:{},lightRevealedHand:{},stealMode:false,mineSlots:[],mineRinshanIdxs:[],mineOwners:{},mineRinshanOwners:{},mineCount:0,penDrawings:{},yamiChallenge:null,
      dealer:Math.floor(Math.random()*numPlayers),current:0,roundNum:1,roundWind:'東',honba:0,riichiPot:0,
      pendingRiichi:null,riichiValidIdx:null,
@@ -5489,7 +5562,7 @@ function discardAction(pidx,tidx,isYami=false){ if(pidx===NET.myIdx){ _timerSave
 
 // 加槓: ポン済みの牌に同じ牌を追加してカンにする
 function handleKakan(pidx, handIdx){
-  SFX.kan();
+  playSeFallback(pidx, 'kan', ()=>SFX.kan());
   const p=G.players[pidx];
   const tile=p.hand[handIdx];
   // ポン済み面子を探す
@@ -5573,7 +5646,7 @@ function canAnkan(pidx){
 }
 
 function handleAnkan(pidx, tileKey){
-  SFX.kan();
+  playSeFallback(pidx, 'kan', ()=>SFX.kan());
   const p=G.players[pidx];
   const tiles=p.hand.filter(t=>tk(t)===tileKey);
   if(tiles.length<4)return;
@@ -5630,7 +5703,7 @@ function checkPon(fromPidx,tile){
 }
 
 function handlePon(pidx,tile,fromPidx){
-  SFX.pon();
+  playSeFallback(pidx, 'pon', ()=>SFX.pon());
   const p=G.players[pidx];
   let rm=0;p.hand=p.hand.filter(t=>{if(rm<2&&teq(t,tile)){rm++;return false;}return true;});
   p.melds.push({type:'pon',tiles:[tile,tile,tile],from:fromPidx});
@@ -5858,7 +5931,19 @@ function toggleAutoMenu(){
   const open=panel.style.display==='flex';
   panel.style.display=open?'none':'flex';
   document.getElementById('autoMenuToggle').style.borderColor=open?'#1a3a2a':'#4a8a6a';
+  // エモートパネルを閉じる
+  const ep=document.getElementById('emotePanel');
+  if(ep) ep.style.display='none';
 }
+
+// エモートパネル外クリックで閉じる
+document.addEventListener('click', function(e){
+  const panel = document.getElementById('emotePanel');
+  const area  = document.getElementById('emoteArea');
+  if(panel && panel.style.display==='flex' && area && !area.contains(e.target)){
+    panel.style.display='none';
+  }
+});
 function updateAutoMenuLabel(){
   const on=[noMeldEnabled,autoDiscardEnabled,autoKitaEnabled,autoWinEnabled].filter(Boolean).length;
   const lbl=document.getElementById('autoMenuLabel');
@@ -6324,7 +6409,9 @@ function handleWin(widx,winTile,isTsumo,losidx){
   setTimeout(()=>{
     const isYM = G.players[widx] && G.players[widx].hand &&
       evalYaku([...G.players[widx].hand,winTile].slice(-5),winTile,isTsumo,G.players[widx],G.roundWind).some(y=>y.han>=13);
-    if(isYM) SFX.yakuman(); else if(isTsumo) SFX.tsumo(); else SFX.ron();
+    if(isYM) SFX.yakuman();
+    else if(isTsumo) playSeFallback(widx, 'tsumo', ()=>SFX.tsumo());
+    else playSeFallback(widx, 'ron', ()=>SFX.ron());
   }, 50);
   const w=G.players[widx];
   const displayHand=[...w.hand];
@@ -6833,7 +6920,7 @@ function humanMinkan(){
   broadcastState();
 }
 function handleMinkan(pidx,tile,fromPidx){
-  SFX.kan();
+  playSeFallback(pidx, 'kan', ()=>SFX.kan());
   const p=G.players[pidx];
   let rm=0;p.hand=p.hand.filter(t=>{if(rm<3&&teq(t,tile)){rm++;return false;}return true;});
   p.melds.push({type:'minkan',tiles:[tile,tile,tile,tile],from:fromPidx});
@@ -6940,7 +7027,9 @@ function commitRiichi(p){
   p.riichiDiscardIdx=p.discards.length;
   p.riichi=true;p.ippatsu=true;p.score-=10;G.riichiPot+=10;
   const mode=G.pendingRiichi;
-  if(mode==='double'||mode==='double-open') SFX.doubleRiichi(); else SFX.riichi();
+  const _rPidx = G.players.indexOf(p);
+  const _rFallback = ()=>{ if(mode==='double'||mode==='double-open') SFX.doubleRiichi(); else SFX.riichi(); };
+  if(_rPidx >= 0) playSeFallback(_rPidx, 'riichi', _rFallback); else _rFallback();
   if(mode==='open')p.openRiichi=true;
   else if(mode==='double')p.doubleRiichi=true;
   else if(mode==='double-open'){p.doubleRiichi=true;p.openRiichi=true;}
@@ -7245,7 +7334,7 @@ function backToLobby(){
   const wasRankMatch = NET.isRankMatch;
   if(NET.peer){try{NET.peer.destroy();}catch(e){} NET.peer=null;NET.conn=null;NET.conns=[];NET.online=false;}
   NET.roomCode=null; NET.isHost=false; NET.isRankMatch=false; NET.roomTimeMode=false; NET.roomTobiMode=true;
-  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
+  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
   RANK.matchId=null; RANK.connectedGuests=0;
   setOnlineStatus('');
   document.getElementById('roomCodeBox').style.display='none';
@@ -9651,6 +9740,88 @@ const GACHA_ICONS = [
 ];
 function gachaIconUrl(id){ return GACHA_ICON_BASE+id+'.png'; }
 
+// ============================================================
+// アイコン別専用ボイス設定
+// 特定のアイコンIDを装備しているプレイヤーが
+// ロン・ツモ・ポン・カン（明槓/暗槓/加槓）・リーチした時に専用音声を再生します。
+//
+// 【設定方法】 以下の ICON_SE_MAP にアイコンIDと音声URLを追加するだけ:
+//
+// const ICON_SE_MAP = {
+//   'L01': {
+//     ron:    'https://example.com/l01_ron.mp3',
+//     tsumo:  'https://example.com/l01_tsumo.mp3',
+//     pon:    'https://example.com/l01_pon.mp3',
+//     kan:    'https://example.com/l01_kan.mp3',
+//     riichi: 'https://example.com/l01_riichi.mp3',
+//   },
+//   'R05': {
+//     ron:    'https://example.com/r05_ron.mp3',
+//     // tsumo等を省略すると通常SEが再生される
+//   },
+// };
+//
+// ※ 省略したキーは通常SEが再生されます。
+// ※ 音量はゲーム内の「SE音量」スライダーに連動します。
+// ============================================================
+const ICON_SE_MAP = {
+  // L01・L02・L03（レジェンド）専用ボイス
+  'L01': {
+    kan:    'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/vc/kan01.mp3',
+    pon:    'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/vc/pon01.mp3',
+    riichi: 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/vc/riti01.mp3',
+    ron:    'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/vc/ron01.mp3',
+    tsumo:  'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/vc/tumo01.mp3',
+  },
+  'L02': {
+    kan:    'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/vc/kan01.mp3',
+    pon:    'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/vc/pon01.mp3',
+    riichi: 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/vc/riti01.mp3',
+    ron:    'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/vc/ron01.mp3',
+    tsumo:  'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/vc/tumo01.mp3',
+  },
+  'L03': {
+    kan:    'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/vc/kan01.mp3',
+    pon:    'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/vc/pon01.mp3',
+    riichi: 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/vc/riti01.mp3',
+    ron:    'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/vc/ron01.mp3',
+    tsumo:  'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/vc/tumo01.mp3',
+  },
+};
+
+// アイコン専用SEキャッシュ
+const _iconSeCache = {};
+function _playIconSe(iconId, action, fallback) {
+  const map = ICON_SE_MAP[iconId];
+  const url = map && map[action];
+  if (!url) { fallback(); return; }
+  if (!_iconSeCache[url]) {
+    const audio = new Audio(url);
+    audio.preload = 'auto';
+    _iconSeCache[url] = audio;
+  }
+  const a = _iconSeCache[url];
+  a.currentTime = 0;
+  const scaleKey = action === 'riichi' ? 'riichi' : action;
+  a.volume = Math.min(1, (SFX.getSeVol ? SFX.getSeVol() : 0.42) * (SFX.getSeScale ? SFX.getSeScale(scaleKey) : 1));
+  a.play().catch(()=>{});
+}
+
+// pidxからiconIdを取得するヘルパー
+function _getPlayerIconId(pidx) {
+  if (!G || !G.players || !G.players[pidx]) return '';
+  const p = G.players[pidx];
+  // 自分自身はPROFILEから（ゲスト側でG.players反映が遅れる場合の保険）
+  if (pidx === NET.myIdx) return PROFILE.iconId || '';
+  return p.iconId || '';
+}
+
+// アイコンSEを鳴らす（なければ通常SE）
+function playSeFallback(pidx, action, fallbackFn) {
+  const iconId = _getPlayerIconId(pidx);
+  _playIconSe(iconId, action, fallbackFn);
+}
+
 function rollRarity(){
   const r = Math.random();
   if(r < 0.001) return 'legend';
@@ -9958,6 +10129,8 @@ function openProfile(){
   renderAbilityPopup();
   // マット選択UIを生成
   renderMatSelect();
+  // エモート選択UIを生成
+  renderEmoteSelect();
 }
 function renderMatSelect(){
   const wrap=document.getElementById('matSelectWrap');
@@ -9997,6 +10170,110 @@ function renderProfileAbilityList(){
     }
     if(badge) badge.textContent=counts[ab]>1?`×${counts[ab]}`:'';
   });
+}
+
+// ============================================================
+// EMOTE SYSTEM
+// ============================================================
+const EMOTE_BASE = 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/emo/';
+const EMOTES = [
+  {id:'01emo01', label:'エモート1'},
+  {id:'01emo02', label:'エモート2'},
+  {id:'01emo03', label:'エモート3'},
+  {id:'01emo04', label:'エモート4'},
+];
+function emoteUrl(id){ return EMOTE_BASE + id + '.png'; }
+
+// プロフィール画面のエモート選択UI
+function renderEmoteSelect(){
+  const wrap = document.getElementById('emoteSelectWrap');
+  if(!wrap) return;
+  const equipped = PROFILE.emote || '';
+  wrap.innerHTML = EMOTES.map(e => {
+    const isEq = equipped === e.id;
+    return `<div class="emote-col-card ${isEq?'equipped-emote':''}" onclick="selectEmote('${e.id}')" title="${e.label}">
+      <img src="${emoteUrl(e.id)}" alt="${e.label}">
+      ${isEq ? '<div class="ec-equip-badge">装備中</div>' : ''}
+    </div>`;
+  }).join('');
+}
+function selectEmote(id){
+  if(PROFILE.emote === id){
+    PROFILE.emote = ''; // 再クリックで外す
+  } else {
+    PROFILE.emote = id;
+  }
+  renderEmoteSelect();
+}
+
+// ゲーム内エモートパネルの表示切り替え
+function toggleEmotePanel(){
+  const panel = document.getElementById('emotePanel');
+  if(!panel) return;
+  const isOpen = panel.style.display === 'flex';
+  panel.style.display = isOpen ? 'none' : 'flex';
+  if(!isOpen) renderEmotePanel();
+}
+function renderEmotePanel(){
+  const panel = document.getElementById('emotePanel');
+  if(!panel) return;
+  const myEmoteId = PROFILE.emote || '';
+  if(!myEmoteId){ panel.innerHTML = '<div style="font-size:.55rem;color:#4a7a6a;padding:4px;">エモート未装備<br>プロフィールで設定</div>'; return; }
+  // 装備中の1つだけ大きく表示してすぐ送れるように
+  panel.innerHTML = EMOTES.map(e => {
+    const owned = e.id === myEmoteId;
+    return `<button class="emote-pick-btn" ${!owned?'style="opacity:.35;pointer-events:none;"':''} onclick="sendEmote('${e.id}')" title="${e.label}">
+      <img src="${emoteUrl(e.id)}" alt="${e.label}">
+    </button>`;
+  }).join('');
+}
+
+// エモートを送信
+function sendEmote(emoteId){
+  if(!NET.online) return;
+  const pidx = NET.myIdx;
+  netBroadcastAll({type:'emote', pidx, emoteId});
+  showEmoteOverlay(pidx, emoteId);
+  // パネルを閉じる
+  const panel = document.getElementById('emotePanel');
+  if(panel) panel.style.display = 'none';
+}
+
+// エモートをアイコンの上に表示
+const _emoteTimers = {};
+function showEmoteOverlay(pidx, emoteId){
+  // leftPanelを探す: player-icon-panelのうちsi対応のもの
+  const allPanels = document.querySelectorAll('.player-icon-panel');
+  // pidxからsi(seatIndex)への変換: renderHandで作られる順序に依存
+  // 自分(NET.myIdx)はsi=0(bottom), 以降は(pidx - myIdx + numPlayers)%numPlayers でsi決定
+  const numP = (typeof numPlayers!=='undefined' ? numPlayers : 4);
+  const myIdx = NET.myIdx || 0;
+  const si = (pidx - myIdx + numP) % numP;
+  const panel = allPanels[si];
+  if(!panel) return;
+
+  // 既存オーバーレイ削除
+  const old = panel.querySelector('.emote-overlay');
+  if(old) old.remove();
+  if(_emoteTimers[pidx]) clearTimeout(_emoteTimers[pidx]);
+
+  // windOrbを基準にposition:relativeを付与
+  const orb = panel.querySelector('.wind-orb');
+  if(orb){
+    orb.style.position = 'relative';
+    const overlay = document.createElement('div');
+    overlay.className = 'emote-overlay';
+    overlay.innerHTML = `<img src="${emoteUrl(emoteId)}" alt="emote">`;
+    orb.appendChild(overlay);
+    _emoteTimers[pidx] = setTimeout(()=>{ overlay.remove(); }, 3500);
+  }
+}
+
+// オンライン時にエモートボタンを表示
+function updateEmoteAreaVisibility(){
+  const area = document.getElementById('emoteArea');
+  if(!area) return;
+  area.style.display = (NET.online) ? 'block' : 'none';
 }
 
 function closeProfile(){
