@@ -7275,12 +7275,13 @@ const YAKUMAN_VIDEOS = {
   '一槓子':       'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/yakuman/wankantuu.mp4',
 };
 
-// 役一覧から動画URLを全て収集（順番を保持）
+// 役一覧から動画URLを全て収集（役名ベースで重複排除、URL重複は許可）
 function getYakumanVideoUrls(yakus){
   const urls=[];
+  const seen=new Set();
   for(const y of (yakus||[])){
     const url=YAKUMAN_VIDEOS[y.name];
-    if(url && !urls.includes(url)) urls.push(url);
+    if(url && !seen.has(y.name)){ seen.add(y.name); urls.push(url); }
   }
   return urls;
 }
@@ -7298,10 +7299,17 @@ function _playOneYakumanVideo(url, callback){
   vid.playsInline=true;
   vid.volume=_yakumanVideoVol;
   vid.style.cssText='max-width:100%;max-height:100%;object-fit:contain;';
-  const done=()=>{ const o=document.getElementById('yakumanVideoOverlay'); if(o) o.remove(); if(callback) callback(); };
+  let _called=false;
+  const done=()=>{
+    if(_called) return; _called=true;
+    const o=document.getElementById('yakumanVideoOverlay'); if(o) o.remove();
+    if(callback) callback();
+  };
   vid.onended=done;
   vid.onerror=done;
-  setTimeout(()=>{ if(document.getElementById('yakumanVideoOverlay')) done(); }, 12000);
+  const _timer=setTimeout(done, 12000);
+  // タイマーをキャンセルするためonendedでクリア
+  vid.onended=()=>{ clearTimeout(_timer); done(); };
   ov.appendChild(vid);
   document.body.appendChild(ov);
   vid.play().catch(done);
