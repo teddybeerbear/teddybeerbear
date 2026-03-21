@@ -84,7 +84,7 @@ function scaleTable(){
       '#tableCornerLeft { bottom: 35px !important; left: 12px !important; transform: scale(3) !important; transform-origin: bottom left !important; }'+
       '#tableCornerRight { bottom: 55px !important; right: 12px !important; transform: scale(2.5) !important; transform-origin: bottom right !important; }'+
       /* 縦画面: アクションエリア(ロン/ツモ/鳴きボタン等)を5/3倍スケール */
-      '.action-area { transform: translateX(-50%) scale(1.667) !important; transform-origin: bottom center !important; bottom: 55px !important; }'+
+      '.action-area { transform: translateX(-50%) scale(1.667) !important; transform-origin: bottom center !important; bottom: 135px !important; }'+
       /* 縦画面: 手牌上リーチ・離席ラベルを2.5倍スケール・位置調整 */
       '.seat-bottom .hand-outer-riichi-label { font-size: 3.4375rem !important; top: -90px !important; }'+
       '.seat-bottom .hand-outer-afk-label { font-size: 4.6875rem !important; top: -110px !important; left: 570px !important; }'+
@@ -1869,117 +1869,7 @@ body::before{
         ">⚙️</button>
         <button id="wallExpandBtn" onclick="toggleWallExpand()" style="font-size:.62rem;padding:4px 7px;background:#030a10;border:1px solid #1a3a2a;border-radius:6px;color:#5a8a7a;cursor:pointer;transition:all .2s;">🔎山</button>
         <button id="discardZoomBtn" onclick="toggleDiscardZoom()" style="font-size:.62rem;padding:4px 7px;background:#030a10;border:1px solid #1a3a2a;border-radius:6px;color:#5a8a7a;cursor:pointer;transition:all .2s;">🔎捨</button>
-        <span style="display:inline-block;width:6px;"></span>
-        <button id="kiruBtn" onclick="humanDiscard()" style="display:none;font-size:.62rem;padding:4px 9px;background:#030a10;border:1px solid #c9a84c;border-radius:6px;color:#c9a84c;cursor:pointer;transition:all .2s;font-weight:bold;">切る</button>
-      </div>
-      <!-- 設定パネル -->
-      <div id="settingsPanel" style="
-        display:none;background:#040d14;border:1px solid #1a3a4a;
-        border-radius:8px;padding:8px 10px;
-        display:none;flex-direction:column;gap:6px;min-width:160px;
-      ">
-        <button onclick="confirmBackToTitle()" style="
-          background:#030a10;border:1px solid #3a2a1a;border-radius:6px;
-          color:#8a6a3a;font-size:.58rem;padding:4px 8px;cursor:pointer;text-align:left;
-        ">← タイトルに戻る</button>
-        <div style="border-top:1px solid #1a2a1a;margin:2px 0;"></div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
-          <span>🎵 SE</span>
-          <input id="sliderSEhdr" type="range" min="0" max="0.07" step="0.005" value="0.035" style="flex:1;accent-color:var(--gold);"
-            oninput="SFX.setVol(+this.value); _syncSliders('se',+this.value); saveSettings();">
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
-          <span>🀇 引く/捨て</span>
-          <input id="sliderSE2hdr" type="range" min="0" max="0.84" step="0.01" value="0.42" style="flex:1;accent-color:var(--gold);"
-            oninput="SFX.setSeVol(+this.value); _syncSliders('se2',+this.value); saveSettings();">
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
-          <span>🎶 BGM</span>
-          <input id="sliderBGMhdr" type="range" min="0" max="0.07" step="0.005" value="0.035" style="flex:1;accent-color:var(--gold);"
-            oninput="BGM.setVol(+this.value); _syncSliders('bgm',+this.value); saveSettings();">
-        </div>
-        <select id="gameBgmSelHdr" style="background:#030a10;color:var(--gold);border:1px solid #1a3a2a;border-radius:4px;font-size:.5rem;padding:2px 3px;"
-          onchange="_gameBgmKey=this.value; BGM.fadeOut(()=>BGM.fadeIn(_gameBgmKey)); document.getElementById('gameBgmSel')&&(document.getElementById('gameBgmSel').value=this.value);">
-          <option value="yourself">yourself</option>
-          <option value="thinking" selected>シンキング</option>
-          <option value="firststep">ファーストステップ</option>
-          <option value="puzzle">思考のパズル</option>
-          <option value="akizuki">秋月の夜</option>
-          <option value="none">🔇 なし</option>
-        </select>
-        <div style="border-top:1px solid #1a2a1a;margin:2px 0;"></div>
-        <button onclick="toggleInGameSEDetail()" style="
-          background:#030a10;border:1px solid #1a3a2a;border-radius:6px;
-          color:#5a8a7a;font-size:.58rem;padding:4px 8px;cursor:pointer;text-align:left;
-        ">🔊 SE個別音量</button>
-        <div id="inGameSEDetail" style="display:none;padding:4px 0;font-size:.55rem;color:#4a7a6a;">
-          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">引く</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('draw',+this.value);saveSettings();"></div>
-          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">捨て</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('discard',+this.value);saveSettings();"></div>
-          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">ロン</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('ron',+this.value);saveSettings();"></div>
-          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">ツモ</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('tsumo',+this.value);saveSettings();"></div>
-          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">リーチ</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('riichi',+this.value);saveSettings();"></div>
-          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">ポン/カン</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('pon',+this.value);SFX.setSeScale('kan',+this.value);saveSettings();"></div>
-          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">北抜き</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('kita',+this.value);saveSettings();"></div>
-          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">能力</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="['light','yami','haku','steal','mine'].forEach(k=>SFX.setSeScale(k,+this.value));saveSettings();"></div>
-          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">マイターン</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('myTurn',+this.value);saveSettings();"></div>
-          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">カウントダウン</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('countdown',+this.value);saveSettings();"></div>
-          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">役満動画</span><input id="sliderYakuVid" type="range" min="0" max="1" step="0.05" value="0.2" style="flex:1;accent-color:var(--gold);" oninput="_yakumanVideoVol=+this.value;saveSettings();"></div>
-          <div style="border-top:1px solid #1a3a2a;margin:4px 0;padding-top:4px;color:#7acc99;font-size:.5rem;">🎤 アイコンボイス（MP3）</div>
-          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">ボイス音量</span><input id="sliderVoiceVol" type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:#7acc99;" oninput="SFX.setSeScale('voice',+this.value);saveSettings();"></div>
-        </div>
-        <div style="border-top:1px solid #1a2a1a;margin:2px 0;"></div>
-        <button onclick="toggleInGameYaku()" style="
-          background:#030a10;border:1px solid #1a3a2a;border-radius:6px;
-          color:#5a8a7a;font-size:.58rem;padding:4px 8px;cursor:pointer;text-align:left;
-        ">🀄 役一覧</button>
-        <div id="inGameYakuPanel" style="display:none;max-height:280px;overflow-y:auto;margin-top:2px;">
-          <table style="width:100%;border-collapse:collapse;font-size:.62rem;">
-            <thead><tr style="color:#4a7a5a;border-bottom:1px solid #1a3a2a;">
-              <th style="text-align:left;padding:2px 5px;font-weight:400;">役名</th>
-              <th style="text-align:right;padding:2px 5px;font-weight:400;color:var(--gold);">翻</th>
-              <th style="text-align:left;padding:2px 5px;font-weight:400;">条件</th>
-            </tr></thead>
-            <tbody style="color:#8aaa8a;">
-              <tr><td colspan="3" style="padding:3px 5px;color:#4a7a5a;font-size:.55rem;background:#081810;">── 1翻 ──</td></tr>
-              <tr><td style="padding:1px 5px;">リーチ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">門前</td></tr>
-              <tr><td style="padding:1px 5px;">一発</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">リーチ後1巡以内</td></tr>
-              <tr><td style="padding:1px 5px;">ツモ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">門前ツモ</td></tr>
-              <tr><td style="padding:1px 5px;">役牌</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">三元牌・場風・自風の刻子</td></tr>
-              <tr><td style="padding:1px 5px;">タンヤオ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">2〜8のみ（萬は不可）</td></tr>
-              <tr><td style="padding:1px 5px;">平和</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">門前・順子のみ・両面待ち</td></tr>
-              <tr><td style="padding:1px 5px;">チャンタ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">全面子に端牌・字牌含む</td></tr>
-              <tr><td style="padding:1px 5px;">ハイテイ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">最後の牌でツモ</td></tr>
-              <tr><td style="padding:1px 5px;">ホウテイ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">最後の牌でロン</td></tr>
-              <tr><td style="padding:1px 5px;">嶺上開花</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">カン後の嶺上牌でツモ</td></tr>
-              <tr><td style="padding:1px 5px;">槍槓</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">加槓牌、北抜きをロン</td></tr>
-              <tr><td colspan="3" style="padding:3px 5px;color:#4a7a5a;font-size:.55rem;background:#081810;">── 2翻 ──</td></tr>
-              <tr><td style="padding:1px 5px;">ダブルリーチ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">2</td><td style="padding:1px 5px;font-size:.55rem;">第一ツモ前リーチ</td></tr>
-              <tr><td style="padding:1px 5px;">オープンリーチ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">2</td><td style="padding:1px 5px;font-size:.55rem;">手牌公開リーチ</td></tr>
-              <tr><td style="padding:1px 5px;">トイトイ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">2</td><td style="padding:1px 5px;font-size:.55rem;">全刻子</td></tr>
-              <tr><td style="padding:1px 5px;">鳴きホンイツ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">2</td><td style="padding:1px 5px;font-size:.55rem;">鳴き混一色</td></tr>
-              <tr><td style="padding:1px 5px;">鳴き純チャン</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">2</td><td style="padding:1px 5px;font-size:.55rem;">鳴き純全帯么九</td></tr>
-              <tr><td colspan="3" style="padding:3px 5px;color:#4a7a5a;font-size:.55rem;background:#081810;">── 3翻 ──</td></tr>
-              <tr><td style="padding:1px 5px;">ホンイツ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">3</td><td style="padding:1px 5px;font-size:.55rem;">門前混一色</td></tr>
-              <tr><td style="padding:1px 5px;">純チャン</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">3</td><td style="padding:1px 5px;font-size:.55rem;">門前純全帯么九</td></tr>
-              <tr><td style="padding:1px 5px;">ダブルオープンリーチ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">3</td><td style="padding:1px 5px;font-size:.55rem;">第一ツモ前オープンリーチ</td></tr>
-              <tr><td colspan="3" style="padding:3px 5px;color:#4a7a5a;font-size:.55rem;background:#081810;">── 5〜6翻 ──</td></tr>
-              <tr><td style="padding:1px 5px;">鳴き清一色</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">5</td><td style="padding:1px 5px;font-size:.55rem;">鳴き清一色</td></tr>
-              <tr><td style="padding:1px 5px;">清一色</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">6</td><td style="padding:1px 5px;font-size:.55rem;">門前清一色</td></tr>
-              <tr><td colspan="3" style="padding:3px 5px;color:#4a7a5a;font-size:.55rem;background:#081810;">── 役満 ──</td></tr>
-              <tr><td style="padding:1px 5px;">字一色</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">字牌のみ</td></tr>
-              <tr><td style="padding:1px 5px;">清老頭</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">1・9のみ</td></tr>
-              <tr><td style="padding:1px 5px;">緑一色</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">索子23468・発のみ</td></tr>
-              <tr><td style="padding:1px 5px;">国士無双</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">東南西北中</td></tr>
-              <tr><td style="padding:1px 5px;">一槓子</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">カン1回以上</td></tr>
-              <tr><td style="padding:1px 5px;">一暗刻</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">暗刻が１つ（ツモのみ）</td></tr>
-              <tr><td style="padding:1px 5px;">地和</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">子の第一ツモ上がり</td></tr>
-              <tr><td style="padding:1px 5px;">人和</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">第一ツモ前ロン</td></tr>
-              <tr><td colspan="3" style="padding:3px 5px;color:#4a7a5a;font-size:.55rem;background:#081810;">── 2倍役満 ──</td></tr>
-              <tr><td style="padding:1px 5px;">天和</td><td style="text-align:right;color:#ff44aa;padding:1px 5px;">2倍</td><td style="padding:1px 5px;font-size:.55rem;">親の配牌上がり</td></tr>
-              <tr><td style="padding:1px 5px;">一暗刻単騎</td><td style="text-align:right;color:#ff44aa;padding:1px 5px;">2倍</td><td style="padding:1px 5px;font-size:.55rem;">一暗刻＋単騎待ち</td></tr>
-            </tbody>
-          </table>
-        </div>
+        <button id="kiruBtn" onclick="humanDiscard()" style="margin-left:6px;font-size:.62rem;padding:4px 9px;background:#030a10;border:1px solid #c9a84c;border-radius:6px;color:#c9a84c;cursor:pointer;font-weight:bold;transition:all .2s;">切る</button>
       </div>
     </div>
     <!-- 鳴き牌・北抜き: マット右中段（cornerRightの上） -->
@@ -5999,9 +5889,12 @@ function toggleInGameYaku(){
 function toggleSettingsPanel(){
   const p=document.getElementById('settingsPanel');
   if(!p) return;
-  p.style.display=p.style.display==='flex'?'none':'flex';
-  const btn=document.getElementById('settingsBtn');
-  if(btn){ btn.style.borderColor=p.style.display==='flex'?'#55aaff':'#2a3a4a'; btn.style.color=p.style.display==='flex'?'#55aaff':'#5a7a8a'; }
+  const isOpen=p.style.display==='flex';
+  p.style.display=isOpen?'none':'flex';
+  document.querySelectorAll('#settingsBtn').forEach(btn=>{
+    btn.style.borderColor=!isOpen?'#55aaff':'#2a3a4a';
+    btn.style.color=!isOpen?'#55aaff':'#5a7a8a';
+  });
 }
 function toggleAutoMenu(){
   const panel=document.getElementById('autoMenuPanel');
@@ -6020,6 +5913,13 @@ document.addEventListener('click', function(e){
   const area  = document.getElementById('emoteArea');
   if(panel && panel.style.display==='flex' && area && !area.contains(e.target)){
     panel.style.display='none';
+  }
+  // 設定パネル外クリックで閉じる
+  const sp = document.getElementById('settingsPanel');
+  const sb = document.querySelector('#settingsBtn');
+  if(sp && sp.style.display==='flex' && !sp.contains(e.target) && !(sb&&sb.contains(e.target))){
+    sp.style.display='none';
+    document.querySelectorAll('#settingsBtn').forEach(b=>{b.style.borderColor='#2a3a4a';b.style.color='#5a7a8a';});
   }
 });
 function updateAutoMenuLabel(){
@@ -7610,17 +7510,6 @@ function renderAll(){
   renderWallExpand();
   // 選択中牌の同種ハイライト更新
   updateSelHighlight();
-  // 「切る」ボタン: 自分のターン・捨てフェーズ・牌選択中・リーチなし・リーチ宣言中でない場合のみ表示
-  const kiruBtn=document.getElementById('kiruBtn');
-  if(kiruBtn){
-    const _kp=G&&G.players&&G.players[NET&&NET.myIdx];
-    const _show=!!(G&&G.phase==='discard'&&G.current===NET.myIdx&&_kp&&!_kp.riichi&&!G.pendingRiichi&&selIdx>=0&&selIdx<(_kp.hand||[]).length);
-    kiruBtn.style.display=_show?'':'none';
-    if(_show&&_kp){
-      const _kt=_kp.hand[selIdx];
-      kiruBtn.textContent=_kt?`切る [${tileLabel(_kt)}]`:'切る';
-    }
-  }
 }
 
 // ── 同種牌ハイライト ─────────────────────────────────────────
@@ -10842,5 +10731,116 @@ function plantMineRinshan(ri){
   renderAll();
 }
 </script>
+<!-- 設定パネル（画面右上固定） -->
+<div id="settingsPanel" style="
+  display:none;position:fixed;top:0;right:0;z-index:99999;
+  background:#040d14;border:1px solid #1a3a4a;
+  border-radius:0 0 0 8px;padding:8px 10px;box-shadow:0 4px 24px #000e;
+  flex-direction:column;gap:6px;min-width:220px;max-height:100vh;overflow-y:auto;
+">
+
+        <button onclick="confirmBackToTitle()" style="
+          background:#030a10;border:1px solid #3a2a1a;border-radius:6px;
+          color:#8a6a3a;font-size:.58rem;padding:4px 8px;cursor:pointer;text-align:left;
+        ">← タイトルに戻る</button>
+        <div style="border-top:1px solid #1a2a1a;margin:2px 0;"></div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
+          <span>🎵 SE</span>
+          <input id="sliderSEhdr" type="range" min="0" max="0.07" step="0.005" value="0.035" style="flex:1;accent-color:var(--gold);"
+            oninput="SFX.setVol(+this.value); _syncSliders('se',+this.value); saveSettings();">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
+          <span>🀇 引く/捨て</span>
+          <input id="sliderSE2hdr" type="range" min="0" max="0.84" step="0.01" value="0.42" style="flex:1;accent-color:var(--gold);"
+            oninput="SFX.setSeVol(+this.value); _syncSliders('se2',+this.value); saveSettings();">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
+          <span>🎶 BGM</span>
+          <input id="sliderBGMhdr" type="range" min="0" max="0.07" step="0.005" value="0.035" style="flex:1;accent-color:var(--gold);"
+            oninput="BGM.setVol(+this.value); _syncSliders('bgm',+this.value); saveSettings();">
+        </div>
+        <select id="gameBgmSelHdr" style="background:#030a10;color:var(--gold);border:1px solid #1a3a2a;border-radius:4px;font-size:.5rem;padding:2px 3px;"
+          onchange="_gameBgmKey=this.value; BGM.fadeOut(()=>BGM.fadeIn(_gameBgmKey)); document.getElementById('gameBgmSel')&&(document.getElementById('gameBgmSel').value=this.value);">
+          <option value="yourself">yourself</option>
+          <option value="thinking" selected>シンキング</option>
+          <option value="firststep">ファーストステップ</option>
+          <option value="puzzle">思考のパズル</option>
+          <option value="akizuki">秋月の夜</option>
+          <option value="none">🔇 なし</option>
+        </select>
+        <div style="border-top:1px solid #1a2a1a;margin:2px 0;"></div>
+        <button onclick="toggleInGameSEDetail()" style="
+          background:#030a10;border:1px solid #1a3a2a;border-radius:6px;
+          color:#5a8a7a;font-size:.58rem;padding:4px 8px;cursor:pointer;text-align:left;
+        ">🔊 SE個別音量</button>
+        <div id="inGameSEDetail" style="display:none;padding:4px 0;font-size:.55rem;color:#4a7a6a;">
+          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">引く</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('draw',+this.value);saveSettings();"></div>
+          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">捨て</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('discard',+this.value);saveSettings();"></div>
+          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">ロン</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('ron',+this.value);saveSettings();"></div>
+          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">ツモ</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('tsumo',+this.value);saveSettings();"></div>
+          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">リーチ</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('riichi',+this.value);saveSettings();"></div>
+          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">ポン/カン</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('pon',+this.value);SFX.setSeScale('kan',+this.value);saveSettings();"></div>
+          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">北抜き</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('kita',+this.value);saveSettings();"></div>
+          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">能力</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="['light','yami','haku','steal','mine'].forEach(k=>SFX.setSeScale(k,+this.value));saveSettings();"></div>
+          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">マイターン</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('myTurn',+this.value);saveSettings();"></div>
+          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">カウントダウン</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('countdown',+this.value);saveSettings();"></div>
+          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">役満動画</span><input id="sliderYakuVid" type="range" min="0" max="1" step="0.05" value="0.2" style="flex:1;accent-color:var(--gold);" oninput="_yakumanVideoVol=+this.value;saveSettings();"></div>
+          <div style="border-top:1px solid #1a3a2a;margin:4px 0;padding-top:4px;color:#7acc99;font-size:.5rem;">🎤 アイコンボイス（MP3）</div>
+          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">ボイス音量</span><input id="sliderVoiceVol" type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:#7acc99;" oninput="SFX.setSeScale('voice',+this.value);saveSettings();"></div>
+        </div>
+        <div style="border-top:1px solid #1a2a1a;margin:2px 0;"></div>
+        <button onclick="toggleInGameYaku()" style="
+          background:#030a10;border:1px solid #1a3a2a;border-radius:6px;
+          color:#5a8a7a;font-size:.58rem;padding:4px 8px;cursor:pointer;text-align:left;
+        ">🀄 役一覧</button>
+        <div id="inGameYakuPanel" style="display:none;max-height:280px;overflow-y:auto;margin-top:2px;">
+          <table style="width:100%;border-collapse:collapse;font-size:.62rem;">
+            <thead><tr style="color:#4a7a5a;border-bottom:1px solid #1a3a2a;">
+              <th style="text-align:left;padding:2px 5px;font-weight:400;">役名</th>
+              <th style="text-align:right;padding:2px 5px;font-weight:400;color:var(--gold);">翻</th>
+              <th style="text-align:left;padding:2px 5px;font-weight:400;">条件</th>
+            </tr></thead>
+            <tbody style="color:#8aaa8a;">
+              <tr><td colspan="3" style="padding:3px 5px;color:#4a7a5a;font-size:.55rem;background:#081810;">── 1翻 ──</td></tr>
+              <tr><td style="padding:1px 5px;">リーチ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">門前</td></tr>
+              <tr><td style="padding:1px 5px;">一発</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">リーチ後1巡以内</td></tr>
+              <tr><td style="padding:1px 5px;">ツモ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">門前ツモ</td></tr>
+              <tr><td style="padding:1px 5px;">役牌</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">三元牌・場風・自風の刻子</td></tr>
+              <tr><td style="padding:1px 5px;">タンヤオ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">2〜8のみ（萬は不可）</td></tr>
+              <tr><td style="padding:1px 5px;">平和</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">門前・順子のみ・両面待ち</td></tr>
+              <tr><td style="padding:1px 5px;">チャンタ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">全面子に端牌・字牌含む</td></tr>
+              <tr><td style="padding:1px 5px;">ハイテイ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">最後の牌でツモ</td></tr>
+              <tr><td style="padding:1px 5px;">ホウテイ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">最後の牌でロン</td></tr>
+              <tr><td style="padding:1px 5px;">嶺上開花</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">カン後の嶺上牌でツモ</td></tr>
+              <tr><td style="padding:1px 5px;">槍槓</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">1</td><td style="padding:1px 5px;font-size:.55rem;">加槓牌、北抜きをロン</td></tr>
+              <tr><td colspan="3" style="padding:3px 5px;color:#4a7a5a;font-size:.55rem;background:#081810;">── 2翻 ──</td></tr>
+              <tr><td style="padding:1px 5px;">ダブルリーチ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">2</td><td style="padding:1px 5px;font-size:.55rem;">第一ツモ前リーチ</td></tr>
+              <tr><td style="padding:1px 5px;">オープンリーチ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">2</td><td style="padding:1px 5px;font-size:.55rem;">手牌公開リーチ</td></tr>
+              <tr><td style="padding:1px 5px;">トイトイ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">2</td><td style="padding:1px 5px;font-size:.55rem;">全刻子</td></tr>
+              <tr><td style="padding:1px 5px;">鳴きホンイツ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">2</td><td style="padding:1px 5px;font-size:.55rem;">鳴き混一色</td></tr>
+              <tr><td style="padding:1px 5px;">鳴き純チャン</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">2</td><td style="padding:1px 5px;font-size:.55rem;">鳴き純全帯么九</td></tr>
+              <tr><td colspan="3" style="padding:3px 5px;color:#4a7a5a;font-size:.55rem;background:#081810;">── 3翻 ──</td></tr>
+              <tr><td style="padding:1px 5px;">ホンイツ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">3</td><td style="padding:1px 5px;font-size:.55rem;">門前混一色</td></tr>
+              <tr><td style="padding:1px 5px;">純チャン</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">3</td><td style="padding:1px 5px;font-size:.55rem;">門前純全帯么九</td></tr>
+              <tr><td style="padding:1px 5px;">ダブルオープンリーチ</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">3</td><td style="padding:1px 5px;font-size:.55rem;">第一ツモ前オープンリーチ</td></tr>
+              <tr><td colspan="3" style="padding:3px 5px;color:#4a7a5a;font-size:.55rem;background:#081810;">── 5〜6翻 ──</td></tr>
+              <tr><td style="padding:1px 5px;">鳴き清一色</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">5</td><td style="padding:1px 5px;font-size:.55rem;">鳴き清一色</td></tr>
+              <tr><td style="padding:1px 5px;">清一色</td><td style="text-align:right;color:var(--gold);padding:1px 5px;">6</td><td style="padding:1px 5px;font-size:.55rem;">門前清一色</td></tr>
+              <tr><td colspan="3" style="padding:3px 5px;color:#4a7a5a;font-size:.55rem;background:#081810;">── 役満 ──</td></tr>
+              <tr><td style="padding:1px 5px;">字一色</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">字牌のみ</td></tr>
+              <tr><td style="padding:1px 5px;">清老頭</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">1・9のみ</td></tr>
+              <tr><td style="padding:1px 5px;">緑一色</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">索子23468・発のみ</td></tr>
+              <tr><td style="padding:1px 5px;">国士無双</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">東南西北中</td></tr>
+              <tr><td style="padding:1px 5px;">一槓子</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">カン1回以上</td></tr>
+              <tr><td style="padding:1px 5px;">一暗刻</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">暗刻が１つ（ツモのみ）</td></tr>
+              <tr><td style="padding:1px 5px;">地和</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">子の第一ツモ上がり</td></tr>
+              <tr><td style="padding:1px 5px;">人和</td><td style="text-align:right;color:#ff9944;padding:1px 5px;">役満</td><td style="padding:1px 5px;font-size:.55rem;">第一ツモ前ロン</td></tr>
+              <tr><td colspan="3" style="padding:3px 5px;color:#4a7a5a;font-size:.55rem;background:#081810;">── 2倍役満 ──</td></tr>
+              <tr><td style="padding:1px 5px;">天和</td><td style="text-align:right;color:#ff44aa;padding:1px 5px;">2倍</td><td style="padding:1px 5px;font-size:.55rem;">親の配牌上がり</td></tr>
+              <tr><td style="padding:1px 5px;">一暗刻単騎</td><td style="text-align:right;color:#ff44aa;padding:1px 5px;">2倍</td><td style="padding:1px 5px;font-size:.55rem;">一暗刻＋単騎待ち</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 </body>
 </html>
