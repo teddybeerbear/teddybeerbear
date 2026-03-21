@@ -1413,7 +1413,7 @@ body::before{
           <tr><td style="padding:2px 6px;">清一色</td><td style="text-align:right;color:var(--gold);padding:2px 6px;">6</td><td style="padding:2px 6px;font-size:.58rem;">門前清一色</td></tr>
           <tr><td colspan="3" style="padding:4px 6px;color:#4a7a5a;font-size:.58rem;background:#081810;">── 役満 (130点) ──</td></tr>
           <tr><td style="padding:2px 6px;">字一色</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">字牌のみ</td></tr>
-          <tr><td style="padding:2px 6px;">チンロウトウ</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">1・9のみ</td></tr>
+          <tr><td style="padding:2px 6px;">清老頭</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">1・9のみ</td></tr>
           <tr><td style="padding:2px 6px;">緑一色</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">索子2346・発のみ</td></tr>
           <tr><td style="padding:2px 6px;">国士無双</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">東南西北中の5種+1</td></tr>
           <tr><td style="padding:2px 6px;">一槓子</td><td style="text-align:right;color:#ff9944;padding:2px 6px;">役満</td><td style="padding:2px 6px;font-size:.58rem;">カン1回以上</td></tr>
@@ -2840,7 +2840,7 @@ function evalYaku(hand5,winTile,isTsumo,player,roundWind){
   if(player.isChiihou&&isTsumo)ymList.push({name:'地和',han:13});
   if(player.isRenhou&&!isTsumo)ymList.push({name:'人和',han:13});
   if(isZiiso(allTiles))ymList.push({name:'字一色',han:13});
-  if(isChinroutou(allTiles))ymList.push({name:'チンロウトウ',han:13});
+  if(isChinroutou(allTiles))ymList.push({name:'清老頭',han:13});
   if(isRyuuiisou(allTiles))ymList.push({name:'緑一色',han:13});
   if(isKokushi(hand5))ymList.push({name:'国士無双（東南西北中）',han:13});
   const meldTypes=melds.map(m=>m.type);
@@ -6221,9 +6221,15 @@ function handleWin(widx,winTile,isTsumo,losidx){
   addLog(`${w.name} の${isTsumo?'ツモ':'ロン'}上がり！ ${score}点`,'log-win');
   saveScores();
   if(checkTobi()) return; // 飛び発生 → 即終了（winModalは出さない）
-  const _wmd={winnerId:w.id,hand:displayHand,winTile,isTsumo,losidx,yakus,score,han};
-  showWinModal(w,displayHand,winTile,isTsumo,losidx,yakus,score,han);renderAll();
+  const _yakuVideoUrl=getYakumanVideoUrl(yakus);
+  const _wmd={winnerId:w.id,hand:displayHand,winTile,isTsumo,losidx,yakus,score,han,yakuVideo:_yakuVideoUrl||null};
+  renderAll();
   broadcastState({winModal:_wmd});
+  if(_yakuVideoUrl){
+    playYakumanVideo(_yakuVideoUrl, ()=>{ showWinModal(w,displayHand,winTile,isTsumo,losidx,yakus,score,han); });
+  } else {
+    showWinModal(w,displayHand,winTile,isTsumo,losidx,yakus,score,han);
+  }
 }
 
 function handleRon(widx,tile,fromidx){
@@ -7051,6 +7057,53 @@ function backToLobby(){
 // ============================================================
 // WIN MODAL
 // ============================================================
+// 役満動画マップ
+const YAKUMAN_VIDEOS = {
+  '国士無双（東南西北中）': 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/yakuman/kokusimusou.mp4',
+  '人和':         'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/yakuman/renhou.mp4',
+  '緑一色':       'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/yakuman/ryu.mp4',
+  '天和':         'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/yakuman/tenhou.mp4',
+  '地和':         'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/yakuman/tiihou.mp4',
+  '清老頭':       'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/yakuman/tinroutou.mp4',
+  '字一色':       'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/yakuman/tuiso.mp4',
+  '四暗刻':       'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/yakuman/wanankou.mp4',
+  '四暗刻単騎':   'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/yakuman/wanankoutanki.mp4',
+  '四槓子':       'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/yakuman/wankantuu.mp4',
+};
+
+// 役一覧から動画URLを検索（最初に一致したもの）
+function getYakumanVideoUrl(yakus){
+  for(const y of (yakus||[])){
+    const url=YAKUMAN_VIDEOS[y.name];
+    if(url) return url;
+  }
+  return null;
+}
+
+// 役満動画再生（全プレイヤー共通）
+function playYakumanVideo(url, callback){
+  const existing=document.getElementById('yakumanVideoOverlay');
+  if(existing) existing.remove();
+  const ov=document.createElement('div');
+  ov.id='yakumanVideoOverlay';
+  ov.style.cssText='position:fixed;inset:0;z-index:9000;background:#000;display:flex;align-items:center;justify-content:center;';
+  const vid=document.createElement('video');
+  vid.src=url;
+  vid.autoplay=true;
+  vid.playsInline=true;
+  vid.style.cssText='max-width:100%;max-height:100%;object-fit:contain;';
+  const done=()=>{ const o=document.getElementById('yakumanVideoOverlay'); if(o) o.remove(); if(callback) callback(); };
+  vid.onended=done;
+  vid.onerror=done;
+  setTimeout(()=>{ if(document.getElementById('yakumanVideoOverlay')) done(); }, 12000);
+  ov.appendChild(vid);
+  document.body.appendChild(ov);
+  vid.play().catch(done);
+}
+
+// 後方互換
+function playRyuVideo(callback){ playYakumanVideo(YAKUMAN_VIDEOS['緑一色'], callback); }
+
 function showWinModalData(d){
   if(d.yamiPenalty){
     const loser=G.players.find(p=>p.id===d.loserId)||G.players[0];
@@ -7059,6 +7112,10 @@ function showWinModalData(d){
     return;
   }
   const w=G.players.find(p=>p.id===d.winnerId)||G.players[0];
+  if(d.yakuVideo){
+    playYakumanVideo(d.yakuVideo, ()=>{ showWinModal(w,d.hand,d.winTile,d.isTsumo,d.losidx,d.yakus,d.score,d.han); });
+    return;
+  }
   showWinModal(w,d.hand,d.winTile,d.isTsumo,d.losidx,d.yakus,d.score,d.han);
 }
 function showWinModal(winner,hand,winTile,isTsumo,losidx,yakus,score,han){
