@@ -1922,6 +1922,8 @@ body::before{
           <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">マイターン</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('myTurn',+this.value);saveSettings();"></div>
           <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">カウントダウン</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('countdown',+this.value);saveSettings();"></div>
           <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">役満動画</span><input id="sliderYakuVid" type="range" min="0" max="1" step="0.05" value="0.2" style="flex:1;accent-color:var(--gold);" oninput="_yakumanVideoVol=+this.value;saveSettings();"></div>
+          <div style="border-top:1px solid #1a3a2a;margin:4px 0;padding-top:4px;color:#7acc99;font-size:.5rem;">🎤 アイコンボイス（MP3）</div>
+          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">ボイス音量</span><input id="sliderVoiceVol" type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:#7acc99;" oninput="SFX.setSeScale('voice',+this.value);saveSettings();"></div>
         </div>
         <div style="border-top:1px solid #1a2a1a;margin:2px 0;"></div>
         <button onclick="toggleInGameYaku()" style="
@@ -2117,7 +2119,7 @@ const SFX = (() => {
   const seScale = {
     draw:1, discard:1, riichi:1, ron:1, pon:1, kan:1, kita:1,
     tsumo:1, yakuman:1, light:1, yami:1, haku:1, steal:1,
-    mine:1, myTurn:1, countdown:1,
+    mine:1, myTurn:1, countdown:1, voice:1,
   };
 
   function ac() {
@@ -2467,7 +2469,7 @@ function saveSettings(){
       gameBgm:    _gameBgmKey,
       yakumanVideoVol: _yakumanVideoVol,
       seScale: Object.fromEntries(
-        ['draw','discard','ron','tsumo','riichi','pon','kan','kita','yakuman','light','yami','haku','steal','mine','myTurn','countdown']
+        ['draw','discard','ron','tsumo','riichi','pon','kan','kita','yakuman','light','yami','haku','steal','mine','myTurn','countdown','voice']
         .map(k=>[k, SFX.getSeScale(k)])
       ),
     };
@@ -2512,7 +2514,7 @@ function loadSettings(){
     }
     // 個別SE音量
     if(data.seScale){
-      const keys=['draw','discard','ron','tsumo','riichi','pon','kan','kita','yakuman','light','yami','haku','steal','mine','myTurn','countdown'];
+      const keys=['draw','discard','ron','tsumo','riichi','pon','kan','kita','yakuman','light','yami','haku','steal','mine','myTurn','countdown','voice'];
       keys.forEach(k=>{
         if(data.seScale[k]!=null) SFX.setSeScale(k, +data.seScale[k]);
       });
@@ -2527,6 +2529,9 @@ function loadSettings(){
           const key=Object.keys(sliderMap).find(k=>sliderMap[k]===i);
           if(key&&data.seScale[key]!=null) sl.value=data.seScale[key];
         });
+        // ボイス音量スライダーを個別に反映
+        const voiceSl = document.getElementById('sliderVoiceVol');
+        if(voiceSl && data.seScale.voice != null) voiceSl.value = data.seScale.voice;
       }
     }
     // タイトルBGMキー
@@ -6480,7 +6485,12 @@ function handleWin(widx,winTile,isTsumo,losidx){
   setTimeout(()=>{
     const isYM = G.players[widx] && G.players[widx].hand &&
       evalYaku([...G.players[widx].hand,winTile].slice(-5),winTile,isTsumo,G.players[widx],G.roundWind).some(y=>y.han>=13);
-    if(isYM) SFX.yakuman();
+    if(isYM){
+      // アイコンボイスがあれば動画前に流すのでここではSFX.yakumanのみ（ボイスなし時）
+      const _ymIconId = _getPlayerIconId(widx);
+      const _hasVoice = ICON_SE_MAP[_ymIconId] && (ICON_SE_MAP[_ymIconId][isTsumo?'tsumo':'ron']);
+      if(!_hasVoice) SFX.yakuman();
+    }
     else if(isTsumo) playSeFallback(widx, 'tsumo', ()=>SFX.tsumo());
     else playSeFallback(widx, 'ron', ()=>SFX.ron());
   }, 50);
@@ -6543,7 +6553,22 @@ function handleWin(widx,winTile,isTsumo,losidx){
   renderAll();
   broadcastState({winModal:_wmd});
   if(_yakuVideoUrls.length){
-    playYakumanVideo(_yakuVideoUrls, ()=>{ showWinModal(w,displayHand,winTile,isTsumo,losidx,yakus,score,han); });
+    // 役満動画の前にロン/ツモのアイコンボイスを再生してから動画へ
+    const _playVidWithVoice = () => playYakumanVideo(_yakuVideoUrls, ()=>{ showWinModal(w,displayHand,winTile,isTsumo,losidx,yakus,score,han); });
+    const _voiceAction = isTsumo ? 'tsumo' : 'ron';
+    const _iconId = _getPlayerIconId(widx);
+    const _voiceUrl = (ICON_SE_MAP[_iconId]||{})[_voiceAction];
+    if(_voiceUrl){
+      const _va = _iconSeCache[_voiceUrl] || (()=>{ const a=new Audio(_voiceUrl); a.preload='auto'; _iconSeCache[_voiceUrl]=a; return a; })();
+      _va.currentTime = 0;
+      const _vs = SFX.getSeScale ? SFX.getSeScale('voice') : 1;
+      _va.volume = Math.min(1, (SFX.getSeVol ? SFX.getSeVol() : 0.42) * (SFX.getSeScale ? SFX.getSeScale(_voiceAction) : 1) * _vs);
+      _va.onended = _playVidWithVoice;
+      _va.onerror = _playVidWithVoice;
+      _va.play().catch(_playVidWithVoice);
+    } else {
+      _playVidWithVoice();
+    }
   } else {
     showWinModal(w,displayHand,winTile,isTsumo,losidx,yakus,score,han);
   }
@@ -7499,7 +7524,22 @@ function showWinModalData(d){
   }
   const w=G.players.find(p=>p.id===d.winnerId)||G.players[0];
   if(d.yakuVideo){
-    playYakumanVideo(d.yakuVideo, ()=>{ showWinModal(w,d.hand,d.winTile,d.isTsumo,d.losidx,d.yakus,d.score,d.han); });
+    const _playVidWithVoice2 = () => playYakumanVideo(d.yakuVideo, ()=>{ showWinModal(w,d.hand,d.winTile,d.isTsumo,d.losidx,d.yakus,d.score,d.han); });
+    const _voiceAction2 = d.isTsumo ? 'tsumo' : 'ron';
+    const _winnerpidx = G.players.indexOf(w);
+    const _iconId2 = _winnerpidx >= 0 ? _getPlayerIconId(_winnerpidx) : '';
+    const _voiceUrl2 = (ICON_SE_MAP[_iconId2]||{})[_voiceAction2];
+    if(_voiceUrl2){
+      const _va2 = _iconSeCache[_voiceUrl2] || (()=>{ const a=new Audio(_voiceUrl2); a.preload='auto'; _iconSeCache[_voiceUrl2]=a; return a; })();
+      _va2.currentTime = 0;
+      const _vs2 = SFX.getSeScale ? SFX.getSeScale('voice') : 1;
+      _va2.volume = Math.min(1, (SFX.getSeVol ? SFX.getSeVol() : 0.42) * (SFX.getSeScale ? SFX.getSeScale(_voiceAction2) : 1) * _vs2);
+      _va2.onended = _playVidWithVoice2;
+      _va2.onerror = _playVidWithVoice2;
+      _va2.play().catch(_playVidWithVoice2);
+    } else {
+      _playVidWithVoice2();
+    }
     return;
   }
   showWinModal(w,d.hand,d.winTile,d.isTsumo,d.losidx,d.yakus,d.score,d.han);
@@ -9874,7 +9914,8 @@ function _playIconSe(iconId, action, fallback) {
   const a = _iconSeCache[url];
   a.currentTime = 0;
   const scaleKey = action === 'riichi' ? 'riichi' : action;
-  a.volume = Math.min(1, (SFX.getSeVol ? SFX.getSeVol() : 0.42) * (SFX.getSeScale ? SFX.getSeScale(scaleKey) : 1));
+  const voiceScale = SFX.getSeScale ? SFX.getSeScale('voice') : 1;
+  a.volume = Math.min(1, (SFX.getSeVol ? SFX.getSeVol() : 0.42) * (SFX.getSeScale ? SFX.getSeScale(scaleKey) : 1) * voiceScale);
   a.play().catch(()=>{});
 }
 
