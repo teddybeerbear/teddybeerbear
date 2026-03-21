@@ -4668,6 +4668,20 @@ function onNetData(msg, senderIdx){
     } else if(msg.type==='emote'){
       // ホストから転送されたエモートをゲスト側で表示
       showEmoteOverlay(msg.pidx, msg.emoteId);
+    } else if(msg.type==='seEvent'){
+      // ホストから配信されたSEイベントをゲスト側で再生
+      // 自分自身のアクションは自分で既に鳴らしているのでスキップ
+      if(msg.pidx !== NET.myIdx){
+        // iconIdはホストが解決済みで送ってくれているのでそのまま使う
+        const _se = ()=>{
+          if(msg.action==='ron')    SFX.ron();
+          else if(msg.action==='tsumo')  SFX.tsumo();
+          else if(msg.action==='pon')    SFX.pon();
+          else if(msg.action==='kan')    SFX.kan();
+          else if(msg.action==='riichi') SFX.riichi();
+        };
+        _playIconSe(msg.iconId||'', msg.action, _se);
+      }
     } else {
       applyHostState(msg);
     }
@@ -9876,9 +9890,14 @@ function _getPlayerIconId(pidx) {
 }
 
 // アイコンSEを鳴らす（なければ通常SE）
+// ホストの場合はゲストにもSEイベントを配信する
 function playSeFallback(pidx, action, fallbackFn) {
   const iconId = _getPlayerIconId(pidx);
   _playIconSe(iconId, action, fallbackFn);
+  // ホストがオンライン中はゲストにSEを配信
+  if(NET.online && amIHost && amIHost()) {
+    netBroadcastAll({type:'seEvent', pidx, action, iconId});
+  }
 }
 
 function rollRarity(){
