@@ -4818,7 +4818,7 @@ function remoteWallPick(pidx,slotIdx){
   // ホスト側ではゲストのターンで G.phase='draw' のまま待機しているので、draw も許可
   if((G.phase!=='draw_wait'&&G.phase!=='draw')||G.current!==pidx)return;
   const tile=G.deckSlots[slotIdx];
-  if(!tile)return;
+  if(!tile){ handleExhausted(); return; } // スロットが空→流局
   G.deckSlots[slotIdx]=null;
   const di=G.deck.findIndex(d=>d.suit===tile.suit&&d.num===tile.num);
   if(di>=0)G.deck.splice(di,1);
@@ -5529,7 +5529,10 @@ function nextTurn(pidx){
   // Online: ホスト（amIHost()）だけがCPU/ドロー進行。ゲストはstate pushを待つ
   if(NET.online&&!amIHost()){broadcastState();return;}
   if(NET.online&&amIHost()){
-    if(isOnlineGuestIdx(pidx)){broadcastState();return;} // 接続中ゲストの番 → state push して待つ
+    if(isOnlineGuestIdx(pidx)){
+      if(G.deck.length===0){handleExhausted();return;} // デッキ空→流局
+      broadcastState();return; // 接続中ゲストの番 → state push して待つ
+    }
     if(pidx!==NET.myIdx){scheduleCpuAction(700);return;} // CPU（isCpu or 接続なし）の番
     // 自分(ホスト)の番はそのまま下へ
   }
@@ -6420,15 +6423,52 @@ function cpuTryAbility(idx){
   return false;
 }
 
-function cpuWorstTileIdx(p){
-  // 最も孤立した牌のインデックスを返す
-  let worst=-1,worstScore=Infinity;
-  for(let i=0;i<p.hand.length;i++){
-    const test=[...p.hand.slice(0,i),...p.hand.slice(i+1)];
-    const waits=getWaits(test);
-    if(waits.length<worstScore){worstScore=waits.length;worst=i;}
+// シャンテン数計算（簡易版）
+function calcShanten(hand){
+  const tiles=hand.filter(t=>t&&t.suit);
+  if(tiles.length===0) return 8;
+  // 4枚手牌(1副露済み等)と5枚手牌に対応
+  const n=tiles.length;
+  let best=8-n; // 最悪ケース
+  // 各牌を1枚取り除いてcanWinならテンパイ
+  for(let i=0;i<n;i++){
+    const test=tiles.filter((_,j)=>j!==i);
+    if(canWin(test)) return 0; // テンパイ
   }
-  return worst;
+  // ウェイト数でシャンテン近似
+  const waits=getWaits(tiles);
+  if(waits.length>0) return 1;
+  return 2;
+}
+
+// 受け入れ枚数計算: 手牌からi枚目を除いた時の待ち枚数
+function calcUkeire(hand4){
+  // 残り山牌から受け入れ可能な牌を数える
+  const waits=getWaits(hand4);
+  if(!waits||waits.length===0) return 0;
+  // デッキ残り枚数を考慮
+  const deck=G.deck||[];
+  const discardAll=G.players.flatMap(p=>p.discards||[]);
+  let cnt=0;
+  waits.forEach(w=>{
+    cnt+=deck.filter(t=>teq(t,w)).length;
+  });
+  return cnt||waits.length*2; // デッキ情報なければ枚数×2で近似
+}
+
+function cpuWorstTileIdx(p){
+  // シャンテン最小→受け入れ枚数最大になる牌を返す
+  let best=-1, bestShanten=999, bestUkeire=-1;
+  const hand=p.hand;
+  for(let i=0;i<hand.length;i++){
+    const test=hand.filter((_,j)=>j!==i);
+    const sh=calcShanten(test);
+    const uk=calcUkeire(test);
+    if(sh<bestShanten||(sh===bestShanten&&uk>bestUkeire)){
+      bestShanten=sh; bestUkeire=uk; best=i;
+    }
+  }
+  return best>=0?best:0;
 }
 
 function cpuPullKita(pidx){
@@ -6480,29 +6520,38 @@ function cpuDiscard(){
     }
   }
 
-  // スコアリング: 待ち枚数 - 役満危険牌ペナルティ
   // ピンズー教CPU: 筒子以外を優先捨て（清一色狙い）
   const isPinzuCpu = p.ability==='pinzu';
   // 🌑 闇能力: 30%で次の捨て牌を闇に
   if(p.ability==='yami' && !p.abilityUsed && !p.riichi && Math.random()<0.3){
     p.abilityUsed=true;
-    // 捨てる牌を闇にするフラグ
     p._cpuNextYami=true;
     addLog(`🌑 ${p.name}が闇を使う...`,'log-dora');
   }
-  let best=0,bScore=-Infinity;
+  // ドラ・役牌リスト
+  const doras=getDoras();
+  const yakuTiles=new Set(['honor_白','honor_発','honor_中',
+    `honor_${p.wind}`,`honor_${G.roundWind}`]);
+
+  let best=0, bestShanten=999, bestUkeire=-1, bestScore=-Infinity;
   for(let i=0;i<p.hand.length;i++){
     const t=p.hand[i];
-    const w=getWaits(p.hand.filter((_,j)=>j!==i)).length;
-    // 役満危険牌は強く避ける（-100点ペナルティ）
+    const test=p.hand.filter((_,j)=>j!==i);
+    const sh=calcShanten(test);
+    const uk=calcUkeire(test);
+    // ペナルティ・ボーナス
     const isDanger = dangerTiles.has(tk(t));
+    const isDora = doras.some(d=>teq(d,t));
+    const isYaku = yakuTiles.has(tk(t));
     const isNonPinzu = isPinzuCpu && t.suit!=='pin';
-    // 地雷CPU: 地雷スロットの牌と同種牌を避ける（地雷が自分の手番に来そうなら）
-    const isMineOwner = p.ability==='mine' && G.mineSlots&&G.mineSlots.length>0;
-    const mineSlotTile = isMineOwner ? G.deckSlots[G.mineSlots[0]] : null;
-    const isMineRisk = mineSlotTile && teq(t, mineSlotTile); // 使わない（引かないで捨てる戦略なし、引く順序制御不可）
-    const score = w - (isDanger ? 100 : 0) - (isNonPinzu ? 50 : 0);
-    if(score>bScore){bScore=score;best=i;}
+    // スコア: シャンテン最小を最優先、次に受け入れ枚数最大
+    // ドラ・役牌は保持（捨てにくい）、危険牌は捨てやすい
+    const score = -sh*10000 + uk*100
+      - (isDanger ? 5000 : 0)
+      - (isDora ? 300 : 0)
+      - (isYaku ? 200 : 0)
+      - (isNonPinzu ? 500 : 0);
+    if(score>bestScore){ bestScore=score; best=i; bestShanten=sh; bestUkeire=uk; }
   }
   discardAction(idx,best);
 }
