@@ -450,9 +450,11 @@ body::before{
 .btn-default:hover{border-color:var(--gold);color:var(--gold2);transform:translateY(-1px);}
 .btn-primary{background:linear-gradient(135deg,#4a2006,#2a1004);border-color:var(--gold);color:var(--gold2);font-weight:700;}
 .btn-primary:hover{background:linear-gradient(135deg,#6a3010,#4a2008);box-shadow:0 0 10px #c9a84c44;transform:translateY(-1px);}
+.btn-tsumogiri{background:linear-gradient(135deg,#3a0000,#1a0000);border-color:#cc3333;color:#ff6666;font-weight:700;}
+.btn-tsumogiri:hover{background:linear-gradient(135deg,#5a0000,#2a0000);box-shadow:0 0 10px #cc333344;transform:translateY(-1px);}
 .btn-danger{background:#100505;border-color:#663333;color:#bb6666;}
-.btn-kita{background:#020a14;border-color:#3377aa;color:#55aaff;}
-.btn-kita:hover{border-color:#55aaff;box-shadow:0 0 8px #3377aa44;transform:translateY(-1px);}
+.btn-kita{background:linear-gradient(135deg,#1a1400,#0a0800);border-color:#c9a84c;color:#f0d47a;font-weight:700;}
+.btn-kita:hover{border-color:#f0d47a;box-shadow:0 0 10px #c9a84c44;transform:translateY(-1px);}
 .btn-danger:hover{border-color:#cc4444;color:#ff8888;}
 .btn-riichi{background:linear-gradient(135deg,#2e0606,#180303);border-color:#cc4444;color:#ff7777;font-weight:700;}
 .btn-riichi:hover{box-shadow:0 0 10px #cc444433;transform:translateY(-1px);}
@@ -7118,6 +7120,10 @@ function _checkAllWinReady(){
 function nextRound(){
   WIN_READY.proceeded = true;
   if(WIN_READY.timer){ clearInterval(WIN_READY.timer); WIN_READY.timer=null; }
+  // 役満動画コールバックを無効化（前の局の winModal が次の局で表示されるバグ対策）
+  _yakumanVideoToken++;
+  const existingVidOv = document.getElementById('yakumanVideoOverlay');
+  if(existingVidOv) existingVidOv.remove();
   document.getElementById('winOverlay').classList.remove('show');
   // mScoreの色をリセット（罰符表示後に通常の金色に戻す）
   const ms=document.getElementById('mScore');if(ms)ms.style.color='';
@@ -7377,8 +7383,11 @@ function getYakumanVideoUrls(yakus){
   return urls;
 }
 
+// 役満動画コールバックのキャンセルトークン（nextRound時にインクリメントして古いコールバックを無効化）
+let _yakumanVideoToken = 0;
+
 // 役満動画を1本再生（内部使用）
-function _playOneYakumanVideo(url, callback){
+function _playOneYakumanVideo(url, callback, token){
   const existing=document.getElementById('yakumanVideoOverlay');
   if(existing) existing.remove();
   const ov=document.createElement('div');
@@ -7394,12 +7403,12 @@ function _playOneYakumanVideo(url, callback){
   const done=()=>{
     if(_called) return; _called=true;
     const o=document.getElementById('yakumanVideoOverlay'); if(o) o.remove();
+    // トークンが一致しない場合はキャンセル済み（次の局が始まっている）
+    if(token !== _yakumanVideoToken) return;
     if(callback) callback();
   };
-  vid.onended=done;
   vid.onerror=done;
   const _timer=setTimeout(done, 12000);
-  // タイマーをキャンセルするためonendedでクリア
   vid.onended=()=>{ clearTimeout(_timer); done(); };
   ov.appendChild(vid);
   document.body.appendChild(ov);
@@ -7407,11 +7416,12 @@ function _playOneYakumanVideo(url, callback){
 }
 
 // 複数URL対応: 順番に再生してから callback
-function playYakumanVideo(urlOrUrls, callback){
+function playYakumanVideo(urlOrUrls, callback, _token){
+  const token = _token !== undefined ? _token : _yakumanVideoToken;
   const urls=Array.isArray(urlOrUrls)?urlOrUrls:[urlOrUrls];
-  if(urls.length===0){ if(callback) callback(); return; }
+  if(urls.length===0){ if(token===_yakumanVideoToken && callback) callback(); return; }
   const [first, ...rest]=urls;
-  _playOneYakumanVideo(first, ()=>{ playYakumanVideo(rest, callback); });
+  _playOneYakumanVideo(first, ()=>{ playYakumanVideo(rest, callback, token); }, token);
 }
 
 // 後方互換
@@ -9274,10 +9284,14 @@ function renderActions(){
     if(p.riichi){
       const drn=p.hand[p.hand.length-1];
       const pinzuNoTsumo=G_ABILITY_MODE&&PROFILE.ability==="pinzu"&&p.isDealer;
-if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanTsumo()">ツモ上がり！</button>`;
-      html+=`<button class="btn btn-primary" onclick="humanDiscard()">ツモ切り [${tileLabel(drn)}]</button>`;
-      // リーチ中はdrawnTileが北の場合のみ北抜きボタン表示（鳴き無しONなら非表示）
-      if(hasKita && p.drawnTile && p.drawnTile.suit==='honor' && p.drawnTile.num==='北' && !noMeldEnabled)html+=`<button class="btn btn-kita" onclick="humanKita()">北抜き [北]</button>`;
+      const canTsumo=canWinNow&&!pinzuNoTsumo;
+      const canKita=hasKita && p.drawnTile && p.drawnTile.suit==='honor' && p.drawnTile.num==='北' && !noMeldEnabled;
+      const canAnkanNow=canAnkan(NET.myIdx).length>0;
+      // 北抜きは常に一番左
+      if(canKita)html+=`<button class="btn btn-kita" onclick="humanKita()">北抜き [北]</button>`;
+      if(canTsumo)html+=`<button class="btn btn-tsumo" onclick="humanTsumo()">ツモ上がり！</button>`;
+      // ツモ上がり・北抜き・暗槓のいずれかができる場合のみツモ切りボタンを表示（赤色）
+      if(canTsumo||canKita||canAnkanNow)html+=`<button class="btn btn-tsumogiri" onclick="humanDiscard()">ツモ切り [${tileLabel(drn)}]</button>`;
       // リーチ中の暗槓（待ちが変わらない場合のみ canAnkan が返す）
       // 暗槓は右下クイックボタンへ
     }else if(isPR){
@@ -9292,8 +9306,9 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
     }else{
       const pinzuNoTsumo=G_ABILITY_MODE&&PROFILE.ability==="pinzu"&&p.isDealer;
       if(!G.yamiSelectMode){
-if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanTsumo()">ツモ上がり！</button>`;
+        // 北抜きは常に一番左
         if(hasKita)html+=`<button class="btn btn-kita" onclick="humanKita()">北抜き [北]</button>`;
+if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanTsumo()">ツモ上がり！</button>`;
         if(canRiichi){
           const dbl=canDoubleRiichi();
           html+=`<button class="btn btn-riichi" onclick="humanDeclareRiichi('riichi')">${dbl?'ダブルリーチ':'リーチ'}</button>`;
