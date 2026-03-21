@@ -1716,11 +1716,11 @@ body::before{
           background:#040d14;border:1px solid #1a3a2a;border-radius:8px;
           padding:6px;display:none;flex-direction:column;gap:4px;min-width:120px;z-index:50;
         ">
-          <button id="afkBtn" onclick="setAFK(!playerAFK)" style="
+          <button id="afkBtn" onclick="toggleCpuMode()" style="
             background:#030a10;border:1px solid #3a1a1a;border-radius:7px;
             color:#8a4a4a;font-size:.6rem;padding:5px 9px;cursor:pointer;
             transition:all .2s;letter-spacing:.04em;white-space:nowrap;text-align:left;
-          ">離席</button>
+          ">🤖 CPU代打</button>
           <button id="noMeldBtn" onclick="toggleNoMeld()" style="
             background:#030a10;border:1px solid #1a3a1a;border-radius:7px;
             color:#4a7a4a;font-size:.6rem;padding:5px 9px;cursor:pointer;
@@ -5648,6 +5648,31 @@ function setAFK(on){
   }
   renderAll();
 }
+function toggleCpuMode(){
+  if(!G||!G.players) return;
+  const myIdx=NET.myIdx;
+  const p=G.players[myIdx];
+  if(!p) return;
+  if(p.isCpu){
+    // CPU解除: 自分を人間に戻す
+    p.isCpu=false;
+    playerAFK=false;
+    if(_afkLoop){ clearInterval(_afkLoop); _afkLoop=null; }
+    addLog('🤖 CPU代打 解除','log-new');
+    if(NET.online&&amIHost()) broadcastState();
+  } else {
+    // CPU化: 自分をCPUに
+    p.isCpu=true;
+    playerAFK=true;
+    if(!_afkLoop) _afkLoop=setInterval(_afkTick,400);
+    setTimeout(_afkTick,50);
+    addLog('🤖 CPU代打 開始','log-new');
+    if(NET.online&&amIHost()) broadcastState();
+  }
+  _updateAFKBtn();
+  renderAll();
+}
+
 function _afkTick(){
   if(!playerAFK){ if(_afkLoop){clearInterval(_afkLoop);_afkLoop=null;} return; }
   const myIdx=NET.myIdx;
@@ -5656,8 +5681,8 @@ function _afkTick(){
   if(wo&&wo.classList.contains('show')){ onWinOk(); return; }
   // 流局は自動進行するためスキップ不要
   if(!G.players) return;
-  // ロン選択肢 → 離席中はスキップ
-  if(G.phase==='pending_ron'){ humanSkipRon(); return; }
+  // ロン選択肢 → 離席中でも手動操作に委ねる（自動スキップしない）
+  if(G.phase==='pending_ron') return;
   // ポン選択肢 → スキップ
   if(G.phase==='pending_pon'){ humanSkipPon(); return; }
   // draw_wait
@@ -5669,10 +5694,11 @@ function _afkTick(){
 function _updateAFKBtn(){
   const btn=document.getElementById('afkBtn');
   if(!btn) return;
-  btn.textContent='離席';
-  btn.style.borderColor=playerAFK?'#cc3333':'#3a1a1a';
-  btn.style.color=playerAFK?'#ff6666':'#8a4a4a';
-  btn.style.boxShadow=playerAFK?'0 0 8px #cc333366':'';
+  const isCpu = G&&G.players&&G.players[NET.myIdx]&&G.players[NET.myIdx].isCpu;
+  btn.textContent=isCpu?'🤖 CPU代打 ON':'🤖 CPU代打';
+  btn.style.borderColor=isCpu?'#cc3333':'#3a1a1a';
+  btn.style.color=isCpu?'#ff6666':'#8a4a4a';
+  btn.style.boxShadow=isCpu?'0 0 8px #cc333366':'';
 }
 function toggleTitleSettings(){
   const p=document.getElementById('titleSettingsPanel');
@@ -5751,7 +5777,7 @@ function humanAutoDiscard(){
 
   // 離席中: 全てのフェーズで即決（止まらない）
   if(playerAFK){
-    if(G.phase==='pending_ron'){ humanSkipRon(); return; } // 離席中はロンスキップ
+    if(G.phase==='pending_ron') return; // 離席中でもロンは手動に委ねる
     if(G.phase==='pending_pon'){ humanSkipPon(); return; } // ポンはスキップ
     if(G.phase==='discard'&&G.current===myIdx){
       const hasKita=p.hand.some(t=>t.suit==='honor'&&t.num==='北');
@@ -6221,12 +6247,12 @@ function handleWin(widx,winTile,isTsumo,losidx){
   addLog(`${w.name} の${isTsumo?'ツモ':'ロン'}上がり！ ${score}点`,'log-win');
   saveScores();
   if(checkTobi()) return; // 飛び発生 → 即終了（winModalは出さない）
-  const _yakuVideoUrl=getYakumanVideoUrl(yakus);
-  const _wmd={winnerId:w.id,hand:displayHand,winTile,isTsumo,losidx,yakus,score,han,yakuVideo:_yakuVideoUrl||null};
+  const _yakuVideoUrls=getYakumanVideoUrls(yakus);
+  const _wmd={winnerId:w.id,hand:displayHand,winTile,isTsumo,losidx,yakus,score,han,yakuVideo:_yakuVideoUrls.length?_yakuVideoUrls:null};
   renderAll();
   broadcastState({winModal:_wmd});
-  if(_yakuVideoUrl){
-    playYakumanVideo(_yakuVideoUrl, ()=>{ showWinModal(w,displayHand,winTile,isTsumo,losidx,yakus,score,han); });
+  if(_yakuVideoUrls.length){
+    playYakumanVideo(_yakuVideoUrls, ()=>{ showWinModal(w,displayHand,winTile,isTsumo,losidx,yakus,score,han); });
   } else {
     showWinModal(w,displayHand,winTile,isTsumo,losidx,yakus,score,han);
   }
@@ -7071,17 +7097,18 @@ const YAKUMAN_VIDEOS = {
   '四槓子':       'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/yakuman/wankantuu.mp4',
 };
 
-// 役一覧から動画URLを検索（最初に一致したもの）
-function getYakumanVideoUrl(yakus){
+// 役一覧から動画URLを全て収集（順番を保持）
+function getYakumanVideoUrls(yakus){
+  const urls=[];
   for(const y of (yakus||[])){
     const url=YAKUMAN_VIDEOS[y.name];
-    if(url) return url;
+    if(url && !urls.includes(url)) urls.push(url);
   }
-  return null;
+  return urls;
 }
 
-// 役満動画再生（全プレイヤー共通）
-function playYakumanVideo(url, callback){
+// 役満動画を1本再生（内部使用）
+function _playOneYakumanVideo(url, callback){
   const existing=document.getElementById('yakumanVideoOverlay');
   if(existing) existing.remove();
   const ov=document.createElement('div');
@@ -7091,6 +7118,7 @@ function playYakumanVideo(url, callback){
   vid.src=url;
   vid.autoplay=true;
   vid.playsInline=true;
+  vid.volume=0.2;
   vid.style.cssText='max-width:100%;max-height:100%;object-fit:contain;';
   const done=()=>{ const o=document.getElementById('yakumanVideoOverlay'); if(o) o.remove(); if(callback) callback(); };
   vid.onended=done;
@@ -7099,6 +7127,14 @@ function playYakumanVideo(url, callback){
   ov.appendChild(vid);
   document.body.appendChild(ov);
   vid.play().catch(done);
+}
+
+// 複数URL対応: 順番に再生してから callback
+function playYakumanVideo(urlOrUrls, callback){
+  const urls=Array.isArray(urlOrUrls)?urlOrUrls:[urlOrUrls];
+  if(urls.length===0){ if(callback) callback(); return; }
+  const [first, ...rest]=urls;
+  _playOneYakumanVideo(first, ()=>{ playYakumanVideo(rest, callback); });
 }
 
 // 後方互換
@@ -8530,7 +8566,7 @@ function renderTable(){
       const afkEl=document.createElement('div');
       afkEl.className='hand-outer-afk-label';
       afkEl.style.cssText='position:absolute;top:-50px;left:228px;font-size:1.875rem;color:#ff6666;background:#1a0000;border:1px solid #cc3333;border-radius:4px;padding:4px 12px;z-index:5;pointer-events:none;font-weight:700;';
-      afkEl.textContent='離席';
+      afkEl.textContent='🤖 CPU代打';
       handOuter.appendChild(afkEl);
     }
 
