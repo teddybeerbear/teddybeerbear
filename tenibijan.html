@@ -1240,6 +1240,26 @@ body::before{
     font-size:.38rem;background:#2a1a00;color:#ffd700;
     border-radius:3px;padding:1px 3px;white-space:nowrap;
   }
+  /* エモートセットタブ */
+  .emote-set-tabs{ display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap; }
+  .emote-set-tab{
+    padding:5px 14px;border-radius:6px;font-size:.55rem;cursor:pointer;
+    border:1.5px solid #1a3a2a;background:#030a10;color:#4a7a6a;
+    transition:all .15s;letter-spacing:.04em;
+  }
+  .emote-set-tab:hover{ border-color:#3a7a5a;color:#7acc99; }
+  .emote-set-tab.active{ border-color:#c9a84c;background:#1a1200;color:#f0d47a;font-weight:700; }
+  /* エモート図鑑カード */
+  .emote-set-card{
+    background:#030a10;border:1.5px solid #1a3a2a;border-radius:10px;
+    padding:10px 14px;display:flex;align-items:center;gap:14px;
+    transition:border-color .15s;
+  }
+  .emote-set-card.owned{ border-color:#2a5a3a; }
+  .emote-set-card.equipped{ border-color:#c9a84c;background:#0d1a06; }
+  .emote-set-card-imgs{ display:flex;gap:5px; }
+  .emote-set-card-imgs img{ width:44px;height:44px;border-radius:6px;border:1px solid #1a3a2a;background:#020a08;object-fit:contain;padding:2px; }
+  .emote-set-card-imgs .emote-locked{ width:44px;height:44px;border-radius:6px;border:1px dashed #1a3a2a;background:#030a10;display:flex;align-items:center;justify-content:center;font-size:1.1rem;color:#2a4a3a; }
   /* エモートスロット */
   .emote-slot-wrap{ display:flex;flex-direction:column;align-items:center; }
   .emote-slot{
@@ -1332,6 +1352,10 @@ body::before{
     <div class="shop-section-title">⚡ 能力を購入</div>
     <div style="font-size:.56rem;color:#4a6a5a;margin-bottom:8px;">所持していない能力を🪙100枚で解放できます。</div>
     <div class="shop-ability-grid" id="shopAbilityGrid"></div>
+
+    <div class="shop-section-title">😊 エモートセットを購入</div>
+    <div style="font-size:.56rem;color:#4a6a5a;margin-bottom:8px;">エモートセットを購入するとプロフィールで装備できます。</div>
+    <div id="shopEmoteGrid" style="display:flex;flex-direction:column;gap:8px;"></div>
   </div>
 </div>
 
@@ -1384,32 +1408,15 @@ body::before{
 
     <!-- エモート選択 -->
     <h3 style="margin-top:12px;">エモート</h3>
-    <p style="font-size:.55rem;color:#4a7a6a;margin:0 0 8px;">スロット1〜4にエモートをセット（ゲーム中に送信できます）</p>
-    <!-- 4スロット -->
-    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-      <div class="emote-slot-wrap" data-slot="0">
-        <div style="font-size:.48rem;color:#4a7a6a;text-align:center;margin-bottom:3px;">スロット1</div>
-        <div class="emote-slot" id="emoteSlot0" onclick="openEmoteSlotPicker(0)"></div>
-      </div>
-      <div class="emote-slot-wrap" data-slot="1">
-        <div style="font-size:.48rem;color:#4a7a6a;text-align:center;margin-bottom:3px;">スロット2</div>
-        <div class="emote-slot" id="emoteSlot1" onclick="openEmoteSlotPicker(1)"></div>
-      </div>
-      <div class="emote-slot-wrap" data-slot="2">
-        <div style="font-size:.48rem;color:#4a7a6a;text-align:center;margin-bottom:3px;">スロット3</div>
-        <div class="emote-slot" id="emoteSlot2" onclick="openEmoteSlotPicker(2)"></div>
-      </div>
-      <div class="emote-slot-wrap" data-slot="3">
-        <div style="font-size:.48rem;color:#4a7a6a;text-align:center;margin-bottom:3px;">スロット4</div>
-        <div class="emote-slot" id="emoteSlot3" onclick="openEmoteSlotPicker(3)"></div>
-      </div>
-    </div>
-    <!-- スロット用ピッカー -->
-    <div id="emoteSlotPicker" style="display:none;background:#040d14;border:1px solid #1a3a2a;border-radius:10px;padding:10px;margin-bottom:10px;">
-      <div style="font-size:.55rem;color:#5a8a6a;margin-bottom:6px;">スロット<span id="emotePickerSlotNum"></span>に設定するエモートを選択</div>
-      <div id="emotePickerList" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
-      <button onclick="clearEmoteSlot()" style="margin-top:8px;background:#030a10;border:1px solid #3a1a1a;border-radius:6px;color:#8a4a4a;font-size:.55rem;padding:4px 10px;cursor:pointer;">🗑 外す</button>
-      <button onclick="closeEmoteSlotPicker()" style="margin-top:8px;margin-left:6px;background:#030a10;border:1px solid #1a3a2a;border-radius:6px;color:#5a8a6a;font-size:.55rem;padding:4px 10px;cursor:pointer;">閉じる</button>
+    <p style="font-size:.55rem;color:#4a7a6a;margin:0 0 8px;">装備中セット（クリックで図鑑を開く）</p>
+    <!-- 装備中プレビュー -->
+    <div id="emoteEquippedPreview" onclick="openEmoteCollection()" style="
+      display:flex;gap:8px;align-items:center;flex-wrap:wrap;cursor:pointer;
+      background:#030a10;border:1.5px solid #1a3a2a;border-radius:10px;
+      padding:10px 14px;margin-bottom:8px;transition:border-color .15s;
+    " onmouseover="this.style.borderColor='#3a7a5a'" onmouseout="this.style.borderColor='#1a3a2a'">
+      <div id="emoteEquippedSlots" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+      <div style="font-size:.55rem;color:#3a6a5a;margin-left:4px;">📖 図鑑を開く</div>
     </div>
     <div id="emoteSelectWrap" style="display:none;"></div>
 
@@ -5919,6 +5926,9 @@ document.addEventListener('click', function(e){
   if(panel && panel.style.display==='flex' && area && !area.contains(e.target)){
     panel.style.display='none';
   }
+  // エモート図鑑外クリックで閉じる
+  const eco=document.getElementById('emoteCollectionOverlay');
+  if(eco&&eco.style.display==='flex'&&e.target===eco) closeEmoteCollection();
   // 自動メニューパネル外クリックで閉じる
   const amp = document.getElementById('autoMenuPanel');
   const amtb = document.getElementById('autoMenuToggle');
@@ -9561,9 +9571,10 @@ function loadProfile(){
         abilities:  data.abilities  ?? PROFILE.abilities,
         totalPulls: data.totalPulls ?? PROFILE.totalPulls,
         gachaIcons: data.gachaIcons ?? PROFILE.gachaIcons,
-        iconId:     data.iconId     ?? PROFILE.iconId,
-        ability:    data.ability    ?? PROFILE.ability,
-        name:       data.name       || PROFILE.name,
+        iconId:          data.iconId          ?? PROFILE.iconId,
+        ability:         data.ability         ?? PROFILE.ability,
+        name:            data.name            || PROFILE.name,
+        ownedEmoteSets:  data.ownedEmoteSets  ?? PROFILE.ownedEmoteSets ?? ['01'],
       });
       try{ localStorage.setItem('mjProfile',JSON.stringify(PROFILE)); }catch(e){}
       _applyProfile();
@@ -10154,11 +10165,12 @@ function saveProfileSilent(){
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
-      abilities:  PROFILE.abilities,
-      gachaIcons: PROFILE.gachaIcons||[],
-      iconId:     PROFILE.iconId||'',
-      ability:    PROFILE.ability||'',
-      name:       PROFILE.name||'',
+      abilities:       PROFILE.abilities,
+      gachaIcons:      PROFILE.gachaIcons||[],
+      iconId:          PROFILE.iconId||'',
+      ability:         PROFILE.ability||'',
+      name:            PROFILE.name||'',
+      ownedEmoteSets:  PROFILE.ownedEmoteSets||['01'],
     }),
   }).catch(()=>{});
 }
@@ -10246,102 +10258,166 @@ function renderProfileAbilityList(){
 // EMOTE SYSTEM
 // ============================================================
 const EMOTE_BASE = 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/emo/';
-const EMOTES = [
-  {id:'01emo01', label:'エモート1'},
-  {id:'01emo02', label:'エモート2'},
-  {id:'01emo03', label:'エモート3'},
-  {id:'01emo04', label:'エモート4'},
+// エモートセット定義（setId: セットID, label: 名前, ids: 4枚のエモートID）
+const EMOTE_SETS_MASTER = [
+  { setId:'01', label:'セット1', ids:['01emo01','01emo02','01emo03','01emo04'] },
+  { setId:'02', label:'セット2', ids:['02emo01','02emo02','02emo03','02emo04'] },
 ];
+// 後方互換: EMOTES（旧）も維持
+const EMOTES = EMOTE_SETS_MASTER.flatMap(s=>s.ids.map((id,i)=>({id, label:`${s.label} ${i+1}`})));
 function emoteUrl(id){ return EMOTE_BASE + id + '.png'; }
 
-// プロフィール画面のエモート選択UI（4スロット）
+// ── エモートセット管理 ──────────────────────────────────────
 let _emotePickerSlot = -1; // 現在編集中のスロット番号
 
-function renderEmoteSelect(){
-  _renderEmoteSlots();
-}
-
-function _renderEmoteSlots(){
-  const slots = PROFILE.emotes || ['','','',''];
-  for(let i=0;i<4;i++){
-    const el = document.getElementById('emoteSlot'+i);
-    if(!el) continue;
-    const id = slots[i] || '';
-    if(id){
-      el.classList.add('filled');
-      el.innerHTML = `<img src="${emoteUrl(id)}" alt="emote"><span class="slot-num">${i+1}</span>`;
-    } else {
-      el.classList.remove('filled');
-      el.innerHTML = `<span style="font-size:.6rem;color:#2a5a3a;">＋</span><span class="slot-num">${i+1}</span>`;
-    }
+// emoteSetsを初期化・取得
+function _initEmoteSets(){
+  if(!Array.isArray(PROFILE.emoteSets)||PROFILE.emoteSets.length<1){
+    const existing = PROFILE.emotes||['','','',''];
+    PROFILE.emoteSets = [existing.slice(0,4).concat(['','','','']).slice(0,4)];
   }
+  if(PROFILE.activeEmoteSet==null) PROFILE.activeEmoteSet=0;
+  // 所持セットのデフォルト（セット01は最初から所持）
+  if(!Array.isArray(PROFILE.ownedEmoteSets)) PROFILE.ownedEmoteSets=['01'];
 }
 
-function openEmoteSlotPicker(slot){
-  _emotePickerSlot = slot;
-  const picker = document.getElementById('emoteSlotPicker');
-  const numEl  = document.getElementById('emotePickerSlotNum');
-  const list   = document.getElementById('emotePickerList');
-  if(!picker||!list) return;
-  numEl.textContent = slot+1;
-  const slots = PROFILE.emotes || ['','','',''];
-  const current = slots[slot] || '';
-  list.innerHTML = EMOTES.map(e => {
-    const isCurrent = e.id === current;
-    return `<div class="emote-picker-card ${isCurrent?'selected-slot':''}" onclick="pickEmoteForSlot('${e.id}')" title="${e.label}">
-      <img src="${emoteUrl(e.id)}" alt="${e.label}" style="width:100%;height:100%;object-fit:contain;">
+// アクティブセットのスロット配列を返す（常にindex 0を使用）
+function _activeSlots(){
+  _initEmoteSets();
+  if(!Array.isArray(PROFILE.emoteSets[0])) PROFILE.emoteSets[0]=['','','',''];
+  return PROFILE.emoteSets[0];
+}
+
+// PROFILE.emotes / PROFILE.emote を後方互換のため同期
+function _syncEmotesCompat(){
+  const slots=_activeSlots();
+  PROFILE.emotes=[...slots];
+  PROFILE.emote=slots[0]||'';
+}
+
+function renderEmoteSelect(){
+  _renderEquippedPreview();
+}
+
+// 装備中セットのプレビューをプロフィール画面に表示
+function _renderEquippedPreview(){
+  const el=document.getElementById('emoteEquippedSlots');
+  if(!el) return;
+  const slots=_activeSlots();
+  const hasAny=slots.some(s=>s);
+  if(!hasAny){
+    el.innerHTML='<span style="font-size:.55rem;color:#2a5a3a;">未装備</span>';
+    return;
+  }
+  el.innerHTML=slots.map(id=>{
+    if(!id) return `<div style="width:40px;height:40px;border-radius:6px;border:1.5px dashed #1a3a2a;background:#020a08;display:flex;align-items:center;justify-content:center;font-size:.5rem;color:#2a4a3a;">−</div>`;
+    return `<img src="${emoteUrl(id)}" style="width:40px;height:40px;border-radius:6px;border:1.5px solid #2a5a3a;background:#020a08;object-fit:contain;padding:2px;" alt="">`;
+  }).join('');
+}
+
+// 図鑑を開く
+function openEmoteCollection(){
+  const ov=document.getElementById('emoteCollectionOverlay');
+  if(!ov) return;
+  ov.style.display='flex';
+  _renderEmoteCollectionList();
+}
+
+function closeEmoteCollection(){
+  const ov=document.getElementById('emoteCollectionOverlay');
+  if(ov) ov.style.display='none';
+}
+
+function _renderEmoteCollectionList(){
+  const el=document.getElementById('emoteCollectionList');
+  if(!el) return;
+  const owned=PROFILE.ownedEmoteSets||['01']; // デフォルトで01所持
+  const equippedIds=_activeSlots();
+  el.innerHTML=EMOTE_SETS_MASTER.map(set=>{
+    const isOwned=owned.includes(set.setId);
+    const isEquipped=isOwned&&set.ids.every((id,i)=>equippedIds[i]===id);
+    const imgsHtml=set.ids.map(id=>
+      isOwned
+        ? `<img src="${emoteUrl(id)}" alt="">`
+        : `<div class="emote-locked">🔒</div>`
+    ).join('');
+    const equippedBadge=isEquipped?`<span style="font-size:.5rem;color:#c9a84c;margin-left:6px;">✔ 装備中</span>`:'';
+    const btn=isOwned&&!isEquipped
+      ? `<button onclick="equipEmoteSet('${set.setId}')" style="
+          background:linear-gradient(135deg,#0d2a10,#061408);border:1.5px solid #3a7a3a;
+          border-radius:7px;color:#7acc99;font-size:.6rem;padding:6px 14px;
+          cursor:pointer;white-space:nowrap;transition:all .15s;
+        ">装備する</button>`
+      : isEquipped
+        ? `<button onclick="unequipEmoteSet()" style="
+            background:#030a10;border:1.5px solid #3a4a2a;
+            border-radius:7px;color:#5a7a5a;font-size:.6rem;padding:6px 14px;
+            cursor:pointer;white-space:nowrap;
+          ">外す</button>`
+        : `<span style="font-size:.55rem;color:#3a4a3a;">未所持</span>`;
+    return `<div class="emote-set-card${isOwned?' owned':''}${isEquipped?' equipped':''}">
+      <div class="emote-set-card-imgs">${imgsHtml}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:.65rem;color:#8aaaa8;font-weight:700;">${set.label}${equippedBadge}</div>
+        <div style="font-size:.5rem;color:#3a6a5a;margin-top:2px;">${isOwned?'所持済み':'未入手'}</div>
+      </div>
+      <div>${btn}</div>
     </div>`;
   }).join('');
-  picker.style.display = 'block';
 }
 
-function pickEmoteForSlot(id){
-  if(!PROFILE.emotes) PROFILE.emotes = ['','','',''];
-  PROFILE.emotes[_emotePickerSlot] = id;
-  // 旧来の PROFILE.emote も先頭スロットで互換維持
-  PROFILE.emote = PROFILE.emotes[0] || '';
-  closeEmoteSlotPicker();
-  _renderEmoteSlots();
+// セットを装備（4枚まとめてアクティブスロットにセット）
+function equipEmoteSet(setId){
+  const set=EMOTE_SETS_MASTER.find(s=>s.setId===setId);
+  if(!set) return;
+  _initEmoteSets();
+  const slots=_activeSlots();
+  set.ids.forEach((id,i)=>{ slots[i]=id; });
+  _syncEmotesCompat();
+  _renderEquippedPreview();
+  _renderEmoteCollectionList();
 }
 
-function clearEmoteSlot(){
-  if(!PROFILE.emotes) PROFILE.emotes = ['','','',''];
-  PROFILE.emotes[_emotePickerSlot] = '';
-  PROFILE.emote = PROFILE.emotes[0] || '';
-  closeEmoteSlotPicker();
-  _renderEmoteSlots();
+// セットを外す
+function unequipEmoteSet(){
+  const slots=_activeSlots();
+  for(let i=0;i<4;i++) slots[i]='';
+  _syncEmotesCompat();
+  _renderEquippedPreview();
+  _renderEmoteCollectionList();
 }
 
-function closeEmoteSlotPicker(){
-  const picker = document.getElementById('emoteSlotPicker');
-  if(picker) picker.style.display = 'none';
-  _emotePickerSlot = -1;
-}
+function openEmoteSlotPicker(slot){ /* 図鑑方式に移行のため無効 */ }
+function pickEmoteForSlot(id){}
+function clearEmoteSlot(){}
+function closeEmoteSlotPicker(){}
 
 function selectEmote(id){
-  // 旧来互換（未使用になるが残しておく）
-  PROFILE.emote = (PROFILE.emote === id) ? '' : id;
-  _renderEmoteSlots();
+  // 旧来互換
+  const slots=_activeSlots();
+  slots[0]=(slots[0]===id)?'':id;
+  _syncEmotesCompat();
+  _renderEquippedPreview();
 }
 
 // ゲーム内エモートパネルの表示切り替え
 function toggleEmotePanel(){
-  const panel = document.getElementById('emotePanel');
+  const panel=document.getElementById('emotePanel');
   if(!panel) return;
-  const isOpen = panel.style.display === 'flex';
-  panel.style.display = isOpen ? 'none' : 'flex';
+  const isOpen=panel.style.display==='flex';
+  panel.style.display=isOpen?'none':'flex';
   if(!isOpen) renderEmotePanel();
 }
 function renderEmotePanel(){
-  const panel = document.getElementById('emotePanel');
+  const panel=document.getElementById('emotePanel');
   if(!panel) return;
-  const slots = PROFILE.emotes || ['','','',''];
-  const hasAny = slots.some(s=>s);
+  const slots=_activeSlots();
+  const hasAny=slots.some(s=>s);
   if(!hasAny){
-    panel.innerHTML = '<div style="font-size:.55rem;color:#4a7a6a;padding:4px;">エモート未設定<br>プロフィールで設定</div>';
+    panel.innerHTML='<div style="font-size:.55rem;color:#4a7a6a;padding:4px;">エモート未設定<br>プロフィールで設定</div>';
     return;
   }
-  panel.innerHTML = slots.map((id, i) => {
+  panel.innerHTML=slots.map((id,i)=>{
     if(!id) return `<button class="emote-pick-btn" style="opacity:.2;pointer-events:none;" title="未設定">
       <span style="font-size:.5rem;color:#2a4a3a;">${i+1}</span>
     </button>`;
@@ -10427,6 +10503,11 @@ function updateShopCoinDisplay(){
   const el=document.getElementById('shopCoinDisplay');
   if(el) el.textContent=(PROFILE.coins||0).toLocaleString();
 }
+// ショップで販売するエモートセット定義
+const SHOP_EMOTE_SETS = [
+  { setId:'02', label:'セット2', price:1000 },
+];
+
 function renderShop(){
   updateShopCoinDisplay();
   // 能力グリッド
@@ -10446,6 +10527,34 @@ function renderShop(){
         ${has?'disabled':''}
         onclick="buyAbility('${ab.key}')">${has?'所持済み':'購入'}</button>`;
     grid.appendChild(card);
+  });
+  // エモートセットグリッド
+  const eg=document.getElementById('shopEmoteGrid');
+  if(!eg) return;
+  const ownedEmotes=PROFILE.ownedEmoteSets||['01'];
+  eg.innerHTML='';
+  SHOP_EMOTE_SETS.forEach(item=>{
+    const master=EMOTE_SETS_MASTER.find(s=>s.setId===item.setId);
+    const has=ownedEmotes.includes(item.setId);
+    const canAfford=(PROFILE.coins||0)>=item.price;
+    const previewHtml=master?master.ids.map(id=>
+      `<img src="${emoteUrl(id)}" style="width:36px;height:36px;border-radius:5px;border:1px solid #1a3a2a;background:#020a08;object-fit:contain;padding:2px;" alt="">`
+    ).join(''):'';
+    const div=document.createElement('div');
+    div.className='shop-item';
+    div.innerHTML=`
+      <div class="shop-item-icon">😊</div>
+      <div class="shop-item-info">
+        <div class="shop-item-name">${item.label}</div>
+        <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;">${previewHtml}</div>
+      </div>
+      <div class="shop-item-price">
+        <div style="font-size:.62rem;color:var(--gold);font-weight:700;margin-bottom:4px;">🪙 ${item.price.toLocaleString()}</div>
+        <button class="shop-buy-btn paid" style="font-size:.6rem;padding:5px 12px;"
+          ${has||!canAfford?'disabled':''}
+          onclick="buyEmoteSet('${item.setId}',${item.price})">${has?'所持済み':canAfford?'購入':'コイン不足'}</button>
+      </div>`;
+    eg.appendChild(div);
   });
 }
 function shopPull1(){
@@ -10477,6 +10586,23 @@ function buyAbility(key){
     _shopToast('エラーが発生しました。もう一度お試しください。');
   });
 }
+function buyEmoteSet(setId, price){
+  if((PROFILE.coins||0)<price){
+    _shopToast(`🪙 コインが足りません（必要：${price}枚）`); return;
+  }
+  if(!Array.isArray(PROFILE.ownedEmoteSets)) PROFILE.ownedEmoteSets=['01'];
+  if(PROFILE.ownedEmoteSets.includes(setId)){
+    _shopToast('すでに所持しています'); return;
+  }
+  PROFILE.coins=(PROFILE.coins||0)-price;
+  PROFILE.ownedEmoteSets.push(setId);
+  saveProfileSilent();
+  renderShop();
+  updateGachaCoinDisplay();
+  const item=SHOP_EMOTE_SETS.find(s=>s.setId===setId);
+  _shopToast(`😊 ${item?item.label:'エモートセット'} を入手しました！`);
+}
+
 function _shopToast(msg){
   let t=document.getElementById('shopToast');
   if(!t){
@@ -10891,6 +11017,31 @@ function plantMineRinshan(ri){
           </table>
         </div>
       </div>
+<!-- エモート図鑑オーバーレイ -->
+<div id="emoteCollectionOverlay" style="
+  display:none;position:fixed;inset:0;z-index:99998;
+  background:#000000cc;backdrop-filter:blur(4px);
+  align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 12px;
+">
+  <div style="
+    background:linear-gradient(135deg,#060e18,#091422);
+    border:1px solid #1a3a2a;border-radius:14px;
+    padding:18px;width:100%;max-width:600px;position:relative;
+  ">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div>
+        <div style="font-size:.9rem;font-weight:700;color:var(--gold);letter-spacing:.1em;">📖 エモート図鑑</div>
+        <div style="font-size:.52rem;color:#4a7a6a;margin-top:2px;">装備ボタンで4枚まとめてセット</div>
+      </div>
+      <button onclick="closeEmoteCollection()" style="
+        background:#030a10;border:1px solid #2a3a4a;border-radius:7px;
+        color:#5a7a8a;font-size:.7rem;padding:5px 10px;cursor:pointer;
+      ">✕ 閉じる</button>
+    </div>
+    <div id="emoteCollectionList" style="display:flex;flex-direction:column;gap:12px;"></div>
+  </div>
+</div>
+
 <!-- 自動メニューパネル（画面左下固定・body直下） -->
 <div id="autoMenuPanel" style="
   display:none;position:fixed;z-index:99999;

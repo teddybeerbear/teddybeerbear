@@ -51,6 +51,10 @@ async function initDB() {
     await pool.query(`
       ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS google_name TEXT
     `);
+    // エモートセット所持管理カラム追加
+    await pool.query(`
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS owned_emote_sets TEXT NOT NULL DEFAULT '["01"]'
+    `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS rank_ratings (
         google_id   TEXT PRIMARY KEY,
@@ -151,6 +155,7 @@ app.get("/api/profile", requireAuth, async (req, res) => {
         coins: 0, abilities: ["ペン"], totalPulls: 0,
         gachaIcons: [], iconId: "", ability: "",
         name: req.user.name, googleName: req.user.name,
+        ownedEmoteSets: ["01"],
       });
     }
     await pool.query(
@@ -159,14 +164,15 @@ app.get("/api/profile", requireAuth, async (req, res) => {
     );
     const row = result.rows[0];
     res.json({
-      coins:      row.coins,
-      abilities:  JSON.parse(row.abilities),
-      totalPulls: row.total_pulls,
-      gachaIcons: JSON.parse(row.gacha_icons),
-      iconId:     row.icon_id,
-      ability:    row.ability,
-      name:       row.name || req.user.name,
-      googleName: row.google_name || req.user.name,
+      coins:           row.coins,
+      abilities:       JSON.parse(row.abilities),
+      totalPulls:      row.total_pulls,
+      gachaIcons:      JSON.parse(row.gacha_icons),
+      iconId:          row.icon_id,
+      ability:         row.ability,
+      name:            row.name || req.user.name,
+      googleName:      row.google_name || req.user.name,
+      ownedEmoteSets:  JSON.parse(row.owned_emote_sets || '["01"]'),
     });
   } catch (err) {
     console.error("プロフィール取得エラー:", err.message);
@@ -324,9 +330,12 @@ app.post("/api/reward", requireAuth, async (req, res) => {
 
 // プロフィール保存（非コイン項目のみ受け付ける）
 // ★ coins / totalPulls はクライアントからの書き換えを一切受け付けない
+// エモートセットIDのホワイトリスト（既存セットIDパターン）
+const VALID_EMOTE_SET_RE = /^\d{2}$/;
+
 app.post("/api/profile", requireAuth, async (req, res) => {
   const uid = req.user.id;
-  const { abilities, gachaIcons, iconId, ability, name } = req.body;
+  const { abilities, gachaIcons, iconId, ability, name, ownedEmoteSets } = req.body;
 
   // 能力ホワイトリスト検証
   const safeAbilities = Array.isArray(abilities)
@@ -339,29 +348,38 @@ app.post("/api/profile", requireAuth, async (req, res) => {
     ? gachaIcons.filter(id => typeof id === "string" && VALID_ICON_RE.test(id))
     : [];
 
+  // ownedEmoteSets: IDパターン検証
+  const safeEmoteSets = Array.isArray(ownedEmoteSets)
+    ? ownedEmoteSets.filter(id => typeof id === "string" && VALID_EMOTE_SET_RE.test(id))
+    : [];
+
   const safeAbility = VALID_ABILITIES.includes(ability) ? ability : "";
   const safeName = typeof name === "string" ? name.slice(0, 12) : req.user.name;
   const safeIconId = typeof iconId === "string" && VALID_ICON_RE.test(iconId) ? iconId : "";
 
   try {
-    // gachaIcons は既存レコードとマージ（クライアントが削除できないように）
+    // gacha_icons / owned_emote_sets は既存レコードとマージ（クライアントが削除できないように）
     const cur = await pool.query(
-      "SELECT gacha_icons FROM user_profiles WHERE google_id = $1", [uid]
+      "SELECT gacha_icons, owned_emote_sets FROM user_profiles WHERE google_id = $1", [uid]
     );
-    const existingIcons = cur.rows[0] ? JSON.parse(cur.rows[0].gacha_icons) : [];
+    const existingIcons = cur.rows[0] ? JSON.parse(cur.rows[0].gacha_icons || "[]") : [];
     const mergedIcons = Array.from(new Set([...existingIcons, ...safeIcons]));
+    const existingEmoteSets = cur.rows[0] ? JSON.parse(cur.rows[0].owned_emote_sets || '["01"]') : ["01"];
+    // セット01は常に所持（デフォルト）、追加分のみマージ
+    const mergedEmoteSets = Array.from(new Set(["01", ...existingEmoteSets, ...safeEmoteSets]));
 
     await pool.query(
       `INSERT INTO user_profiles
-         (google_id, name, email, abilities, gacha_icons, icon_id, ability, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+         (google_id, name, email, abilities, gacha_icons, icon_id, ability, owned_emote_sets, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
        ON CONFLICT (google_id) DO UPDATE SET
-         name        = EXCLUDED.name,
-         abilities   = EXCLUDED.abilities,
-         gacha_icons = EXCLUDED.gacha_icons,
-         icon_id     = EXCLUDED.icon_id,
-         ability     = EXCLUDED.ability,
-         updated_at  = NOW()`,
+         name              = EXCLUDED.name,
+         abilities         = EXCLUDED.abilities,
+         gacha_icons       = EXCLUDED.gacha_icons,
+         icon_id           = EXCLUDED.icon_id,
+         ability           = EXCLUDED.ability,
+         owned_emote_sets  = EXCLUDED.owned_emote_sets,
+         updated_at        = NOW()`,
       [
         uid,
         safeName,
@@ -370,6 +388,7 @@ app.post("/api/profile", requireAuth, async (req, res) => {
         JSON.stringify(mergedIcons),
         safeIconId,
         safeAbility,
+        JSON.stringify(mergedEmoteSets),
       ]
     );
     res.json({ ok: true });
