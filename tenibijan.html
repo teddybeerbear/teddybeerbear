@@ -6874,23 +6874,20 @@ function showFinalResult(){
   ).join('');
   // コイン付与: サーバーAPIで付与（クライアント側での増減は行わない）
   const myPlayer=G.players[NET.myIdx];
-  const myRank=sorted.findIndex(p=>p===myPlayer);
-  const _coinTable={2:10,3:30,4:40};
-  const _firstPrize=_coinTable[numPlayers]||10;
-  const earned=myRank===0?_firstPrize:0;
+  const myRank=sorted.findIndex(p=>p===myPlayer)+1; // 1始まり
   const rewardEl=document.getElementById('resultCoinReward');
-  if(earned>0){
-    fetch('/api/reward',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({rank:1,numPlayers})})
-    .then(r=>r.json()).then(d=>{
-      if(d.ok){
-        PROFILE.coins=d.coins; // サーバーの値で上書き
-        if(rewardEl) rewardEl.innerHTML=`🪙 +${d.earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">1位ボーナス：+${d.earned}枚</span>`;
+  fetch('/api/reward',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({rank:myRank,numPlayers})})
+  .then(r=>r.json()).then(d=>{
+    if(d.ok){
+      PROFILE.coins=d.coins??PROFILE.coins;
+      const rankLabel=['🥇1位','🥈2位','🥉3位'][myRank-1]||myRank+'位';
+      if(rewardEl){
+        if(d.earned>0) rewardEl.innerHTML=`🪙 +${d.earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">${rankLabel}報酬：+${d.earned}枚</span>`;
+        else rewardEl.innerHTML=`🪙 +0 手にビコイン<br><span style="font-size:.65rem;color:#5a7a6a;">参加報酬：+0枚</span>`;
       }
-    }).catch(()=>{});
-  } else {
-    if(rewardEl) rewardEl.innerHTML=`🪙 +0 手にビコイン<br><span style="font-size:.65rem;color:#5a7a6a;">参加報酬：+0枚</span>`;
-  }
+    }
+  }).catch(()=>{});
   saveProfileSilent();
 
   // ランクマッチの場合、ホストがスコアを提出してレートを更新
@@ -6944,23 +6941,21 @@ function showFinalResultData(sorted){
 
   // コイン付与（ゲスト側）: サーバーAPIで付与
   const myPlayer = G && G.players ? G.players[NET.myIdx] : null;
-  const myRank = myPlayer ? sorted.findIndex(p=>p.name===myPlayer.name) : -1;
+  const myRankIdx = myPlayer ? sorted.findIndex(p=>p.name===myPlayer.name) : -1;
+  const myRankG = myRankIdx + 1; // 1始まり
   const rewardEl = document.getElementById('resultCoinReward');
-  const _g_coinTable={2:10,3:30,4:40};
-  const _g_firstPrize=_g_coinTable[numPlayers]||10;
-  const earned = myRank===0 ? _g_firstPrize : 0;
-  if(earned>0){
-    fetch('/api/reward',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({rank:1,numPlayers})})
-    .then(r=>r.json()).then(d=>{
-      if(d.ok){
-        PROFILE.coins=d.coins;
-        if(rewardEl) rewardEl.innerHTML=`🪙 +${d.earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">1位ボーナス：+${d.earned}枚</span>`;
+  fetch('/api/reward',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({rank:myRankG,numPlayers})})
+  .then(r=>r.json()).then(d=>{
+    if(d.ok){
+      PROFILE.coins=d.coins??PROFILE.coins;
+      const rankLabel=['🥇1位','🥈2位','🥉3位'][myRankG-1]||myRankG+'位';
+      if(rewardEl){
+        if(d.earned>0) rewardEl.innerHTML=`🪙 +${d.earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">${rankLabel}報酬：+${d.earned}枚</span>`;
+        else rewardEl.innerHTML=`🪙 +0 手にビコイン<br><span style="font-size:.65rem;color:#5a7a6a;">参加報酬：+0枚</span>`;
       }
-    }).catch(()=>{});
-  } else {
-    if(rewardEl) rewardEl.innerHTML=`🪙 +0 手にビコイン<br><span style="font-size:.65rem;color:#5a7a6a;">参加報酬：+0枚</span>`;
-  }
+    }
+  }).catch(()=>{});
   saveProfileSilent();
 
   // ランクマッチ: レート変動をサーバーから取得（ホストのPOSTが完了するまで少し待つ）

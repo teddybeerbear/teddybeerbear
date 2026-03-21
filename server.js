@@ -294,11 +294,19 @@ app.post("/api/gacha", requireAuth, async (req, res) => {
 
 
 // POST /api/reward — 対局報酬（1位のみ・numPlayersをサーバーで検証）
+// ルームマッチ報酬テーブル (numPlayers → rank → coins)
+const ROOM_REWARD_TABLE = {
+  2: { 1: 20, 2: 10 },              // 2人
+  3: { 1: 30, 2: 15, 3:  5 },      // 3人
+  4: { 1: 40, 2: 20, 3: 10, 4: 5 }, // 4人
+};
+
 app.post("/api/reward", requireAuth, async (req, res) => {
   const { rank, numPlayers } = req.body;
-  if (rank !== 1) return res.json({ ok: true, earned: 0 });
-  const earned = REWARD_TABLE[numPlayers];
-  if (!earned) return res.status(400).json({ error: "不正なプレイヤー数です" });
+  if (!rank || !numPlayers) return res.status(400).json({ error: "rank と numPlayers が必要です" });
+  const table = ROOM_REWARD_TABLE[numPlayers];
+  const earned = table?.[rank] ?? 0;
+  if (earned === 0) return res.json({ ok: true, earned: 0 });
   const uid = req.user.id;
   try {
     const r = await pool.query(
