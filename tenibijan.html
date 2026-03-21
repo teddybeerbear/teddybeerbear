@@ -4504,6 +4504,8 @@ function handleGuestAction(msg, senderIdx){
     case 'ankan':     if(amIHost()){handleAnkan(msg.pidx,msg.tileKey);broadcastState();} break;
     case 'steal':     if(amIHost()){_doSteal(msg.myIdx,msg.fromPidx,msg.discardIdx);} break;
     case 'haku':      if(amIHost()){remoteHaku(msg.pidx,msg.tidx);} break;
+    case 'hakuOpponent': if(amIHost()){remoteHakuOpponent(msg.pidx,msg.tidx,senderIdx);} break;
+    case 'hakuDiscard': if(amIHost()){remoteHakuDiscard(msg.pidx,msg.di,senderIdx);} break;
     case 'lightRevealWall':
       if(amIHost()){
         const si=msg.slotIdx;
@@ -4511,12 +4513,10 @@ function handleGuestAction(msg, senderIdx){
           if(!G.lightRevealedSlots) G.lightRevealedSlots={};
           G.lightRevealedSlots[si]=true;
           const tile=G.deckSlots[si];
-          if(!G.lightExtraDora) G.lightExtraDora=[];
-          G.lightExtraDora.push({suit:tile.suit,num:tile.num});
           const ui=msg.userIdx??senderIdx;
           if(ui!=null&&G.players[ui]) G.players[ui].abilityUsed=true;
           G.lightMode=false;
-          addLog(`☀️ 光！山牌を表にした: ${emj(tile)}（ドラ追加）`,'log-dora');
+          addLog(`☀️ 光！山牌を表にした: ${emj(tile)}`,'log-dora');
           SFX.light();
           broadcastState();
         }
@@ -4529,12 +4529,10 @@ function handleGuestAction(msg, senderIdx){
           if(!G.lightRevealedHand) G.lightRevealedHand={};
           const tile=p.hand[msg.handIdx];
           G.lightRevealedHand[tile._id]=tile;
-          if(!G.lightExtraDora) G.lightExtraDora=[];
-          G.lightExtraDora.push({suit:tile.suit,num:tile.num});
           const ui=msg.userIdx??senderIdx;
           if(ui!=null&&G.players[ui]) G.players[ui].abilityUsed=true;
           G.lightMode=false;
-          addLog(`☀️ 光！${p.name}の手牌を表にした: ${emj(tile)}（ドラ追加）`,'log-dora');
+          addLog(`☀️ 光！${p.name}の手牌を表にした: ${emj(tile)}`,'log-dora');
           SFX.light();
           broadcastState();
         }
@@ -4564,6 +4562,17 @@ function handleGuestAction(msg, senderIdx){
           SFX.light();
           broadcastState();
         }
+      }
+      break;
+    case 'lightRevealDiscard':
+      if(amIHost()){
+        const ui=msg.userIdx??senderIdx;
+        if(ui!=null&&G.players[ui]) G.players[ui].abilityUsed=true;
+        G.lightMode=false;
+        const p2=G.players[msg.pidx];
+        const t2=p2&&p2.discards[msg.di];
+        addLog(`☀️ 光！${p2?p2.name:''}の捨て牌を選択: ${t2?emj(t2):''}`, 'log-dora');
+        SFX.light(); broadcastState();
       }
       break;
     case 'lightDispelDiscardYami':
@@ -4893,6 +4902,36 @@ function remoteKita(pidx){
   }
   broadcastState();renderAll();
 }
+function remoteHakuDiscard(targetPidx, di, senderIdx){
+  const target=G.players[targetPidx];
+  const sender=G.players[senderIdx];
+  if(!target||!sender||sender.abilityUsed) return;
+  const t=target.discards[di];
+  if(!t||t._isHaku||t._yami) return;
+  t._hakuOriginal={suit:t.suit,num:t.num};
+  t.suit='honor'; t.num='白'; t._isHaku=true;
+  sender.abilityUsed=true;
+  G.hakuSelectMode=false;
+  addLog(`🀆 白！${sender.name}が${target.name}の捨て牌を白に変換した`,'log-dora');
+  broadcastState(); renderAll();
+}
+function remoteHakuOpponent(targetPidx, tidx, senderIdx){
+  const target=G.players[targetPidx];
+  const sender=G.players[senderIdx];
+  if(!target||!sender||sender.abilityUsed) return;
+  if(target.riichi) return;
+  const t=target.hand[tidx];
+  if(!t||t._isHaku) return;
+  t._hakuOriginal={suit:t.suit,num:t.num};
+  t.suit='honor';t.num='白';t._isHaku=true;
+  target.hakuTileId=t._id;
+  sender.abilityUsed=true;
+  G.hakuSelectMode=false;
+  addLog(`🀆 白！${sender.name}が${target.name}の手牌1枚を白に変換した`,'log-dora');
+  updateTenpai(target);
+  broadcastState();
+  renderAll();
+}
 function remoteHaku(pidx,tidx){
   const p=G.players[pidx];
   if(!p||p.abilityUsed)return;
@@ -5129,6 +5168,13 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; _wallEx
     });
   }
   cpuPlantMines(); // CPU地雷能力: 1巡目に即設置
+  // 人間プレイヤー（自分 or オンラインゲスト）が地雷能力を持つ場合、minePlantModeをONに
+  if(G_ABILITY_MODE){
+    const mineHuman = G.players.find((p,i)=>
+      p.ability==='mine' && !p.abilityUsed && !p.isCpu
+    );
+    if(mineHuman) G.minePlantMode=true;
+  }
   renderAll();
   broadcastState();
   // nextTurn に処理を委譲してツモ待ち・CPU代打を統一管理
@@ -5609,8 +5655,8 @@ function _afkTick(){
   if(wo&&wo.classList.contains('show')){ onWinOk(); return; }
   // 流局は自動進行するためスキップ不要
   if(!G.players) return;
-  // ロン選択肢
-  if(G.phase==='pending_ron'){ humanRon(); return; }
+  // ロン選択肢 → 離席中はスキップ
+  if(G.phase==='pending_ron'){ humanSkipRon(); return; }
   // ポン選択肢 → スキップ
   if(G.phase==='pending_pon'){ humanSkipPon(); return; }
   // draw_wait
@@ -5704,7 +5750,7 @@ function humanAutoDiscard(){
 
   // 離席中: 全てのフェーズで即決（止まらない）
   if(playerAFK){
-    if(G.phase==='pending_ron'){ humanRon(); return; }
+    if(G.phase==='pending_ron'){ humanSkipRon(); return; } // 離席中はロンスキップ
     if(G.phase==='pending_pon'){ humanSkipPon(); return; } // ポンはスキップ
     if(G.phase==='discard'&&G.current===myIdx){
       const hasKita=p.hand.some(t=>t.suit==='honor'&&t.num==='北');
@@ -5794,11 +5840,38 @@ function timerOnMyTurn(){
 function autoPickWall(){
   if(G.phase!=='draw_wait'||G.current!==NET.myIdx)return;
   if(G.lightMode)return; // 光モード中はツモ不可
-  const available=G.deckSlots.map((t,i)=>t?i:-1).filter(i=>i>=0);
+  let available=G.deckSlots.map((t,i)=>t?i:-1).filter(i=>i>=0);
   if(available.length===0)return;
+  // 地雷能力: 自分が設置した地雷スロットを避ける
+  if(G_ABILITY_MODE && PROFILE.ability==='mine' && G.mineSlots && G.mineSlots.length>0){
+    const safe=available.filter(i=>!(G.mineSlots.includes(i)&&G.mineOwners[i]===NET.myIdx));
+    if(safe.length>0) available=safe;
+  }
   const slotIdx=available[Math.floor(Math.random()*available.length)];
   humanPickWall(slotIdx);
 }
+function humanHakuSelectOpponent(pidx, tidx){
+  if(!G.hakuSelectMode) return;
+  const p=G.players[pidx];
+  if(!p||p.riichi) return;
+  const t=p.hand[tidx];
+  if(!t||t._isHaku) return;
+  if(NET.online&&!amIHost()){
+    G.hakuSelectMode=false;
+    netSend({type:'hakuOpponent',pidx,tidx});
+    renderAll();
+    return;
+  }
+  t._hakuOriginal={suit:t.suit,num:t.num};
+  t.suit='honor';t.num='白';t._isHaku=true;
+  p.hakuTileId=t._id;
+  G.players[NET.myIdx].abilityUsed=true;
+  G.hakuSelectMode=false;
+  SFX.haku();
+  addLog(`🀆 白！${p.name}の手牌1枚を白に変換した`,'log-dora');
+  updateTenpai(p);broadcastState();renderAll();
+}
+
 function humanHakuAuto(){
   // 白能力: 最も孤立した（=捨てたい）手牌を即座に白に変換
   const myIdx=NET.myIdx;
@@ -6263,12 +6336,9 @@ function cpuTryAbility(idx){
         if(tile&&tile.suit){
           if(!G.lightRevealedSlots) G.lightRevealedSlots={};
           G.lightRevealedSlots[si]=true;
-          if(!G.lightExtraDora) G.lightExtraDora=[];
-          G.lightExtraDora.push({suit:tile.suit,num:tile.num});
-          G.doraInds.push(tile);
           p.abilityUsed=true;
           G.lightMode=false;
-          addLog(`☀️ ${p.name}が光を使った！ ${emj(tile)}（ドラ追加）`,'log-dora');
+          addLog(`☀️ ${p.name}が光を使った！ ${emj(tile)}`,'log-dora');
           flashLightEffect();SFX.light();
           broadcastState();renderAll();
         }
@@ -8559,6 +8629,11 @@ function renderTable(){
           bt.textContent='🀫';
           bt.dataset.lpidx=pidx;
           bt.dataset.lidx=i;
+        } else if(G.hakuSelectMode&&pidx!==NET.myIdx&&!p.riichi){
+          // 白選択モード: 相手の手牌を選択可能
+          bt.className='tile back steal-target';
+          bt.textContent='🀫';
+          bt.onclick=()=>humanHakuSelectOpponent(pidx,i);
         } else {
           bt.className='tile back';
           bt.textContent='🀫';
@@ -8604,8 +8679,11 @@ function renderTable(){
         return`<div class="tile ${tc(t)}${isLast?' last-discard':''}${isRiichiTile?' riichi-discard':''}" style="opacity:.55;border-color:#553377;"><span style="font-size:.5em;position:absolute;top:1px;left:1px;">🌑</span>${emj(t)}</div>`;
       }
       const isStealTarget = G.stealMode && pidx!==NET.myIdx && !t._yami;
+      const isHakuDiscard = G.hakuSelectMode && !t._isHaku && !t._yami;
       const isDoraDiscard = getDoras().some(d=>teq(d,t));
-      return`<div class="tile ${tc(t)}${isLast?' last-discard':''}${isRiichiTile?' riichi-discard':''}${isStealTarget?' steal-target':''}${isDoraDiscard?' tile-dora-glow':''}" data-suit="${t.suit}" data-num="${t.num}" ${isStealTarget?`onclick="humanSteal(${pidx},${di})"`:''} style="position:relative;">${emj(t)}</div>`;
+      const discardClick = isStealTarget?`onclick="humanSteal(${pidx},${di})"`:isHakuDiscard?`onclick="humanHakuSelectDiscard(${pidx},${di})"`:'' ;
+      const discardBorder = isHakuDiscard?'border-color:#aaaaff;cursor:pointer;box-shadow:0 0 6px #aaaaff66;':'';
+      return`<div class="tile ${tc(t)}${isLast?' last-discard':''}${isRiichiTile?' riichi-discard':''}${isStealTarget?' steal-target':''}${isDoraDiscard?' tile-dora-glow':''}" data-suit="${t.suit}" data-num="${t.num}" ${discardClick} style="position:relative;${discardBorder}">${emj(t)}</div>`;
     }).join('');
     dw.appendChild(dg);
     // ドラ山は doraPileFixed に固定表示（seat-innerには追加しない）
@@ -9697,11 +9775,9 @@ function lightRevealWall(slotIdx){
   if(!G.lightRevealedSlots) G.lightRevealedSlots={};
   G.lightRevealedSlots[slotIdx]=true;
   const tile=G.deckSlots[slotIdx];
-  if(!G.lightExtraDora) G.lightExtraDora=[];
-  G.lightExtraDora.push({suit:tile.suit,num:tile.num});
   if(G.lightUserIdx!=null&&G.players[G.lightUserIdx])G.players[G.lightUserIdx].abilityUsed=true;
   G.lightMode=false;
-  addLog(`☀️ 光！山牌を表にした: ${emj(tile)}（ドラ追加）`,'log-dora');
+  addLog(`☀️ 光！山牌を表にした: ${emj(tile)}`,'log-dora');
   flashLightEffect();
   SFX.light();
   broadcastState();
@@ -9724,9 +9800,7 @@ function lightRevealHand(pidx, handIdx){
   G.lightRevealedHand[tile._id]=tile;
   if(G.lightUserIdx!=null&&G.players[G.lightUserIdx])G.players[G.lightUserIdx].abilityUsed=true;
   G.lightMode=false;
-  if(!G.lightExtraDora) G.lightExtraDora=[];
-  G.lightExtraDora.push({suit:tile.suit,num:tile.num});
-  addLog(`☀️ 光！${p.name}の手牌を表にした: ${emj(tile)}（ドラ追加）`,'log-dora');
+  addLog(`☀️ 光！${p.name}の手牌を表にした: ${emj(tile)}`,'log-dora');
   flashLightEffect();
   SFX.light();
   broadcastState();
@@ -9734,6 +9808,20 @@ function lightRevealHand(pidx, handIdx){
 }
 
 
+function lightRevealDiscard(pidx, di){
+  if(G.lightMode!=='pick') return;
+  if(NET.online&&!amIHost()){
+    netSend({type:'lightRevealDiscard',pidx,di,userIdx:NET.myIdx});
+    G.lightMode=false; renderAll(); return;
+  }
+  if(G.lightUserIdx!=null&&G.players[G.lightUserIdx])G.players[G.lightUserIdx].abilityUsed=true;
+  G.lightMode=false;
+  const p=G.players[pidx];
+  const t=p&&p.discards[di];
+  addLog(`☀️ 光！${p?p.name:''}の捨て牌を選択: ${t?emj(t):''}`, 'log-dora');
+  flashLightEffect(); SFX.light();
+  broadcastState(); renderAll();
+}
 function lightDispelDiscardYami(pidx, discardIdx){
   if(G.lightMode!=='yami') return;
   const p=G.players[pidx];
@@ -9867,7 +9955,11 @@ function showLightPeek(tile, label, isMine=false){
 // CPU地雷能力: startRound直後に1巡目3カ所ランダム設置
 function cpuPlantMines(){
   G.players.forEach((p,idx)=>{
-    if(p.ability!=='mine'||idx===NET.myIdx) return;
+    // 自分（人間）またはオンラインゲスト（人間）はスキップ、CPUのみ自動設置
+    if(p.ability!=='mine') return;
+    if(idx===NET.myIdx) return; // 自分はスキップ
+    if(NET.online && isOnlineGuestIdx(idx)) return; // オンラインゲスト（人間）はスキップ
+    if(NET.online && !p.isCpu) return; // isCpu=falseの人間プレイヤーはスキップ
     // deckSlots(山牌)と嶺上牌を合わせた候補リストからランダムに3カ所
     const wallAvail = G.deckSlots.map((s,i)=>s?{type:'wall',idx:i}:null).filter(Boolean);
     const rinshanAvail = G.rinshan.map((_,i)=>({type:'rinshan',idx:i}));
