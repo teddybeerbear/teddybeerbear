@@ -85,6 +85,8 @@ function scaleTable(){
       '#tableCornerRight { bottom: 55px !important; right: 12px !important; transform: scale(2.5) !important; transform-origin: bottom right !important; }'+
       /* 縦画面: アクションエリア(ロン/ツモ/鳴きボタン等)を5/3倍スケール */
       '.action-area { transform: translateX(-50%) scale(1.667) !important; transform-origin: bottom center !important; bottom: 135px !important; }'+
+      /* 縦画面: リーチ・オープンリーチボタンだけ2倍（action-areaの1.667倍に対し追加で×1.2） */
+      '.btn-riichi, .btn-open-riichi { transform: scale(1.2) !important; transform-origin: center center !important; margin: 0 12px !important; }'+
       /* 縦画面: 手牌上リーチ・離席ラベルを2.5倍スケール・位置調整 */
       '.seat-bottom .hand-outer-riichi-label { font-size: 3.4375rem !important; top: -90px !important; }'+
       '.seat-bottom .hand-outer-afk-label { font-size: 4.6875rem !important; top: -110px !important; left: 570px !important; }'+
@@ -1825,6 +1827,7 @@ body::before{
 
     <!-- ホスト: 開始ボタン -->
     <div id="rlsHostControls" style="display:none;">
+      <button id="rlsAddCpuBtn" class="start-btn" style="width:100%;margin-bottom:8px;background:linear-gradient(135deg,#0a1a2a,#050e18);border-color:#2a5a7a;color:#5aaadd;" onclick="addCpuToRoom()">🤖 CPUを追加</button>
       <button id="rlsStartBtn" class="start-btn" style="display:none;width:100%;margin-bottom:10px;" onclick="hostStartGame()">ゲーム開始 →</button>
     </div>
 
@@ -3259,6 +3262,7 @@ let NET={
   guestIconIds:[],  // ゲストのアイコンID [idx1, idx2, idx3]
   guestEmotes:[],   // ゲストの装備エモート [idx1, idx2, idx3]
   guestReady:[],    // ゲストの準備状態 [idx1:bool, idx2:bool, idx3:bool]
+  guestIsCpu:[],  // ゲストスロットがCPUか [idx1:bool, idx2:bool, idx3:bool]
   guestPeerIds:[],  // ゲストのPeerID [idx1のPeerID, idx2のPeerID, idx3のPeerID]
   _memberDataCache:[], // ゲスト側: ホストから受け取ったメンバーデータのキャッシュ
   // ── P2P分散アーキテクチャ ──
@@ -4235,12 +4239,13 @@ function hideRoomLobby(){
 
 function _buildMemberData(){
   return [
-    {name:PROFILE.name||'あなた', iconId:PROFILE.iconId||'', role:'ホスト', ready:true},
+    {name:PROFILE.name||'あなた', iconId:PROFILE.iconId||'', role:'ホスト', ready:true, isCpu:false},
     ...NET.conns.map((c,i)=>({
-      name:NET.guestNames[i]||`ゲスト${i+1}`,
-      iconId:NET.guestIconIds[i]||'',
-      role:`ゲスト${i+1}`,
-      ready:!!NET.guestReady[i]
+      name: NET.guestIsCpu[i] ? (NET.guestNames[i]||'CPU') : (NET.guestNames[i]||`ゲスト${i+1}`),
+      iconId: NET.guestIconIds[i]||'',
+      role: NET.guestIsCpu[i] ? 'CPU' : `ゲスト${i+1}`,
+      ready: NET.guestIsCpu[i] ? true : !!NET.guestReady[i],
+      isCpu: !!NET.guestIsCpu[i]
     }))
   ];
 }
@@ -4277,14 +4282,21 @@ function updateRoomLobbyUI(){
     document.getElementById('rlsModeTobiOff')?.classList.toggle('active', !NET.roomTobiMode);
     const startBtn = document.getElementById('rlsStartBtn');
     if(startBtn){
-      const hasGuests = NET.conns.length>=1;
-      const allReady = NET.conns.length>0 && NET.conns.every((_,i)=>!!NET.guestReady[i]);
-      startBtn.style.display = hasGuests?'':'none';
+      const totalSlots = NET.conns.length; // CPU含む全ゲストスロット数
+      const realIdxs = NET.conns.map((_,i)=>i).filter(i=>!NET.guestIsCpu[i]);
+      const hasSlots = totalSlots >= 1;
+      const allReady = hasSlots && realIdxs.every(i=>!!NET.guestReady[i]);
+      startBtn.style.display = hasSlots?'':'none';
       startBtn.disabled = !allReady;
       startBtn.style.opacity = allReady?'1':'0.45';
       startBtn.title = allReady?'':'全員が準備OKになると開始できます';
-      startBtn.textContent = allReady?'ゲーム開始 →':`ゲーム開始 (${NET.guestReady.filter(Boolean).length}/${NET.conns.length}人 準備OK)`;
+      const readyCount = realIdxs.filter(i=>!!NET.guestReady[i]).length;
+      const realCount = realIdxs.length;
+      startBtn.textContent = allReady?'ゲーム開始 →':`ゲーム開始 (${readyCount}/${realCount}人 準備OK)`;
     }
+    // CPU追加ボタンの表示/非表示（最大3人まで＝ホスト含む4人まで）
+    const addCpuBtn = document.getElementById('rlsAddCpuBtn');
+    if(addCpuBtn) addCpuBtn.style.display = NET.conns.length < 3 ? '' : 'none';
     // Build member cards
     const members = _buildMemberData().map((m,i)=>({...m, isMe:i===0, connIdx:i-1}));
     _renderRlsMembers(members);
@@ -4318,8 +4330,8 @@ function _renderRlsMembers(members){
         <div class="rls-member-role">${m.role}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center;">
-        ${m.role!=='ホスト'?`<span style="font-size:.6rem;padding:2px 7px;border-radius:4px;font-weight:700;${m.ready?'background:#0d2a10;color:#5adb8a;border:1px solid #2a6a3a;':'background:#1a0a0a;color:#aa5555;border:1px solid #4a2a2a;'}">${m.ready?'✓ 準備OK':'待機中…'}</span>`:''}
-        ${NET.isHost && m.connIdx>=0 ? `<button class="rls-kick-btn" title="このプレイヤーをキック" onclick="kickPlayer(${m.connIdx})">キック</button>` : ''}
+        ${m.role!=='ホスト'?`<span style="font-size:.6rem;padding:2px 7px;border-radius:4px;font-weight:700;${m.isCpu?'background:#0a1a2a;color:#5aaadd;border:1px solid #2a4a6a;':m.ready?'background:#0d2a10;color:#5adb8a;border:1px solid #2a6a3a;':'background:#1a0a0a;color:#aa5555;border:1px solid #4a2a2a;'}">${m.isCpu?'🤖 CPU':m.ready?'✓ 準備OK':'待機中…'}</span>`:''}
+        ${NET.isHost && m.connIdx>=0 ? `<button class="rls-kick-btn" title="${m.isCpu?'CPUを削除':'このプレイヤーをキック'}" onclick="kickPlayer(${m.connIdx})">${m.isCpu?'削除':'キック'}</button>` : ''}
       </div>
     </div>
   `).join('');
@@ -4328,15 +4340,51 @@ function _renderRlsMembers(members){
 function kickPlayer(connIdx){
   if(!NET.isHost) return;
   const conn = NET.conns[connIdx];
-  if(!conn) return;
-  if(conn.open) conn.send({type:'kicked'});
-  setTimeout(()=>{ try{conn.close();}catch(e){} }, 120);
+  // CPUスロット(conn=null)は接続なしなのでclose不要
+  if(conn){
+    if(conn.open) conn.send({type:'kicked'});
+    setTimeout(()=>{ try{conn.close();}catch(e){} }, 120);
+  }
   NET.conns.splice(connIdx, 1);
   NET.guestNames.splice(connIdx, 1);
   NET.guestAbilities.splice(connIdx, 1);
   NET.guestIconIds.splice(connIdx, 1);
   NET.guestEmotes.splice(connIdx, 1);
   NET.guestReady.splice(connIdx, 1);
+  NET.guestIsCpu.splice(connIdx, 1);
+  _broadcastMemberUpdate();
+  updateRoomLobbyUI();
+}
+
+// ホスト: CPUをルームに追加
+function addCpuToRoom(){
+  if(!NET.isHost) return;
+  if(NET.conns.length >= 3) return; // 最大3スロット（ホスト含む4人）
+  // 解放済み能力からランダム選択
+  const cpuAbilities=['mine','light','yami','haku','sanctuary','pinzu','steal','tenbi'];
+  const unlockedAbs = cpuAbilities.filter(a => isCpuUnlocked(a));
+  const pool = unlockedAbs.length > 0 ? unlockedAbs : ['light'];
+  const ability = pool[Math.floor(Math.random() * pool.length)];
+  const CPU_PROFILE = {
+    'mine':'地雷師ナミ','light':'光の探偵ヒカル','yami':'闇使いカゲ',
+    'haku':'白術士ハク','sanctuary':'聖域守りセイ','pinzu':'筒子教ピン',
+    'steal':'盗賊スティール','tenbi':'手にビ','':{name:'CPU'}
+  };
+  const CPU_ICON = {
+    'mine':'C01','light':'C02','yami':'C03','haku':'C04',
+    'sanctuary':'C05','pinzu':'C06','steal':'C07','tenbi':'L01','':{id:'C08'}
+  };
+  const cpuName = CPU_PROFILE[ability] || 'CPU';
+  const cpuIcon = CPU_ICON[ability] || 'C08';
+  const slot = NET.conns.length;
+  // connsにnullを入れてスロットを確保（実接続なし）
+  NET.conns.push(null);
+  NET.guestNames[slot]     = cpuName;
+  NET.guestAbilities[slot] = ability;
+  NET.guestIconIds[slot]   = cpuIcon;
+  NET.guestEmotes[slot]    = '';
+  NET.guestReady[slot]     = true;  // CPUは常に準備OK
+  NET.guestIsCpu[slot]     = true;
   _broadcastMemberUpdate();
   updateRoomLobbyUI();
 }
@@ -4376,7 +4424,7 @@ function leaveRoomLobby(){
   if(NET.peer){ try{NET.peer.destroy();}catch(e){} NET.peer=null; }
   hideRoomLobby();
   NET.conns=[]; NET.conn=null; NET.roomCode=null; NET.isHost=false;
-  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET.guestReady=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
+  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET.guestReady=[]; NET.guestIsCpu=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
   setOnlineStatus('');
   document.getElementById('lobby').style.display='flex';
   document.getElementById('roomCodeBox').style.display='none';
@@ -4391,18 +4439,28 @@ function copyRlsCode(){
   });
 }
 function hostStartGame(){
-  if(NET.conns.length===0)return;
-  // 全ゲストが準備OKでないと開始できない
-  if(!NET.conns.every((_,i)=>!!NET.guestReady[i])) return;
+  // CPUスロットを除いた実接続数 + CPU数 >= 1 で開始可能
+  const realConns = NET.conns.filter((_,i)=>!NET.guestIsCpu[i]);
+  const cpuCount  = NET.guestIsCpu.filter(Boolean).length;
+  if(realConns.length + cpuCount === 0) return;
+  // 実ゲストが全員準備OKかチェック（CPUスロットはスキップ）
+  const allReady = realConns.every((_,ri)=>{
+    const i = NET.conns.indexOf(realConns[ri]);
+    return !!NET.guestReady[i];
+  });
+  if(!allReady) return;
+  const totalPlayers = 1 + NET.conns.length + cpuCount; // ホスト + 実ゲスト + CPU
   const membersInfo = [
-    {name: PROFILE.name||'あなた', iconId: PROFILE.iconId||'', ability: PROFILE.ability||''},
+    {name: PROFILE.name||'あなた', iconId: PROFILE.iconId||'', ability: PROFILE.ability||'', isCpu:false},
     ...NET.conns.map((c,i)=>({
       name: NET.guestNames[i]||`ゲスト${i+1}`,
       iconId: NET.guestIconIds[i]||'',
-      ability: NET.guestAbilities[i]||''
-    }))
+      ability: NET.guestAbilities[i]||'',
+      isCpu: !!NET.guestIsCpu[i]
+    })),
+    // 末尾にCPUスロット（connsには含まれない純粋CPU）は既にconns側に入っているので不要
   ];
-  NET.conns.forEach((c,i)=>{if(c.open)c.send({type:'gameStart',totalPlayers:NET.conns.length+1,abilityMode:NET.roomAbilityMode,timeMode:NET.roomTimeMode,tobiMode:NET.roomTobiMode,membersInfo});});
+  realConns.forEach(c=>{if(c&&c.open)c.send({type:'gameStart',totalPlayers,abilityMode:NET.roomAbilityMode,timeMode:NET.roomTimeMode,tobiMode:NET.roomTobiMode,membersInfo});});
   // ゲーム開始後はサーバーから部屋を削除する（新規参加を防ぐ）
   if(NET.roomCode) fetch('/room/'+NET.roomCode, {method:'DELETE'}).catch(()=>{});
   if(NET.roomTimeMode) G_TIME_MODE=true;
@@ -5305,7 +5363,9 @@ function setOnlineStatus(msg){ const el=document.getElementById('onlineStatus');
 // ── Start online game (host calls this) ───────────────────────
 function startOnlineGame(){
   bgmToGame();
-  numPlayers=NET.conns.length+1;
+  // CPUスロットはNET.connsに含まれているのでそのままカウント
+  // CPUスロット(null)を除いた実接続数でonline管理、numPlayersは全スロット込み
+  numPlayers = NET.conns.length + 1;
   NET.online=true;
   NET._lastActionId=0;
   if(!NET.isRankMatch){
@@ -5597,15 +5657,27 @@ function makePlayer(id,dealer){
     pAbility = '';
   } else if(id===NET.myIdx){
     pAbility = PROFILE.ability||'';
+  } else if(NET.isHost && NET.guestIsCpu && NET.guestIsCpu[id-1]){
+    // CPUスロット: 解放済み能力から取得済みの値を使う
+    pAbility = NET.guestAbilities[id-1] || 'light';
   } else if(NET.isHost && NET.guestAbilities[id-1]!==undefined){
     pAbility = NET.guestAbilities[id-1];
   } else if(!NET.online){
     // ソロCPU: cpuSelectedAbilities から取得
     const cpuSlot = id - 1; // id=1→slot0, id=2→slot1, id=3→slot2
     const sel = (typeof cpuSelectedAbilities!=='undefined' && cpuSelectedAbilities[cpuSlot]) ?? 'random';
-    pAbility = sel==='random' ? cpuAbilities[Math.floor(Math.random()*cpuAbilities.length)] : sel;
+    if(sel==='random'){
+      // ランダムは解放済みの能力のみから選ぶ
+      const unlockedCpuAbs = cpuAbilities.filter(a => isCpuUnlocked(a));
+      const pool = unlockedCpuAbs.length > 0 ? unlockedCpuAbs : ['light'];
+      pAbility = pool[Math.floor(Math.random()*pool.length)];
+    } else {
+      pAbility = sel;
+    }
   } else {
-    pAbility = cpuAbilities[Math.floor(Math.random()*cpuAbilities.length)];
+    const unlockedCpuAbs = cpuAbilities.filter(a => isCpuUnlocked(a));
+    const pool = unlockedCpuAbs.length > 0 ? unlockedCpuAbs : ['light'];
+    pAbility = pool[Math.floor(Math.random()*pool.length)];
   }
 
   // 能力別CPU名とアイコン
@@ -5641,6 +5713,8 @@ function makePlayer(id,dealer){
 }
 
 function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; _wallExpandInited=false; timerStop(); _timerAutoActFired=false; _timerDebt=0;
+  // 自動切りは局をまたいでリセット
+  autoDiscardEnabled=false; _updateAutoDiscardBtn(); updateAutoMenuLabel();
   // ペンモードOFFにリセット（局をまたいでペン状態が残らないよう）
   if(_penModeOn){ _penModeOn=false; window._activePenOC=null; const pb=document.getElementById('penToggleBtn');if(pb)pb.classList.remove('pen-active'); const pt=document.getElementById('penToolbarFloat');if(pt)pt.style.display='none'; const wc=document.getElementById('wallCanvas');if(wc){wc.classList.remove('pen-on');wc.classList.remove('pick-on');} const wo=document.getElementById('wallExpandOverlay');if(wo)wo.classList.remove('show'); }
   // 前局の白変換を元に戻す（players再生成前に処理）
@@ -8105,7 +8179,7 @@ async function backToRoom(){
     NET.online=true;
     netBroadcastAll({type:'backToRoom'});
     // UI状態をリセットしてルームロビーを再表示
-    NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET.guestReady=[]; NET._memberDataCache=[];
+    NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET.guestReady=[]; NET.guestIsCpu=[]; NET._memberDataCache=[];
     // 全ゲスト接続を閉じて再接続を促す（部屋は維持、ゲストは自動で再接続）
     const _oldConns = [...NET.conns];
     NET.conns = [];
@@ -8201,7 +8275,7 @@ function backToLobby(){
   const wasRankMatch = NET.isRankMatch;
   if(NET.peer){try{NET.peer.destroy();}catch(e){} NET.peer=null;NET.conn=null;NET.conns=[];NET.online=false;}
   NET.roomCode=null; NET.isHost=false; NET.isRankMatch=false; NET.roomTimeMode=false; NET.roomTobiMode=true;
-  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET.guestReady=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
+  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET.guestReady=[]; NET.guestIsCpu=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
   RANK.matchId=null; RANK.connectedGuests=0;
   setOnlineStatus('');
   document.getElementById('roomCodeBox').style.display='none';
