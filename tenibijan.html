@@ -7409,7 +7409,9 @@ function humanKita(){
   }
   const rep=drawRinshanTile(myIdx);if(!rep){handleExhausted();return;}
   // 北抜きはカンドラを開かない
-  updateTenpai(p);selIdx=-1;
+  updateTenpai(p);
+  // 引いた嶺上牌を選択状態にする（手牌の末尾に追加されているので最後のインデックス）
+  selIdx = p.hand.length - 1;
   if(canWin(p.hand)){addLog(`${emj(rep)} 嶺上開花！`,'log-tsumo');p.isRinshanKaihou=true;renderAll();broadcastState();return;}
   if(p.riichi){
     const repIsKita=rep.suit==='honor'&&rep.num==='北';
