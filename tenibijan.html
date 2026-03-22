@@ -4552,14 +4552,6 @@ function onNetData(msg, senderIdx){
         }
         updateRoomLobbyUI();
       }
-    } else if(msg.type==='guestReady'){
-      // ホスト: ゲストの準備状態を更新
-      // senderIdxは1始まりなのでguestReady配列は0始まり(senderIdx-1)
-      if(typeof msg.ready==='boolean'){
-        NET.guestReady[senderIdx-1]=msg.ready;
-        _broadcastMemberUpdate();
-        updateRoomLobbyUI();
-      }
     } else if(msg.type==='hostDisconnect'){
       // ホストが明示的に切断を通知 → 即座にホスト昇格処理
       // ★修正: 切断したのは「現在のホスト」なので、そのプレイヤーの idx を正確に特定する
@@ -4656,6 +4648,17 @@ function updateGuestMemberList(count){
 
 // Host: receive action from guest, execute, broadcast state
 function handleGuestAction(msg, senderIdx){
+  // guestReady: ゲームフェーズに関わらず処理
+  if(msg.type==='guestReady'){
+    if(typeof msg.ready==='boolean'){
+      NET.guestReady[senderIdx-1]=msg.ready;
+      _broadcastMemberUpdate();
+      updateRoomLobbyUI();
+    }
+    return;
+  }
+  // requestMyName: backToRoom後の再収集
+  if(msg.type==='requestMyName') return; // ゲスト側で処理済み
   // winReady と nextRound は win/end フェーズでも処理する
   if(msg.type==='winReady'){
     // ゲストがOKを押した → readySetに追加して全員待ち
