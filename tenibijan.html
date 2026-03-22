@@ -7465,38 +7465,57 @@ async function backToRoom(){
     NET.online=true;
     netBroadcastAll({type:'backToRoom'});
     // UI状態をリセットしてルームロビーを再表示
-    NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET.guestReady=[]; NET._memberDataCache=[]; NET.guestReady=new Array(NET.conns.length).fill(false);
-    // 接続中ゲストのmyName情報を再収集
-    NET.conns.forEach(conn=>{
-      if(conn&&conn.open) conn.send({type:'requestMyName'});
+    NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET.guestReady=[]; NET._memberDataCache=[];
+    // 全ゲスト接続を閉じて再接続を促す（部屋は維持、ゲストは自動で再接続）
+    const _oldConns = [...NET.conns];
+    NET.conns = [];
+    _oldConns.forEach(conn=>{
+      try{ if(conn&&conn.open) conn.send({type:'backToRoom'}); }catch(e){}
+      setTimeout(()=>{ try{ if(conn&&conn.open) conn.close(); }catch(e){} }, 200);
     });
     NET._lastActionId=0;
     setOnlineStatus('');
     updateRoomMemberList();
     showRoomLobby();
   } else {
-    // ゲスト: 自分もルームロビーに移動（ホストから backToRoom が来るか、自分で戻るかの両方に対応）
-    NET.online=true;
+    // ゲスト: 現在の接続を閉じてから同じルームに再接続する（ハンドラをリフレッシュ）
+    const _roomCode = NET.roomCode;
+    // 現在の接続を閉じる
+    if(NET.conn){ try{NET.conn.close();}catch(e){} NET.conn=null; }
+    if(NET.peer){ try{NET.peer.destroy();}catch(e){} NET.peer=null; }
+    NET.online=false;
     NET._lastActionId=0;
-    setOnlineStatus('');
+    NET._memberDataCache=[];
     // 準備ボタンをリセット
     const _rb=document.getElementById('rlsReadyBtn');
     if(_rb){_rb.dataset.ready='0';_rb.textContent='準備OK ✓';_rb.style.background='';_rb.style.borderColor='';_rb.style.color='';}
     const _rs=document.getElementById('rlsReadyStatus');
-    if(_rs) _rs.textContent='ホストの開始を待っています…';
-    // ゲストのプレイヤーインデックスを保持したままロビーへ
+    if(_rs) _rs.textContent='再接続中…';
+    // 少し待ってから再接続（ホスト側が接続待ち状態になるのを待つ）
+    setTimeout(async ()=>{
+      if(!_roomCode) return;
+      try{
+        const res = await fetch('/room/'+_roomCode);
+        if(!res.ok) throw new Error('room not found');
+        const data = await res.json();
+        const hostPeerId = data.peerId;
+        setOnlineStatus('再接続中…');
+        NET.peer = new Peer('mj-guest-'+Date.now(), {debug:0});
+        NET.peer.on('open', ()=>{
+          const conn = NET.peer.connect(hostPeerId, {reliable:true});
+          NET.conn = conn;
+          NET.roomCode = _roomCode;
+          setupConn(conn, null);
+          NET.peer.on('error', e=>{setOnlineStatus('再接続エラー: '+e.message);});
+        });
+        NET.peer.on('error', e=>{setOnlineStatus('再接続エラー: '+e.message);});
+      }catch(e){
+        setOnlineStatus('再接続に失敗しました');
+        hideRoomLobby();
+        document.getElementById('lobby').style.display='flex';
+      }
+    }, 400);
     showRoomLobby();
-    // ルームメンバーリスト更新をホストにリクエスト
-    if(NET.conn&&NET.conn.open){
-      NET.conn.send({type:'myName',
-        name:PROFILE.name||'プレイヤー',
-        ability:PROFILE.ability||'',
-        iconId:PROFILE.iconId||'',
-        emote:PROFILE.emote||'',
-        emotes:PROFILE.emotes||['','','',''],
-        peerId:NET.peer?.id||''
-      });
-    }
   }
 }
 
