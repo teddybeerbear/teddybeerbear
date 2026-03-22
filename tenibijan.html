@@ -165,7 +165,7 @@ body::before{
 }
 .lobby-banner-track{
   display:flex;
-  transition:transform .45s cubic-bezier(.4,0,.2,1);
+  transition:transform .7s cubic-bezier(.4,0,.2,1);
   will-change:transform;
 }
 .lobby-banner-slide{
@@ -1617,7 +1617,7 @@ body::before{
 
     <!-- Twitch サブスク特典 -->
     <div class="shop-section-title" style="margin-top:18px;">💜 Twitch サブスク特典</div>
-    <div style="font-size:.56rem;color:#4a6a5a;margin-bottom:10px;">サブスクライバーは毎月🪙1000枚＋初回エモートセット2をもらえます。</div>
+    <div style="font-size:.56rem;color:#4a6a5a;margin-bottom:10px;">サブスクライバーは毎月🪙1000枚＋100 TBBコイン、初回🔊ボイス付きエモートセット2をもらえます。</div>
     <div id="twitchSubPanel" style="background:#0d0a18;border:1.5px solid #4a2a7a;border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;">
       <div id="twitchLinkStatus" style="font-size:.65rem;color:#9a7acc;"></div>
       <div id="twitchSubAction"></div>
@@ -1898,7 +1898,7 @@ body::before{
       </div>
 
       <!-- ★ バナー2: コラボガチャ（テキスト型） -->
-      <div class="lobby-banner-slide">
+      <div class="lobby-banner-slide" onclick="openGacha();switchGachaTab('collab')" style="cursor:pointer;">
         <div class="lbs-inner" style="background:linear-gradient(135deg,#0d0a20,#070518);border:1px solid #3a2a6a;">
           <span class="lbs-tag" style="background:#1a0a30;color:#aa80ff;border:1px solid #5a3aaa;">🌟 コラボガチャ</span>
           <div class="lbs-title" style="color:#d0b0ff;">コラボガチャ 近日公開予定</div>
@@ -1907,18 +1907,18 @@ body::before{
       </div>
 
       <!-- ★ バナー3: Twitch特典（テキスト型） -->
-      <div class="lobby-banner-slide">
+      <div class="lobby-banner-slide" onclick="openShop()" style="cursor:pointer;">
         <div class="lbs-inner" style="background:linear-gradient(135deg,#12082a,#0a0418);border:1px solid #5a3a9a;">
           <span class="lbs-tag" style="background:#1e0a40;color:#c9a0ff;border:1px solid #7a4acc;">💜 Twitch特典</span>
-          <div class="lbs-title" style="color:#e0c0ff;">サブスクで毎月 🪙1,000コイン</div>
-          <div class="lbs-desc" style="color:#9a70cc;">ショップからTwitchを連携すると毎月コインとTBBコインが受け取れます！</div>
+          <div class="lbs-title" style="color:#e0c0ff;">サブスクで毎月 🪙1,000コイン ＋ 100 TBB</div>
+          <div class="lbs-desc" style="color:#9a70cc;">ショップからTwitchを連携すると毎月コイン＆TBBコインを受け取れます！さらに🔊ボイス付きエモート（サブスク限定）もゲット。</div>
         </div>
       </div>
 
-      <!-- ★ バナー4: BOMBじゃん（テキスト型） -->
+      <!-- ★ バナー4: 手にボム！（テキスト型） -->
       <div class="lobby-banner-slide">
         <div class="lbs-inner" style="background:linear-gradient(135deg,#1a0505,#0d0202);border:1px solid #5a1a1a;">
-          <span class="lbs-tag" style="background:#2a0808;color:#ff8866;border:1px solid #aa3322;">💣 BOMBじゃん</span>
+          <span class="lbs-tag" style="background:#2a0808;color:#ff8866;border:1px solid #aa3322;">💣 手にボム！</span>
           <div class="lbs-title" style="color:#ffaa88;">爆弾を避けて山牌を引け！</div>
           <div class="lbs-desc" style="color:#aa6655;">ステージ5の倍数クリアでコイン獲得。どこまで進めるか挑戦しよう。</div>
         </div>
@@ -1936,7 +1936,7 @@ body::before{
       <button id="modeBtn-solo" class="pcnt-btn active" onclick="startTitleBgmOnce();showSolo()" style="padding:10px 4px;text-align:center;">CPU対戦</button>
       <button id="modeBtn-online" class="pcnt-btn" onclick="showOnline()" style="padding:10px 4px;text-align:center;">ルームマッチ</button>
       <button id="modeBtn-rank" class="pcnt-btn" onclick="showRank()" style="padding:10px 4px;text-align:center;">ランクマッチ</button>
-      <button id="modeBtn-bomb" class="pcnt-btn" onclick="startTitleBgmOnce();showBomb()" style="padding:10px 4px;text-align:center;border-color:#cc4422;color:#ff8866;background:linear-gradient(135deg,#200808,#100404);font-weight:700;letter-spacing:.08em;">💣 手にビBOMBじゃん</button>
+      <button id="modeBtn-bomb" class="pcnt-btn" onclick="startTitleBgmOnce();showBomb()" style="padding:10px 4px;text-align:center;border-color:#cc4422;color:#ff8866;background:linear-gradient(135deg,#200808,#100404);font-weight:700;letter-spacing:.08em;">💣 手にボム！</button>
       <button class="pcnt-btn" disabled style="padding:10px 4px;text-align:center;border-color:#1a2a2a;color:#2a3a3a;background:#030a10;cursor:default;"></button>
       <button class="pcnt-btn" disabled style="padding:10px 4px;text-align:center;border-color:#1a2a2a;color:#2a3a3a;background:#030a10;cursor:default;"></button>
       <button class="pcnt-btn" onclick="startTitleBgmOnce();openGacha()" style="padding:10px 4px;text-align:center;border-color:#aa7700;color:#ffd700;background:linear-gradient(135deg,#1a0e00,#0a0500);">✨ ガチャ</button>
@@ -1982,9 +1982,9 @@ body::before{
     <button class="start-btn" onclick="initGame()">ゲーム開始 →</button>
   </div>
 
-  <!-- BOMBじゃん card -->
+  <!-- 手にボム！ card -->
   <div class="lobby-card" id="lobbyBomb" style="display:none;">
-    <h3 style="color:#ff8866;border-bottom-color:#3a1a0a;">💣 手にビBOMBじゃん</h3>
+    <h3 style="color:#ff8866;border-bottom-color:#3a1a0a;">💣 手にボム！</h3>
     <div class="rule-box" style="margin-bottom:14px;border:1px solid #3a1a0a;">
       <strong style="color:#ff8866;">ルール</strong><br>
       山牌に爆弾が隠れている。爆弾の隣を引くと数字のヒントが出る。<br>
@@ -2004,7 +2004,7 @@ body::before{
         <div><div style="font-size:.55rem;color:#7a5a4a;">最高持ち点</div><div id="bombBestScoreEl" style="font-size:1.0rem;font-weight:700;color:var(--gold2);"></div></div>
       </div>
     </div>
-    <button class="start-btn" style="background:linear-gradient(135deg,#4a1008,#2a0804);border-color:#cc4422;color:#ff8866;" onclick="startBombGame()">手にビBOMBじゃん 開始 →</button>
+    <button class="start-btn" style="background:linear-gradient(135deg,#4a1008,#2a0804);border-color:#cc4422;color:#ff8866;" onclick="startBombGame()">手にボム！ 開始 →</button>
   </div>
 
   <!-- Online card -->
@@ -2241,6 +2241,11 @@ body::before{
           padding:6px;gap:6px;z-index:60;flex-wrap:wrap;width:208px;">
         </div>
       </div>
+      <button id="bombAutoPickBtn" onclick="toggleBombAutoPick()" style="
+        background:#030a10;border:1px solid #cc4422;border-radius:7px;
+        color:#ff8866;font-size:.6rem;padding:5px 9px;cursor:pointer;
+        transition:all .2s;letter-spacing:.04em;white-space:nowrap;
+      ">💣 安全自動</button>
       <div style="display:flex;gap:4px;align-items:center;">
         <button id="autoDrawBtn" onclick="toggleAutoDraw()" style="
           background:#030a10;border:1px solid #1a4a2a;border-radius:7px;
@@ -2294,6 +2299,7 @@ body::before{
       </div>
       <!-- ボタン行: ペン + 能力 -->
       <div id="cornerBtns" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+        <button id="bombFlagBtn" onclick="toggleBombFlagMode()" style="display:none;background:#030a10;border:1px solid #cc4422;border-radius:7px;color:#ff8866;font-size:.7rem;padding:5px 8px;cursor:pointer;transition:all .2s;">🚩</button>
         <button id="penToggleBtn" onclick="togglePenMode()">🖊️ ペン</button>
         <!-- 能力ボタンはrenderCornerAbilityBtns()で動的挿入 -->
       </div>
@@ -6157,6 +6163,7 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; _wallEx
     G._soloBombs=null;
   }
   G._soloRevealed=new Set(); // 連鎖展開済みスロット
+  G._soloFlags=new Set();   // 🚩旗を立てたスロット
   G.yamiSelectMode=false;
   G.stealMode=false;
   G.hakuSelectPlayers=[];
@@ -6432,6 +6439,8 @@ function handleKakan(pidx, handIdx){
   }
   p.hand=sortTiles(p.hand);updateTenpai(p);
   G.phase='discard';
+  // 嶺上牌を選択状態にする（自分の番のみ）
+  if(pidx===NET.myIdx){ const rIdx=p.hand.findIndex(t=>t===rep); selIdx=rIdx>=0?rIdx:p.hand.length-1; }
   if(canWin(p.hand)){
     p.isRinshanKaihou=true;
     if(pidx===NET.myIdx||(NET.online&&amIHost()&&pidx!==NET.myIdx)){
@@ -6496,9 +6505,9 @@ function handleAnkan(pidx, tileKey){
   revealKanDora();
   p.hand=sortTiles(p.hand);updateTenpai(p);
   G.phase='discard';
+  // 嶺上牌を選択状態にする（自分の番のみ）
+  if(pidx===NET.myIdx){ const rIdx=p.hand.findIndex(t=>t===rep); selIdx=rIdx>=0?rIdx:p.hand.length-1; }
   if(canWin(p.hand)){
-    p.isRinshanKaihou=true;
-    setTimeout(()=>handleWin(pidx,rep,true,-1),400);return;
   }
   if(p.riichi){
     // リーチ中はツモ切り
@@ -6572,6 +6581,7 @@ function nextTurn(pidx){
   const myIdx=NET.myIdx;
   if(G.deck.length===0){handleExhausted();return;}
   G.phase='draw_wait'; // wait for humanPickWall()
+  setTimeout(()=>{ _updateBombAutoPickBtn(); _updateBombFlagBtn(); if(_bombAutoPickOn) _bombTryAutoPick(); }, 80); // 💣 BOMBモードボタン更新
   timerOnMyTurn(); // 制限時間モード: タイマー起動（autoDrawON時も）
   if(autoDrawEnabled){
     renderAll();broadcastState();
@@ -7080,6 +7090,102 @@ function toggleAutoDraw(){
     setTimeout(autoPickWall, 120);
   }
 }
+// ============================================================
+// 💣 BOMBモード: 安全確定スロット自動引き
+// ============================================================
+// ============================================================
+// 🚩 BOMBモード: 旗立てモード
+// ============================================================
+let _bombFlagMode = false;
+
+function toggleBombFlagMode(){
+  if(numPlayers!==1||!G||!G._soloStage) return;
+  _bombFlagMode = !_bombFlagMode;
+  const btn = document.getElementById('bombFlagBtn');
+  if(btn){
+    btn.style.background    = _bombFlagMode ? 'linear-gradient(135deg,#2a0808,#1a0404)' : '#030a10';
+    btn.style.borderColor   = _bombFlagMode ? '#ff4422' : '#cc4422';
+    btn.style.boxShadow     = _bombFlagMode ? '0 0 8px #ff442266' : '';
+    btn.textContent         = _bombFlagMode ? '🚩 旗モードON' : '🚩';
+  }
+  // 旗モード中はcanvasのカーソルを変更
+  const wc = document.getElementById('wallCanvas');
+  if(wc) wc.style.cursor = _bombFlagMode ? 'cell' : '';
+  renderWall();
+}
+
+function _updateBombFlagBtn(){
+  const btn = document.getElementById('bombFlagBtn');
+  if(!btn) return;
+  const show = numPlayers===1 && G && G._soloStage;
+  btn.style.display = show ? '' : 'none';
+  if(!show && _bombFlagMode){
+    _bombFlagMode = false;
+    const wc = document.getElementById('wallCanvas');
+    if(wc) wc.style.cursor = '';
+  }
+}
+
+function _bombFlagToggleSlot(si){
+  if(!G||!G._soloFlags||!G.deckSlots) return;
+  if(G.deckSlots[si]===null) return; // 引き済みは旗立て不可
+  if(G._soloFlags.has(si)) G._soloFlags.delete(si);
+  else G._soloFlags.add(si);
+  renderWall();
+}
+
+function _bombGetSafeSlots(){
+  // _soloRevealedに入っていて、deckSlots[i]がnull以外のスロット＝安全確定の未引き牌
+  if(!G||!G._soloRevealed||!G.deckSlots) return [];
+  return Array.from(G._soloRevealed).filter(i =>
+    G.deckSlots[i] !== null && !G.mineSlots.includes(i) && !(G._soloFlags&&G._soloFlags.has(i))
+  );
+}
+
+let _bombAutoPickOn = false; // トグル状態
+
+function _updateBombAutoPickBtn(){
+  const btn = document.getElementById('bombAutoPickBtn');
+  if(!btn) return;
+  const isBomb = numPlayers===1 && G && G._soloStage;
+  const safe = isBomb ? _bombGetSafeSlots() : [];
+  // ON状態のスタイル
+  if(_bombAutoPickOn){
+    btn.style.background   = 'linear-gradient(135deg,#082a3a,#041828)';
+    btn.style.borderColor  = '#22aaff';
+    btn.style.boxShadow    = '0 0 8px #22aaff66';
+    btn.style.color        = '#66ccff';
+    btn.textContent        = `💣 安全自動 ON(${safe.length})`;
+  } else {
+    btn.style.background   = 'linear-gradient(135deg,#1a0808,#0d0404)';
+    btn.style.borderColor  = '#cc4422';
+    btn.style.boxShadow    = '';
+    btn.style.color        = '#ff8866';
+    btn.textContent        = `💣 安全自動(${safe.length})`;
+  }
+  btn.style.display = isBomb ? '' : 'none';
+  btn.style.opacity = '1';
+  btn.style.cursor  = 'pointer';
+}
+
+function toggleBombAutoPick(){
+  if(numPlayers!==1||!G||!G._soloStage) return;
+  _bombAutoPickOn = !_bombAutoPickOn;
+  _updateBombAutoPickBtn();
+  // ONにした瞬間かつdraw_wait中なら即実行
+  if(_bombAutoPickOn && G.phase==='draw_wait' && G.current===NET.myIdx){
+    _bombTryAutoPick();
+  }
+}
+
+function _bombTryAutoPick(){
+  if(!_bombAutoPickOn) return;
+  if(!G || G.phase!=='draw_wait' || G.current!==NET.myIdx) return;
+  const safe = _bombGetSafeSlots();
+  if(safe.length===0) return;
+  humanPickWall(safe[0]);
+}
+
 function toggleAutoDiscard(){
   autoDiscardEnabled=!autoDiscardEnabled;
   _updateAutoDiscardBtn();
@@ -7092,6 +7198,8 @@ function toggleAutoDiscard(){
 function humanPickWall(slotIdx){
   if(G.phase!=='draw_wait'||G.current!==NET.myIdx)return;
   if(G.lightMode)return; // 光モード中はツモ不可
+  // 🚩 旗が立っているスロットは引けない
+  if(G._soloFlags && G._soloFlags.has(slotIdx)) return;
   SFX.draw();
   if(G.deckSlots[slotIdx]===null)return;
   if(NET.online&&!amIHost()){
@@ -7118,6 +7226,8 @@ function humanPickWall(slotIdx){
     updateTenpai(p);
     SFX.mineExplode();
     if(numPlayers===1){
+      _bombAutoPickOn = false; // 安全自動引きをOFFにしてタイマー干渉を防ぐ
+      _updateBombAutoPickBtn();
       addLog(`💥 爆弾を踏んだ！ゲームオーバー（ステージ${G._soloStage||1}まで到達）`,'log-win');
       renderAll();broadcastState();
       setTimeout(()=>_soloShowFinalResult(false), 1200);
@@ -7173,6 +7283,7 @@ function humanPickWall(slotIdx){
 
   G.phase='discard';
   selIdx=p.hand.length-1; // 引いた牌を最初から選択状態に
+  _updateBombAutoPickBtn(); _updateBombFlagBtn();
   // タイマーはdraw_wait開始時に起動済み → ここでは継続（restartしない）
   // 天和: 親 かつ 1巡目 かつ 自分がまだ一度も捨てていない
   if(p.isDealer&&G.firstRound&&(p.turnCount||0)===0&&canWin(p.hand))p.isTenhou=true;
@@ -8210,11 +8321,10 @@ function _soloShowFinalResult(cleared){
       <span style="font-size:.65rem;color:#5a7a6a;letter-spacing:.1em;">持ち点</span><br>
       <span style="font-size:1.3rem;font-weight:700;color:${score>=0?'var(--gold2)':'#ff7777'};">${score.toLocaleString()} 点</span>
     </td></tr>`;
+  // 💣 BOMBモード: ステージ数に応じてコイン付与（1〜4は0枚、5の倍数のみ付与）
+  const bombEarned = (stage >= 5 && stage % 5 === 0) ? stage : 0;
   const rewardEl=document.getElementById('resultCoinReward');
   if(rewardEl) rewardEl.innerHTML=`🎯 スコア：ステージ ${stage} 到達 / ${score.toLocaleString()} 点${bombEarned===0?' <span style="font-size:.6rem;color:#5a5a5a;">（ステージ5の倍数で報酬）</span>':''}`;
-  // 💣 BOMBモード: ステージ数に応じてコイン付与（1〜4は0枚、5の倍数のみ付与）
-  // ステージ5→5枚、ステージ10→10枚、ステージ15→15枚…
-  const bombEarned = (stage >= 5 && stage % 5 === 0) ? stage : 0;
   fetch('/api/reward',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({rank:1, numPlayers:1, bombStage:stage, bombScore:score})})
   .then(r=>r.json()).then(d=>{
@@ -8997,7 +9107,13 @@ function renderCornerAbilityBtns(){
 // ─── Wall Canvas constants ───────────────────────────────
 const W_TW=36, W_TH=48, W_GAP=2, W_COLS=15;
 // 💣 BOMBモード(numPlayers===1)では山牌を1.5倍表示
-function _wScale(){ return (typeof numPlayers!=="undefined" && numPlayers===1) ? 1.5 : 1.0; }
+function _wScale(){
+  if(typeof window._wScaleOverride !== "undefined") return window._wScaleOverride;
+  const isBomb = typeof numPlayers!=="undefined" && numPlayers===1;
+  if(!isBomb) return 1.0;
+  const isPortrait = window.innerWidth < window.innerHeight && window.innerWidth < 768;
+  return isPortrait ? 2.4 : 1.5;
+}
 function _wTW(){ return Math.round(W_TW*_wScale()); }
 function _wTH(){ return Math.round(W_TH*_wScale()); }
 function _wGAP(){ return Math.round(W_GAP*_wScale()); }
@@ -9181,7 +9297,10 @@ function renderWallExpand(){
   // _wallCanvasInited をリセットしてイベント再登録しないようにする
   const savedInited = _wallCanvasInited;
   _wallCanvasInited = true; // イベント登録スキップ（拡大canvas は別途登録）
+  // 拡大表示時は _wScale() を 1.0 固定にして論理サイズを統一する
+  window._wScaleOverride = 1.0;
   renderWall();
+  window._wScaleOverride = undefined;
   // 元に戻す
   ec.id = 'wallExpandCanvas';
   origCanvas.id = 'wallCanvas';
@@ -9301,6 +9420,7 @@ function _initWallExpandEvents(ec){
       if(_lightPending&&_lightPending.type==='wall'&&_lightPending.si===si){ lightRevealWall(si); _lightPending=null; closeWallExpand(); }
       else { _lightPending={type:'wall',si}; renderWallExpand(); renderActions(); }
     }
+    else if(_bombFlagMode && numPlayers===1 && G && G._soloStage){ _bombFlagToggleSlot(si); renderWallExpand(); }
     else if(G.phase === 'draw_wait' && G.current === NET.myIdx){
       humanPickWall(si);
       closeWallExpand(); // ツモったら閉じる
@@ -9428,11 +9548,14 @@ const _doraImgCache={};
     const penImg    = slot?._pkey ? G.penDrawings?.[slot._pkey] : null; // _pkeyベース
     // ソロ連鎖展開: 安全確定スロット
     const isSoloSafe= numPlayers===1 && !!(G._soloRevealed&&G._soloRevealed.has(i)) && G.deckSlots[i]!==null;
+    const isSoloFlag= numPlayers===1 && !!(G._soloFlags&&G._soloFlags.has(i)) && G.deckSlots[i]!==null;
 
     // 牌の背景グラデーション
     const grad=ctx.createLinearGradient(r.x,r.y,r.x+r.w,r.y+r.h);
     if(isRevealed){
       grad.addColorStop(0,'#f0e8d0'); grad.addColorStop(1,'#e0d0b0');
+    } else if(isSoloFlag){
+      grad.addColorStop(0,'#2a1a00'); grad.addColorStop(1,'#180e00');
     } else if(isMine){
       grad.addColorStop(0,'#3a1a10'); grad.addColorStop(1,'#1a0a08');
     } else if(isSoloSafe){
@@ -9446,7 +9569,8 @@ const _doraImgCache={};
     // ボーダー
     const isPickable= (canPick||plantMode||lightPickMode) && !_penModeOn;
     const isPenTarget= _penModeOn && !isRevealed;
-    ctx.strokeStyle= isPickable && isSoloSafe ? '#33dd66'
+    ctx.strokeStyle= isSoloFlag ? '#ff8800'
+      : isPickable && isSoloSafe ? '#33dd66'
       : isPickable ? '#6aaa6a'
       : isPenTarget ? '#3ada8a55'
       : isMine ? '#cc4422'
@@ -9512,6 +9636,9 @@ const _doraImgCache={};
       } else {
         // 白(haku)など画像なし: 空白
       }
+    } else if(isSoloFlag){
+      ctx.font=`${Math.round(28*_wScale())}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('🚩',r.x+r.w/2,r.y+r.h/2);
     } else if(isMine){
       ctx.font=`${Math.round(34*_wScale())}px serif`; ctx.fillText('💣',r.x+r.w/2,r.y+r.h/2);
     } else if(isPinzu){
@@ -9530,8 +9657,8 @@ const _doraImgCache={};
     ctx.drawImage(window._activePenOC,0,0);
   }
 
-  // イベント設定（初回のみ）
-  if(!_wallCanvasInited){
+  // イベント設定（初回のみ・かつ本物の wallCanvas のときのみ）
+  if(!_wallCanvasInited && wc.id==='wallCanvas'){
     _wallCanvasInited=true;
     _initWallCanvasEvents(wc);
   }
@@ -9635,6 +9762,7 @@ function _initWallCanvasEvents(wc){
       if(_lightPending&&_lightPending.type==='wall'&&_lightPending.si===si){ lightRevealWall(si); _lightPending=null; }
       else { _lightPending={type:'wall',si}; renderWall(); renderActions(); }
     }
+    else if(_bombFlagMode && numPlayers===1 && G && G._soloStage){ _bombFlagToggleSlot(si); }
     else if(G.phase==='draw_wait'&&G.current===NET.myIdx){ humanPickWall(si); }
   };
 
@@ -11665,7 +11793,7 @@ function selectAbility(el,ability){
 // LOBBY BANNER
 // ============================================================
 (function(){
-  const BANNER_INTERVAL = 4000; // 4秒ごと自動スライド
+  const BANNER_INTERVAL = 7000; // 7秒ごと自動スライド
   let _bnIdx = 0;
   let _bnTimer = null;
   let _bnTotal = 0;
@@ -11710,19 +11838,32 @@ function selectAbility(el,ability){
   }
 
   // タッチスワイプ
+  let _bnSwiped = false;
   window._bnTouchStart = function(e){
     _bnTouchX = e.touches[0].clientX;
+    _bnSwiped = false;
     _bnAutoStop();
   };
   window._bnTouchEnd = function(e){
     const dx = e.changedTouches[0].clientX - _bnTouchX;
-    if(Math.abs(dx) > 40) _bnGo(_bnIdx + (dx < 0 ? 1 : -1), false);
+    if(Math.abs(dx) > 40){ _bnGo(_bnIdx + (dx < 0 ? 1 : -1), false); _bnSwiped = true; }
     _bnAutoStart();
   };
+  // スワイプ後のクリック誤発火を防ぐ
+  document.getElementById('lobbyBannerWrap') && document.getElementById('lobbyBannerWrap').addEventListener('click', function(e){
+    if(_bnSwiped){ e.stopPropagation(); _bnSwiped = false; }
+  }, true);
 
   // ロビーが表示されたタイミングで初期化
   document.addEventListener('DOMContentLoaded', ()=>{
-    setTimeout(_bnInit, 100);
+    setTimeout(()=>{
+      _bnInit();
+      // スワイプ後のクリック誤発火を防ぐ
+      const wrap = document.getElementById('lobbyBannerWrap');
+      if(wrap) wrap.addEventListener('click', function(e){
+        if(_bnSwiped){ e.stopPropagation(); _bnSwiped = false; }
+      }, true);
+    }, 100);
   });
 })();
 
