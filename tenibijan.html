@@ -1356,6 +1356,14 @@ body::before{
     <div class="shop-section-title">😊 エモートセットを購入</div>
     <div style="font-size:.56rem;color:#4a6a5a;margin-bottom:8px;">エモートセットを購入するとプロフィールで装備できます。</div>
     <div id="shopEmoteGrid" style="display:flex;flex-direction:column;gap:8px;"></div>
+
+    <!-- Twitch サブスク特典 -->
+    <div class="shop-section-title" style="margin-top:18px;">💜 Twitch サブスク特典</div>
+    <div style="font-size:.56rem;color:#4a6a5a;margin-bottom:10px;">サブスクライバーは毎月🪙1000枚＋初回エモートセット2をもらえます。</div>
+    <div id="twitchSubPanel" style="background:#0d0a18;border:1.5px solid #4a2a7a;border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;">
+      <div id="twitchLinkStatus" style="font-size:.65rem;color:#9a7acc;"></div>
+      <div id="twitchSubAction"></div>
+    </div>
   </div>
 </div>
 
@@ -9762,7 +9770,10 @@ function loadProfile(){
         iconId:          data.iconId          ?? PROFILE.iconId,
         ability:         data.ability         ?? PROFILE.ability,
         name:            data.name            || PROFILE.name,
-        ownedEmoteSets:  data.ownedEmoteSets  ?? PROFILE.ownedEmoteSets ?? ['01'],
+        ownedEmoteSets:       data.ownedEmoteSets      ?? PROFILE.ownedEmoteSets ?? ['01'],
+        twitchLinked:          data.twitchLinked          ?? false,
+        twitchSubClaimable:    data.twitchSubClaimable    ?? false,
+        twitchEmoteClaimable:  data.twitchEmoteClaimable  ?? false,
       });
       try{ localStorage.setItem('mjProfile',JSON.stringify(PROFILE)); }catch(e){}
       _applyProfile();
@@ -10713,7 +10724,7 @@ function updateShopCoinDisplay(){
 }
 // ショップで販売するエモートセット定義
 const SHOP_EMOTE_SETS = [
-  { setId:'02', label:'セット2', price:1000 },
+  // セット2はTwitchサブスク特典のため販売なし
 ];
 
 function renderShop(){
@@ -10764,7 +10775,170 @@ function renderShop(){
       </div>`;
     eg.appendChild(div);
   });
+  // Twitchサブスクパネル描画
+  renderTwitchSubPanel();
 }
+
+function renderTwitchSubPanel(){
+  const statusEl = document.getElementById('twitchLinkStatus');
+  const actionEl = document.getElementById('twitchSubAction');
+  if(!statusEl||!actionEl) return;
+
+  const linked = PROFILE.twitchLinked;
+  const hasSub02 = (PROFILE.ownedEmoteSets||['01']).includes('02');
+
+  // ステータス表示
+  statusEl.innerHTML = linked
+    ? '<span style="color:#9a7acc;">✓ Twitchアカウント連携済み</span>'
+    : '<span style="color:#7a5a9a;">💜 Twitchサブスクライバー限定特典</span>';
+
+  // ── ① 毎月コインボタン ──
+  let coinBtn;
+  if(!linked){
+    // 未連携: ロック表示で購買意欲を高める
+    coinBtn = `<div style="position:relative;opacity:0.75;">
+      <div style="background:linear-gradient(135deg,#1a0a2a,#0d0518);border:1.5px solid #6a3a9a;
+        border-radius:8px;padding:10px 20px;font-size:.7rem;color:#9a70cc;
+        font-weight:700;letter-spacing:.04em;display:flex;justify-content:space-between;align-items:center;">
+        <span>🪙 毎月の特典コイン</span>
+        <span style="color:#c9a84c;font-size:.8rem;">+1,000コイン</span>
+      </div>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+        background:#00000044;border-radius:8px;font-size:1.1rem;">🔒</div>
+    </div>`;
+  } else if(PROFILE.twitchSubClaimable){
+    coinBtn = `<button id="twitchCoinBtn" onclick="claimTwitchSubReward()" style="
+        background:linear-gradient(135deg,#6441a4,#4a2a7a);border:1.5px solid #9a60e8;
+        border-radius:8px;color:#fff;font-weight:700;font-size:.7rem;
+        padding:10px 20px;cursor:pointer;letter-spacing:.04em;width:100%;
+        display:flex;justify-content:space-between;align-items:center;
+      "><span>🪙 今月の特典コインを受け取る</span><span style="color:#c9a84c;">+1,000コイン</span></button>`;
+  } else {
+    coinBtn = `<div style="background:#0a0818;border:1px solid #2a1a4a;border-radius:8px;
+        padding:10px 14px;font-size:.62rem;color:#5a4a7a;">
+        ✅ 今月のコイン特典は受け取り済みです。来月またもらえます！
+       </div>`;
+  }
+
+  // ── ② 初回エモートボタン ──
+  let emoteBtn;
+  if(hasSub02){
+    emoteBtn = `<div style="background:#0a0818;border:1px solid #2a1a4a;border-radius:8px;
+        padding:10px 14px;font-size:.62rem;color:#5a4a7a;">
+        ✅ エモートセット2は受け取り済みです
+       </div>`;
+  } else if(!linked){
+    // 未連携: エモート画像＆ボイス情報を見せびらかしてロック
+    const set02 = EMOTE_SETS_MASTER.find(s=>s.setId==='02');
+    const previewImgs = set02 ? set02.ids.map(id=>
+      `<img src="${emoteUrl(id)}" style="width:52px;height:52px;border-radius:7px;border:1.5px solid #6a3a9a;background:#120820;object-fit:contain;padding:3px;" alt="">`
+    ).join('') : '';
+    emoteBtn = `<div style="position:relative;">
+      <div style="background:linear-gradient(135deg,#1a0a2a,#0d0518);border:1.5px solid #6a3a9a;
+        border-radius:10px;padding:12px 14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:.7rem;color:#c9b0ff;font-weight:700;">🎁 エモートセット2（初回限定）</span>
+          <span style="font-size:.58rem;color:#9a60e8;background:#2a1050;padding:2px 8px;border-radius:4px;border:1px solid #6a3a9a;">サブスク限定</span>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;">${previewImgs}</div>
+        <div style="font-size:.58rem;color:#9a70cc;display:flex;align-items:center;gap:5px;">
+          <span style="background:#2a1050;border:1px solid #6a3a9a;border-radius:4px;padding:1px 7px;">🔊 ボイス付き</span>
+          <span>全4種 — 送信すると音声が流れる特別エモート</span>
+        </div>
+      </div>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+        background:#00000055;border-radius:10px;">
+        <div style="background:#1a0a30;border:1.5px solid #9a60e8;border-radius:8px;
+          padding:6px 16px;font-size:.72rem;color:#c9b0ff;font-weight:700;">🔒 サブスクライバー限定</div>
+      </div>
+    </div>`;
+  } else if(PROFILE.twitchEmoteClaimable){
+    const set02c = EMOTE_SETS_MASTER.find(s=>s.setId==='02');
+    const previewImgsC = set02c ? set02c.ids.map(id=>
+      `<img src="${emoteUrl(id)}" style="width:48px;height:48px;border-radius:6px;border:1.5px solid #7a50b8;background:#120820;object-fit:contain;padding:3px;" alt="">`
+    ).join('') : '';
+    emoteBtn = `<div style="background:linear-gradient(135deg,#1a0a3a,#0d0520);border:1.5px solid #9a60e8;border-radius:10px;padding:12px 14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:.7rem;color:#c9b0ff;font-weight:700;">🎁 エモートセット2</span>
+        <span style="font-size:.58rem;color:#9a60e8;background:#2a1050;padding:2px 8px;border-radius:4px;border:1px solid #6a3a9a;">🔊 ボイス付き</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">${previewImgsC}</div>
+      <button id="twitchEmoteBtn" onclick="claimTwitchEmote()" style="
+        background:linear-gradient(135deg,#6441a4,#4a2a7a);border:1.5px solid #9a60e8;
+        border-radius:8px;color:#fff;font-weight:700;font-size:.7rem;
+        padding:9px 20px;cursor:pointer;letter-spacing:.04em;width:100%;
+      ">初回特典を受け取る →</button>
+    </div>`;
+  } else {
+    emoteBtn = `<div style="background:#0a0818;border:1px solid #2a1a4a;border-radius:8px;
+        padding:10px 14px;font-size:.62rem;color:#5a4a7a;">
+        🎁 エモートセット2（サブスクライバー初回限定）
+       </div>`;
+  }
+
+  // 未連携の場合は連携ボタンを下に表示
+  const linkPrompt = !linked ? `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;
+      padding:10px 0 2px;border-top:1px solid #2a1a4a;">
+      <div style="font-size:.58rem;color:#7a5a9a;text-align:center;">
+        上記の特典はTwitchサブスクライバーが対象です
+      </div>
+      <a href="/auth/twitch" style="
+        display:inline-block;background:linear-gradient(135deg,#6441a4,#4a2a7a);
+        border:1.5px solid #9a60e8;border-radius:8px;color:#fff;font-weight:700;
+        font-size:.7rem;padding:8px 20px;text-decoration:none;letter-spacing:.05em;
+      ">💜 Twitchでログインして連携する</a>
+    </div>` : '';
+
+  actionEl.innerHTML=`<div style="display:flex;flex-direction:column;gap:8px;">
+    ${coinBtn}${emoteBtn}${linkPrompt}
+  </div>`;
+}
+
+function claimTwitchSubReward(){
+  const btn = document.getElementById('twitchCoinBtn');
+  if(btn){ btn.disabled=true; btn.textContent='確認中…'; }
+  fetch('/api/twitch/claim-sub',{method:'POST'})
+  .then(r=>r.json()).then(d=>{
+    if(d.ok){
+      PROFILE.coins = d.coins;
+      PROFILE.twitchSubClaimable = false;
+      saveProfileSilent();
+      renderShop();
+      updateShopCoinDisplay();
+      _shopToast(`💜 +${d.earned} コインを受け取りました！（合計 ${d.coins.toLocaleString()} 枚）`);
+    } else {
+      _shopToast(d.error||'受け取りに失敗しました');
+      renderTwitchSubPanel();
+    }
+  }).catch(()=>{
+    _shopToast('エラーが発生しました');
+    renderTwitchSubPanel();
+  });
+}
+
+function claimTwitchEmote(){
+  const btn = document.getElementById('twitchEmoteBtn');
+  if(btn){ btn.disabled=true; btn.textContent='確認中…'; }
+  fetch('/api/twitch/claim-emote',{method:'POST'})
+  .then(r=>r.json()).then(d=>{
+    if(d.ok){
+      if(!Array.isArray(PROFILE.ownedEmoteSets)) PROFILE.ownedEmoteSets=['01'];
+      if(!PROFILE.ownedEmoteSets.includes('02')) PROFILE.ownedEmoteSets.push('02');
+      PROFILE.twitchEmoteClaimable = false;
+      saveProfileSilent();
+      renderShop();
+      _shopToast('🎁 エモートセット2をゲットしました！プロフィールで装備できます');
+    } else {
+      _shopToast(d.error||'受け取りに失敗しました');
+      renderTwitchSubPanel();
+    }
+  }).catch(()=>{
+    _shopToast('エラーが発生しました');
+    renderTwitchSubPanel();
+  });
+}
+
 function shopPull1(){
   // doPull1() 内でサーバーAPI経由のコイン消費が行われるため、ここでは遷移のみ
   closeShop();
@@ -10835,6 +11009,33 @@ function _shopToast(msg){
       document.getElementById('lobby').style.display='none';
       document.getElementById('profileScreen').classList.add('active');
     },0);
+  }
+
+  // Twitch OAuth リダイレクト後の処理
+  const _params = new URLSearchParams(window.location.search);
+  const _twitchResult = _params.get('twitch');
+  if(_twitchResult === 'linked'){
+    // 連携成功: プロフィール再取得してショップを開く
+    PROFILE.twitchLinked = true;
+    PROFILE.twitchSubClaimable = false;
+    // サーバーから最新状態を取得
+    fetch('/api/twitch/status').then(r=>r.json()).then(d=>{
+      PROFILE.twitchLinked = d.linked;
+      PROFILE.twitchSubClaimable = d.claimable;
+      PROFILE.twitchEmoteClaimable = d.emoteClaimable;
+      // URLのクエリを消す
+      history.replaceState(null,'','/game');
+      // ショップのTwitchパネルを更新
+      if(typeof renderTwitchSubPanel==='function') renderTwitchSubPanel();
+      // トースト通知
+      setTimeout(()=>{
+        openShop();
+        _shopToast('💜 Twitchアカウントの連携が完了しました！');
+      }, 500);
+    }).catch(()=>{ history.replaceState(null,'','/game'); });
+  } else if(_twitchResult === 'error'){
+    history.replaceState(null,'','/game');
+    setTimeout(()=>{ _shopToast('Twitch連携に失敗しました。もう一度お試しください。'); }, 500);
   }
 })();
 

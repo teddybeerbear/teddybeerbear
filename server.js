@@ -13,6 +13,12 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const SESSION_SECRET = process.env.SESSION_SECRET || "change-this-secret";
 const DATABASE_URL = process.env.DATABASE_URL;
 
+// ── Twitch サブスク確認用設定 ────────────────────────────────────
+const TWITCH_CLIENT_ID     = process.env.TWITCH_CLIENT_ID;
+const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
+const TWITCH_BROADCASTER_ID = process.env.TWITCH_BROADCASTER_ID; // あなたのTwitch ユーザーID
+const TWITCH_SUB_COINS     = 1000; // サブスク月次コイン報酬
+
 const BASE_URL = process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || `http://localhost:${PORT}`;
 const CALLBACK_URL = `${BASE_URL}/auth/google/callback`;
 
@@ -51,9 +57,21 @@ async function initDB() {
     await pool.query(`
       ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS google_name TEXT
     `);
-    // エモートセット所持管理カラム追加
+    // エモートセット所持管理
     await pool.query(`
       ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS owned_emote_sets TEXT NOT NULL DEFAULT '["01"]'
+    `);
+    // Twitchサブスク月次コイン受取日時
+    await pool.query(`
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS twitch_sub_claimed_at TIMESTAMPTZ
+    `);
+    // Twitch紐付けユーザーID
+    await pool.query(`
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS twitch_user_id TEXT
+    `);
+    // Twitchサブスク初回エモート受取済みフラグ
+    await pool.query(`
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS twitch_emote_claimed BOOLEAN NOT NULL DEFAULT FALSE
     `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS rank_ratings (
@@ -156,6 +174,9 @@ app.get("/api/profile", requireAuth, async (req, res) => {
         gachaIcons: [], iconId: "", ability: "",
         name: req.user.name, googleName: req.user.name,
         ownedEmoteSets: ["01"],
+        twitchLinked: false,
+        twitchSubClaimable: false,
+        twitchEmoteClaimable: false,
       });
     }
     await pool.query(
@@ -163,16 +184,29 @@ app.get("/api/profile", requireAuth, async (req, res) => {
       [req.user.name, uid]
     );
     const row = result.rows[0];
+    // Twitchサブスク月次受取可否チェック
+    const now = new Date();
+    const claimed = row.twitch_sub_claimed_at ? new Date(row.twitch_sub_claimed_at) : null;
+    const claimable = !!row.twitch_user_id && (
+      !claimed ||
+      (now.getFullYear() > claimed.getFullYear()) ||
+      (now.getFullYear() === claimed.getFullYear() && now.getMonth() > claimed.getMonth())
+    );
+    const ownedSets = JSON.parse(row.owned_emote_sets || '["01"]');
+    const emoteClaimable = !!row.twitch_user_id && !row.twitch_emote_claimed && !ownedSets.includes('02');
     res.json({
-      coins:           row.coins,
-      abilities:       JSON.parse(row.abilities),
-      totalPulls:      row.total_pulls,
-      gachaIcons:      JSON.parse(row.gacha_icons),
-      iconId:          row.icon_id,
-      ability:         row.ability,
-      name:            row.name || req.user.name,
-      googleName:      row.google_name || req.user.name,
-      ownedEmoteSets:  JSON.parse(row.owned_emote_sets || '["01"]'),
+      coins:                row.coins,
+      abilities:            JSON.parse(row.abilities),
+      totalPulls:           row.total_pulls,
+      gachaIcons:           JSON.parse(row.gacha_icons),
+      iconId:               row.icon_id,
+      ability:              row.ability,
+      name:                 row.name || req.user.name,
+      googleName:           row.google_name || req.user.name,
+      ownedEmoteSets:       ownedSets,
+      twitchLinked:         !!row.twitch_user_id,
+      twitchSubClaimable:   claimable,
+      twitchEmoteClaimable: emoteClaimable,
     });
   } catch (err) {
     console.error("プロフィール取得エラー:", err.message);
@@ -330,25 +364,21 @@ app.post("/api/reward", requireAuth, async (req, res) => {
 
 // プロフィール保存（非コイン項目のみ受け付ける）
 // ★ coins / totalPulls はクライアントからの書き換えを一切受け付けない
-// エモートセットIDのホワイトリスト（既存セットIDパターン）
 const VALID_EMOTE_SET_RE = /^\d{2}$/;
 
 app.post("/api/profile", requireAuth, async (req, res) => {
   const uid = req.user.id;
   const { abilities, gachaIcons, iconId, ability, name, ownedEmoteSets } = req.body;
 
-  // 能力ホワイトリスト検証
   const safeAbilities = Array.isArray(abilities)
     ? abilities.filter(a => VALID_ABILITIES.includes(a))
     : [];
 
-  // gachaIcons: 既存IDパターン検証
   const VALID_ICON_RE = /^[CREL]\d{2}$/;
   const safeIcons = Array.isArray(gachaIcons)
     ? gachaIcons.filter(id => typeof id === "string" && VALID_ICON_RE.test(id))
     : [];
 
-  // ownedEmoteSets: IDパターン検証
   const safeEmoteSets = Array.isArray(ownedEmoteSets)
     ? ownedEmoteSets.filter(id => typeof id === "string" && VALID_EMOTE_SET_RE.test(id))
     : [];
@@ -358,14 +388,12 @@ app.post("/api/profile", requireAuth, async (req, res) => {
   const safeIconId = typeof iconId === "string" && VALID_ICON_RE.test(iconId) ? iconId : "";
 
   try {
-    // gacha_icons / owned_emote_sets は既存レコードとマージ（クライアントが削除できないように）
     const cur = await pool.query(
       "SELECT gacha_icons, owned_emote_sets FROM user_profiles WHERE google_id = $1", [uid]
     );
     const existingIcons = cur.rows[0] ? JSON.parse(cur.rows[0].gacha_icons || "[]") : [];
     const mergedIcons = Array.from(new Set([...existingIcons, ...safeIcons]));
     const existingEmoteSets = cur.rows[0] ? JSON.parse(cur.rows[0].owned_emote_sets || '["01"]') : ["01"];
-    // セット01は常に所持（デフォルト）、追加分のみマージ
     const mergedEmoteSets = Array.from(new Set(["01", ...existingEmoteSets, ...safeEmoteSets]));
 
     await pool.query(
@@ -373,28 +401,228 @@ app.post("/api/profile", requireAuth, async (req, res) => {
          (google_id, name, email, abilities, gacha_icons, icon_id, ability, owned_emote_sets, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
        ON CONFLICT (google_id) DO UPDATE SET
-         name              = EXCLUDED.name,
-         abilities         = EXCLUDED.abilities,
-         gacha_icons       = EXCLUDED.gacha_icons,
-         icon_id           = EXCLUDED.icon_id,
-         ability           = EXCLUDED.ability,
-         owned_emote_sets  = EXCLUDED.owned_emote_sets,
-         updated_at        = NOW()`,
-      [
-        uid,
-        safeName,
-        req.user.email,
-        JSON.stringify(safeAbilities),
-        JSON.stringify(mergedIcons),
-        safeIconId,
-        safeAbility,
-        JSON.stringify(mergedEmoteSets),
-      ]
+         name             = EXCLUDED.name,
+         abilities        = EXCLUDED.abilities,
+         gacha_icons      = EXCLUDED.gacha_icons,
+         icon_id          = EXCLUDED.icon_id,
+         ability          = EXCLUDED.ability,
+         owned_emote_sets = EXCLUDED.owned_emote_sets,
+         updated_at       = NOW()`,
+      [uid, safeName, req.user.email,
+       JSON.stringify(safeAbilities), JSON.stringify(mergedIcons),
+       safeIconId, safeAbility, JSON.stringify(mergedEmoteSets)]
     );
     res.json({ ok: true });
   } catch (err) {
     console.error("プロフィール保存エラー:", err.message);
     res.status(500).json({ error: "DB エラー" });
+  }
+});
+
+
+// ── Twitch サブスク連携 ───────────────────────────────────────────
+
+// Twitchアプリアクセストークンをキャッシュ（1時間ごとに自動更新）
+let _twitchAppToken = null;
+let _twitchAppTokenExpiry = 0;
+async function getTwitchAppToken() {
+  if (_twitchAppToken && Date.now() < _twitchAppTokenExpiry) return _twitchAppToken;
+  const r = await fetch(
+    `https://id.twitch.tv/oauth2/token?client_id=${TWITCH_CLIENT_ID}&client_secret=${TWITCH_CLIENT_SECRET}&grant_type=client_credentials`,
+    { method: "POST" }
+  );
+  const d = await r.json();
+  _twitchAppToken = d.access_token;
+  _twitchAppTokenExpiry = Date.now() + (d.expires_in - 300) * 1000;
+  return _twitchAppToken;
+}
+
+// GET /auth/twitch — Twitch OAuth ログイン開始
+app.get("/auth/twitch", requireAuth, (req, res) => {
+  if (!TWITCH_CLIENT_ID) return res.status(500).json({ error: "Twitch未設定" });
+  const state = req.user.id; // Google ID を state に埋め込んで紐付け
+  const scope = "user:read:subscriptions";
+  const params = new URLSearchParams({
+    client_id:     TWITCH_CLIENT_ID,
+    redirect_uri:  `${BASE_URL}/auth/twitch/callback`,
+    response_type: "code",
+    scope,
+    state,
+  });
+  res.redirect(`https://id.twitch.tv/oauth2/authorize?${params}`);
+});
+
+// GET /auth/twitch/callback — Twitch OAuth コールバック
+app.get("/auth/twitch/callback", async (req, res) => {
+  const { code, state: googleId } = req.query;
+  if (!code || !googleId) return res.redirect("/game?twitch=error");
+  try {
+    // アクセストークン取得
+    const tokenRes = await fetch("https://id.twitch.tv/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id:     TWITCH_CLIENT_ID,
+        client_secret: TWITCH_CLIENT_SECRET,
+        code,
+        grant_type:    "authorization_code",
+        redirect_uri:  `${BASE_URL}/auth/twitch/callback`,
+      }),
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) throw new Error("token error");
+
+    // TwitchユーザーID取得
+    const userRes = await fetch("https://api.twitch.tv/helix/users", {
+      headers: {
+        "Client-Id":   TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${tokenData.access_token}`,
+      },
+    });
+    const userData = await userRes.json();
+    const twitchUserId = userData.data?.[0]?.id;
+    if (!twitchUserId) throw new Error("user not found");
+
+    // Google IDと紐付けてDBに保存
+    await pool.query(
+      `UPDATE user_profiles SET twitch_user_id = $1, updated_at = NOW() WHERE google_id = $2`,
+      [twitchUserId, googleId]
+    );
+    console.log(`Twitch紐付け完了: google=${googleId} twitch=${twitchUserId}`);
+    res.redirect("/game?twitch=linked");
+  } catch (e) {
+    console.error("Twitch callback error:", e.message);
+    res.redirect("/game?twitch=error");
+  }
+});
+
+// POST /api/twitch/claim-sub — サブスクコイン受取
+app.post("/api/twitch/claim-sub", requireAuth, async (req, res) => {
+  if (!TWITCH_CLIENT_ID || !TWITCH_BROADCASTER_ID) {
+    return res.status(503).json({ error: "Twitch連携が設定されていません" });
+  }
+  const uid = req.user.id;
+  try {
+    // DBからtwitch_user_idと受取日時を取得
+    const cur = await pool.query(
+      "SELECT twitch_user_id, twitch_sub_claimed_at, coins FROM user_profiles WHERE google_id = $1",
+      [uid]
+    );
+    if (!cur.rows[0]) return res.status(404).json({ error: "プロフィールが見つかりません" });
+    const row = cur.rows[0];
+    if (!row.twitch_user_id) return res.status(400).json({ error: "Twitchアカウントが未連携です" });
+
+    // 今月すでに受け取り済みか確認
+    const now = new Date();
+    if (row.twitch_sub_claimed_at) {
+      const claimed = new Date(row.twitch_sub_claimed_at);
+      if (
+        now.getFullYear() === claimed.getFullYear() &&
+        now.getMonth() === claimed.getMonth()
+      ) {
+        return res.status(409).json({ error: "今月はすでに受け取り済みです" });
+      }
+    }
+
+    // Twitch APIでサブスク確認（ブロードキャスターのアプリトークンで確認）
+    const appToken = await getTwitchAppToken();
+    const subRes = await fetch(
+      `https://api.twitch.tv/helix/subscriptions?broadcaster_id=${TWITCH_BROADCASTER_ID}&user_id=${row.twitch_user_id}`,
+      {
+        headers: {
+          "Client-Id":   TWITCH_CLIENT_ID,
+          Authorization: `Bearer ${appToken}`,
+        },
+      }
+    );
+    const subData = await subRes.json();
+    const isSub = Array.isArray(subData.data) && subData.data.length > 0;
+    if (!isSub) {
+      return res.status(403).json({ error: "サブスクライバーではありません" });
+    }
+
+    // コイン付与のみ（エモートは別エンドポイント）
+    const result = await pool.query(
+      `UPDATE user_profiles
+         SET coins = coins + $2,
+             twitch_sub_claimed_at = NOW(),
+             updated_at = NOW()
+       WHERE google_id = $1
+       RETURNING coins`,
+      [uid, TWITCH_SUB_COINS]
+    );
+    const newCoins = result.rows[0].coins;
+    console.log(`Twitchサブスクコイン付与: google=${uid} +${TWITCH_SUB_COINS} 合計=${newCoins}`);
+    res.json({ ok: true, earned: TWITCH_SUB_COINS, coins: newCoins });
+  } catch (e) {
+    console.error("Twitchサブスク確認エラー:", e.message);
+    res.status(500).json({ error: "サーバーエラー" });
+  }
+});
+
+// POST /api/twitch/claim-emote — サブスク初回エモートセット2受取
+app.post("/api/twitch/claim-emote", requireAuth, async (req, res) => {
+  if (!TWITCH_CLIENT_ID || !TWITCH_BROADCASTER_ID) {
+    return res.status(503).json({ error: "Twitch連携が設定されていません" });
+  }
+  const uid = req.user.id;
+  try {
+    const cur = await pool.query(
+      "SELECT twitch_user_id, twitch_emote_claimed, owned_emote_sets FROM user_profiles WHERE google_id = $1",
+      [uid]
+    );
+    if (!cur.rows[0]) return res.status(404).json({ error: "プロフィールが見つかりません" });
+    const row = cur.rows[0];
+    if (!row.twitch_user_id) return res.status(400).json({ error: "Twitchアカウントが未連携です" });
+    if (row.twitch_emote_claimed) return res.status(409).json({ error: "エモートはすでに受け取り済みです" });
+
+    // Twitch APIでサブスク確認
+    const appToken = await getTwitchAppToken();
+    const subRes = await fetch(
+      `https://api.twitch.tv/helix/subscriptions?broadcaster_id=${TWITCH_BROADCASTER_ID}&user_id=${row.twitch_user_id}`,
+      { headers: { "Client-Id": TWITCH_CLIENT_ID, Authorization: `Bearer ${appToken}` } }
+    );
+    const subData = await subRes.json();
+    if (!(Array.isArray(subData.data) && subData.data.length > 0)) {
+      return res.status(403).json({ error: "サブスクライバーではありません" });
+    }
+
+    // セット2付与
+    const currentSets = JSON.parse(row.owned_emote_sets || '["01"]');
+    if (!currentSets.includes('02')) currentSets.push('02');
+    await pool.query(
+      `UPDATE user_profiles SET owned_emote_sets=$2, twitch_emote_claimed=TRUE, updated_at=NOW() WHERE google_id=$1`,
+      [uid, JSON.stringify(currentSets)]
+    );
+    console.log(`Twitchエモートセット2付与: google=${uid}`);
+    res.json({ ok: true, ownedEmoteSets: currentSets });
+  } catch (e) {
+    console.error("Twitchエモート付与エラー:", e.message);
+    res.status(500).json({ error: "サーバーエラー" });
+  }
+});
+
+// GET /api/twitch/status — Twitch連携状態確認
+app.get("/api/twitch/status", requireAuth, async (req, res) => {
+  try {
+    const cur = await pool.query(
+      "SELECT twitch_user_id, twitch_sub_claimed_at, twitch_emote_claimed, owned_emote_sets FROM user_profiles WHERE google_id = $1",
+      [req.user.id]
+    );
+    const row = cur.rows[0];
+    if (!row) return res.json({ linked: false, claimable: false, emoteClaimable: false });
+    const now = new Date();
+    const claimed = row.twitch_sub_claimed_at ? new Date(row.twitch_sub_claimed_at) : null;
+    const claimable = !!row.twitch_user_id && (
+      !claimed ||
+      now.getFullYear() > claimed.getFullYear() ||
+      (now.getFullYear() === claimed.getFullYear() && now.getMonth() > claimed.getMonth())
+    );
+    const ownedSets = JSON.parse(row.owned_emote_sets || '["01"]');
+    const emoteClaimable = !!row.twitch_user_id && !row.twitch_emote_claimed && !ownedSets.includes('02');
+    res.json({ linked: !!row.twitch_user_id, claimable, emoteClaimable });
+  } catch (e) {
+    res.status(500).json({ error: "DB error" });
   }
 });
 
