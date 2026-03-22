@@ -155,6 +155,119 @@ body::before{
   pointer-events:none;z-index:0;
 }
 
+/* ===== LOBBY BANNER ===== */
+#lobbyBannerWrap{
+  width:100%;max-width:900px;
+  position:relative;overflow:hidden;
+  border-radius:12px;
+  cursor:pointer;
+  user-select:none;
+}
+.lobby-banner-track{
+  display:flex;
+  transition:transform .45s cubic-bezier(.4,0,.2,1);
+  will-change:transform;
+}
+.lobby-banner-slide{
+  flex:0 0 100%;
+  width:100%;
+  border-radius:12px;
+  overflow:hidden;
+  position:relative;
+  min-height:90px;
+  display:flex;align-items:center;
+}
+/* 画像バナー */
+.lobby-banner-slide img{
+  width:100%;height:100%;object-fit:cover;display:block;
+  border-radius:12px;
+}
+/* テキストバナー共通 */
+.lbs-inner{
+  width:100%;padding:14px 20px;
+  display:flex;flex-direction:column;justify-content:center;
+  gap:5px;position:relative;overflow:hidden;
+}
+.lbs-inner::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(120deg,transparent 55%,#ffffff06);
+  pointer-events:none;
+}
+.lbs-tag{
+  font-size:.52rem;font-weight:700;letter-spacing:.12em;
+  padding:2px 7px;border-radius:3px;
+  display:inline-block;align-self:flex-start;
+}
+.lbs-title{
+  font-size:.82rem;font-weight:900;letter-spacing:.04em;
+  line-height:1.25;
+}
+.lbs-desc{
+  font-size:.6rem;opacity:.8;line-height:1.5;
+}
+/* ドットインジケーター */
+#lobbyBannerDots{
+  display:flex;gap:5px;justify-content:center;margin-top:6px;
+}
+.lbd{
+  width:6px;height:6px;border-radius:50%;
+  background:#1a3a2a;transition:all .3s;cursor:pointer;
+}
+.lbd.active{
+  background:var(--gold);width:16px;border-radius:3px;
+}
+/* ===== LOBBY PLAYER CARD ===== */
+#lobbyPlayerCard{
+  display:flex;align-items:center;gap:12px;
+  background:linear-gradient(135deg,#060e18cc,#091422cc);
+  border:1px solid #1a3a2a;border-radius:14px;
+  padding:10px 16px;cursor:pointer;
+  transition:border-color .2s, box-shadow .2s;
+  backdrop-filter:blur(4px);
+  position:relative;overflow:hidden;
+  max-width:340px;width:100%;
+}
+#lobbyPlayerCard::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(120deg,transparent 60%,#c9a84c0a 100%);
+  pointer-events:none;
+}
+#lobbyPlayerCard:hover{
+  border-color:#3a6a4a;
+  box-shadow:0 0 18px #c9a84c1a;
+}
+#lobbyPlayerCard .lpc-icon{
+  width:54px;height:76px;flex-shrink:0;
+  border-radius:8px;overflow:hidden;
+  border:1.5px solid #2a4a3a;
+  background:#040c12;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+#lobbyPlayerCard .lpc-icon img{
+  width:100%;height:100%;object-fit:contain;
+}
+#lobbyPlayerCard .lpc-icon-empty{
+  font-size:.5rem;color:#2a4a3a;text-align:center;line-height:1.4;
+}
+#lobbyPlayerCard .lpc-info{
+  flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;
+}
+#lobbyPlayerCard .lpc-name{
+  font-size:.85rem;font-weight:700;color:var(--gold);
+  letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#lobbyPlayerCard .lpc-ability{
+  font-size:.6rem;color:#5a8a7a;
+  display:flex;align-items:center;gap:4px;
+}
+#lobbyPlayerCard .lpc-coins{
+  font-size:.6rem;color:#aa8844;
+  display:flex;align-items:center;gap:4px;
+}
+#lobbyPlayerCard .lpc-edit{
+  font-size:.52rem;color:#2a5a3a;margin-top:2px;letter-spacing:.05em;
+}
 /* ===== LOBBY ===== */
 #lobby{
   position:relative;z-index:10;
@@ -954,6 +1067,95 @@ body::before{
 .wall-drawing-thumb{position:absolute;inset:1px;border-radius:2px;object-fit:cover;pointer-events:none;}
 
 /* ===== ICON COLLECTION SCREEN ===== */
+/* ===== MAT BOOK SCREEN ===== */
+#matBookScreen{
+  position:fixed;inset:0;z-index:60;
+  background:var(--bg);
+  display:none;flex-direction:column;align-items:center;
+  overflow-y:auto;padding:20px 16px 40px;
+}
+#matBookScreen.active{display:flex;}
+.mat-book-grid{
+  width:100%;max-width:520px;
+  display:grid;grid-template-columns:repeat(2,1fr);gap:14px;
+}
+.mat-book-card{
+  border-radius:12px;overflow:hidden;
+  border:2px solid #1a3a2a;
+  background:#030a10;
+  cursor:pointer;
+  transition:border-color .2s,box-shadow .2s;
+  display:flex;flex-direction:column;
+}
+.mat-book-card:hover{border-color:#3a7a5a;box-shadow:0 0 14px #3ada8a22;}
+.mat-book-card.mat-selected{border-color:var(--gold);box-shadow:0 0 14px #c9a84c44;}
+.mat-book-preview{
+  width:100%;aspect-ratio:3/2;object-fit:cover;display:block;
+}
+.mat-book-preview-default{
+  width:100%;aspect-ratio:3/2;
+  background:linear-gradient(160deg,#0d3d28,#092a1c);
+  display:flex;align-items:center;justify-content:center;
+  font-size:.6rem;color:#4a8a6a;letter-spacing:.08em;
+}
+.mat-book-label{
+  padding:6px 10px;
+  font-size:.62rem;color:#5a8a7a;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.mat-book-label .mat-sel-badge{
+  font-size:.5rem;padding:1px 6px;border-radius:3px;font-weight:700;
+  background:#1a1400;border:1px solid var(--gold);color:var(--gold2);
+}
+/* ===== ABILITY BOOK SCREEN ===== */
+#abilityBookScreen{
+  position:fixed;inset:0;z-index:60;
+  background:var(--bg);
+  display:none;flex-direction:column;align-items:center;
+  overflow-y:auto;padding:20px 16px 40px;
+}
+#abilityBookScreen.active{display:flex;}
+.ab-card{
+  background:linear-gradient(135deg,var(--panel2),var(--panel));
+  border:1.5px solid #1a3a2a;border-radius:12px;
+  padding:12px 8px 10px;
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  cursor:pointer;transition:border-color .2s,box-shadow .2s;
+  position:relative;overflow:hidden;text-align:center;
+}
+.ab-card:hover,.ab-card:active{border-color:#3a7a5a;box-shadow:0 0 14px #3ada8a22;}
+.ab-card.owned-card{border-color:#2a5a3a;}
+.ab-card.equipped-card{border-color:var(--gold);box-shadow:0 0 14px #c9a84c33;}
+.ab-card.locked-card{opacity:.45;cursor:default;filter:grayscale(.6);pointer-events:none;}
+.ab-card .ab-icon{
+  font-size:2.4rem;line-height:1;
+}
+.ab-card .ab-body{width:100%;}
+.ab-card .ab-name{font-size:.7rem;font-weight:700;color:var(--gold);letter-spacing:.02em;}
+.ab-card .ab-desc{font-size:.5rem;color:#5a8a7a;margin-top:3px;line-height:1.45;}
+.ab-card .ab-tag{
+  font-size:.46rem;padding:1px 5px;border-radius:3px;font-weight:700;
+  border:1px solid #2a5a3a;color:#5a9a7a;background:#0a1a10;
+  margin-top:4px;display:inline-block;
+}
+.ab-card .ab-right{
+  width:100%;display:flex;flex-direction:column;align-items:center;gap:4px;
+}
+.ab-badge-equipped{
+  font-size:.52rem;padding:2px 8px;border-radius:4px;font-weight:700;
+  background:#1a1400;border:1px solid var(--gold);color:var(--gold2);
+}
+.ab-badge-owned{
+  font-size:.52rem;padding:2px 8px;border-radius:4px;
+  background:#0a1a10;border:1px solid #2a5a3a;color:#5ada8a;
+}
+.ab-badge-locked{
+  font-size:.52rem;padding:2px 8px;border-radius:4px;
+  background:#0a0a0a;border:1px solid #2a2a2a;color:#3a3a3a;
+}
+.ab-unlock-hint{
+  font-size:.5rem;color:#3a5a4a;text-align:right;line-height:1.4;max-width:100px;
+}
 #iconCollectionScreen{
   position:fixed;inset:0;z-index:60;
   background:var(--bg);
@@ -1306,34 +1508,68 @@ body::before{
   <div style="width:100%;max-width:480px;">
     <button onclick="closeGacha()" style="background:none;border:none;color:#5a7a6a;font-size:.75rem;cursor:pointer;padding:4px 0;margin-bottom:8px;">← ロビーへ戻る</button>
     <div class="gacha-title">✨ ガチャ</div>
-    <div class="gacha-sub">LEGEND排出でランダムに能力が解放！</div>
 
-    <!-- レアリティ表 -->
-    <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;justify-content:center;">
-      <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#0a1a14;border:1px solid #2a4a3a;color:#5a8a7a;">NORMAL 89.9%</span>
-      <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#0a0a24;border:1px solid #3333aa;color:#8888ff;">RARE 10%</span>
-      <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#18081a;border:1px solid #8833aa;color:#cc66ff;">EPIC 1%</span>
-      <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#1a0e00;border:1px solid #ffd700;color:#ffd700;">LEGEND 0.1%</span>
+    <!-- タブ切り替え -->
+    <div style="display:flex;gap:6px;margin-bottom:16px;">
+      <button id="gachaTabStd" onclick="switchGachaTab('standard')" style="
+        flex:1;padding:9px 0;border-radius:8px;font-family:inherit;font-size:.72rem;font-weight:700;
+        cursor:pointer;transition:all .2s;letter-spacing:.05em;
+        background:linear-gradient(135deg,#0a1a10,#051008);border:1.5px solid #3ada8a;color:#3ada8a;">
+        ⭐ 常設ガチャ
+      </button>
+      <button id="gachaTabCollab" onclick="switchGachaTab('collab')" style="
+        flex:1;padding:9px 0;border-radius:8px;font-family:inherit;font-size:.72rem;font-weight:700;
+        cursor:pointer;transition:all .2s;letter-spacing:.05em;
+        background:#030a10;border:1.5px solid #2a3a4a;color:#3a5a6a;">
+        🌟 コラボガチャ
+      </button>
     </div>
 
-    <!-- コイン残高 -->
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;justify-content:center;">
-      <span style="font-size:1.1rem;">🪙</span>
-      <span style="font-size:.85rem;font-weight:700;color:var(--gold);" id="gachaCoinDisplay">0</span>
-      <span style="font-size:.62rem;color:#5a7a6a;">手にビコイン</span>
-    </div>
-    <div class="gacha-btn-wrap">
-      <button class="gacha-pull-btn gacha-pull-10" onclick="doPull10()">🎰 10連ガチャ（🪙10枚）</button>
+    <!-- 常設ガチャパネル -->
+    <div id="gachaPanelStandard">
+      <div class="gacha-sub">LEGEND排出でランダムに能力が解放！</div>
+      <!-- レアリティ表 -->
+      <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;justify-content:center;">
+        <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#0a1a14;border:1px solid #2a4a3a;color:#5a8a7a;">NORMAL 89.9%</span>
+        <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#0a0a24;border:1px solid #3333aa;color:#8888ff;">RARE 10%</span>
+        <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#18081a;border:1px solid #8833aa;color:#cc66ff;">EPIC 1%</span>
+        <span style="font-size:.55rem;padding:3px 8px;border-radius:4px;background:#1a0e00;border:1px solid #ffd700;color:#ffd700;">LEGEND 0.1%</span>
+      </div>
+      <!-- コイン残高 -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;justify-content:center;">
+        <span style="font-size:1.1rem;">🪙</span>
+        <span style="font-size:.85rem;font-weight:700;color:var(--gold);" id="gachaCoinDisplay">0</span>
+        <span style="font-size:.62rem;color:#5a7a6a;">手にビコイン</span>
+      </div>
+      <div class="gacha-btn-wrap">
+        <button class="gacha-pull-btn gacha-pull-10" onclick="doPull10()">🎰 10連ガチャ（🪙10枚）</button>
+      </div>
+      <!-- 所持能力コレクション -->
+      <div class="gacha-collection" style="display:none;">
+        <div class="gacha-col-title">⚡ 所持能力（タップで装備）</div>
+        <div class="gacha-col-grid" id="abilityCollection"></div>
+      </div>
+      <!-- 統計 -->
+      <div style="margin-top:12px;text-align:center;font-size:.55rem;color:#2a4a3a;" id="gachaStat"></div>
     </div>
 
-    <!-- 所持能力コレクション（非表示） -->
-    <div class="gacha-collection" style="display:none;">
-      <div class="gacha-col-title">⚡ 所持能力（タップで装備）</div>
-      <div class="gacha-col-grid" id="abilityCollection"></div>
+    <!-- コラボガチャパネル -->
+    <div id="gachaPanelCollab" style="display:none;">
+      <div style="
+        background:linear-gradient(135deg,#0d1020,#080c18);
+        border:1.5px solid #2a3a5a;border-radius:12px;
+        padding:32px 20px;text-align:center;
+      ">
+        <div style="font-size:2rem;margin-bottom:12px;">🌟</div>
+        <div style="font-size:.85rem;font-weight:700;color:#6a8acc;letter-spacing:.1em;margin-bottom:8px;">コラボガチャ</div>
+        <div style="font-size:.65rem;color:#3a5a7a;line-height:1.8;">
+          現在準備中です<br>
+          <span style="color:#2a4a6a;">コラボ開催時にここから引けます</span>
+        </div>
+        <div style="margin-top:20px;font-size:1.5rem;opacity:.3;">🚧</div>
+      </div>
     </div>
 
-    <!-- 統計 -->
-    <div style="margin-top:12px;text-align:center;font-size:.55rem;color:#2a4a3a;" id="gachaStat"></div>
   </div>
 </div>
 
@@ -1391,6 +1627,34 @@ body::before{
 
 <!-- PROFILE SCREEN -->
 <!-- ICON COLLECTION SCREEN -->
+<div id="matBookScreen">
+  <div style="width:100%;max-width:520px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-shrink:0;">
+      <button onclick="closeMatBook()" class="icon-col-back">← 戻る</button>
+      <div>
+        <div style="font-size:.95rem;font-weight:900;color:var(--gold);letter-spacing:.1em;">🎴 マット図鑑</div>
+        <div style="font-size:.55rem;color:#4a7a5a;margin-top:2px;">タップして卓のデザインを変更できます</div>
+      </div>
+    </div>
+    <div class="mat-book-grid" id="matBookGrid"></div>
+  </div>
+</div>
+
+<div id="abilityBookScreen">
+  <div style="width:100%;max-width:520px;">
+    <!-- ヘッダー -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-shrink:0;">
+      <button onclick="closeAbilityBook()" class="icon-col-back">← 戻る</button>
+      <div>
+        <div style="font-size:.95rem;font-weight:900;color:var(--gold);letter-spacing:.1em;">⚡ 能力図鑑</div>
+        <div style="font-size:.55rem;color:#4a7a5a;margin-top:2px;">タップして装備・解除できます</div>
+      </div>
+    </div>
+    <!-- カードリスト -->
+    <div id="abilityBookList" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;"></div>
+  </div>
+</div>
+
 <div id="iconCollectionScreen">
   <div class="icon-col-header">
     <button class="icon-col-back" onclick="closeIconCollection()">← 戻る</button>
@@ -1405,52 +1669,81 @@ body::before{
 
   </div>
   <div class="profile-card">
-    <!-- アイコン選択 -->
-    <h3 style="margin-top:8px;">アイコン</h3>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
-      <div id="iconDisplay" onclick="openIconCollection()" style="width:72px;height:90px;display:flex;align-items:center;justify-content:center;border:2px solid #2a5a3a;border-radius:12px;cursor:pointer;background:#040c12;transition:border-color .15s;font-size:.55rem;color:#3a5a4a;" title="クリックで変更">未設定</div>
-      <span style="font-size:.6rem;color:#3a5a4a;">タップして図鑑へ</span>
-    </div>
+    <!-- 2列グリッド -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;">
 
-    <!-- 名前 -->
-    <h3>プレイヤー名</h3>
-    <input class="profile-input" id="profileName" type="text" maxlength="12" placeholder="プレイヤー名を入力">
-
-    <!-- 能力選択 -->
-    <h3 style="margin-top:12px;">能力</h3>
-    <div id="abilityDisplay" onclick="toggleAbilityPopup()" style="display:flex;align-items:center;gap:10px;background:#040c12;border:2px solid #2a5a3a;border-radius:10px;padding:10px 14px;cursor:pointer;margin-bottom:6px;transition:border-color .15s;">
-      <span id="abilityDisplayIcon" style="font-size:1.8rem;">🚫</span>
-      <div>
-        <div id="abilityDisplayName" style="font-size:.75rem;font-weight:700;color:#c0d8c0;">能力なし</div>
-        <div id="abilityDisplayDesc" style="font-size:.55rem;color:#5a7a6a;">特殊能力なし</div>
+      <!-- 左列: アイコン・名前 -->
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <!-- アイコン -->
+        <div>
+          <h3 style="margin-bottom:6px;">アイコン</h3>
+          <div id="iconDisplay" onclick="openIconCollection()" style="
+            width:100%;aspect-ratio:3/4;max-width:90px;
+            display:flex;align-items:center;justify-content:center;
+            border:2px solid #2a5a3a;border-radius:12px;cursor:pointer;
+            background:#040c12;transition:border-color .15s;
+            font-size:.52rem;color:#3a5a4a;overflow:hidden;
+          " title="クリックで変更">未設定</div>
+        </div>
+        <!-- 名前 -->
+        <div>
+          <h3 style="margin-bottom:6px;">プレイヤー名</h3>
+          <input class="profile-input" id="profileName" type="text" maxlength="12" placeholder="名前を入力" style="width:100%;">
+        </div>
       </div>
-      <span style="margin-left:auto;font-size:.55rem;color:#3a5a4a;">タップして変更</span>
-    </div>
-    <!-- hidden input for abilityList compatibility -->
-    <div id="abilityList" style="display:none;"></div>
-    <div id="abilityPopup" style="display:none;background:#030a10;border:1px solid #1a3a2a;border-radius:10px;padding:8px;margin-bottom:10px;max-height:260px;overflow-y:auto;">
-    </div>
 
-    <!-- マット選択 -->
-    <h3 style="margin-top:12px;">マット</h3>
-    <div id="matSelectWrap" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-    </div>
+      <!-- 右列: 能力・マット・エモート -->
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <!-- 能力 -->
+        <div>
+          <h3 style="margin-bottom:6px;">能力</h3>
+          <div id="abilityDisplay" onclick="openAbilityBook()" style="
+            display:flex;align-items:center;gap:8px;
+            background:#040c12;border:2px solid #2a5a3a;border-radius:10px;
+            padding:8px 10px;cursor:pointer;transition:border-color .15s;
+          ">
+            <span id="abilityDisplayIcon" style="font-size:1.6rem;flex-shrink:0;">🚫</span>
+            <div style="min-width:0;">
+              <div id="abilityDisplayName" style="font-size:.68rem;font-weight:700;color:#c0d8c0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">能力なし</div>
+              <div style="font-size:.48rem;color:#3a5a4a;margin-top:1px;">タップして変更</div>
+            </div>
+          </div>
+          <div id="abilityList" style="display:none;"></div>
+          <div id="abilityPopup" style="display:none;"></div>
+        </div>
+        <!-- マット -->
+        <div>
+          <h3 style="margin-bottom:6px;">マット</h3>
+          <div id="matSelectWrap" onclick="openMatBook()" style="
+            display:flex;align-items:center;gap:8px;
+            background:#040c12;border:2px solid #2a5a3a;border-radius:10px;
+            padding:8px 10px;cursor:pointer;transition:border-color .15s;
+          ">
+            <div id="matPreviewThumb" style="width:48px;height:32px;border-radius:5px;overflow:hidden;flex-shrink:0;"></div>
+            <div style="min-width:0;">
+              <div id="matPreviewLabel" style="font-size:.68rem;font-weight:700;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">緑（デフォルト）</div>
+              <div style="font-size:.48rem;color:#3a5a4a;margin-top:1px;">タップして変更</div>
+            </div>
+          </div>
+        </div>
+        <!-- エモート -->
+        <div>
+          <h3 style="margin-bottom:6px;">エモート</h3>
+          <div id="emoteEquippedPreview" onclick="openEmoteCollection()" style="
+            display:flex;gap:6px;align-items:center;flex-wrap:wrap;cursor:pointer;
+            background:#030a10;border:1.5px solid #1a3a2a;border-radius:10px;
+            padding:8px 10px;transition:border-color .15s;
+          " onmouseover="this.style.borderColor='#3a7a5a'" onmouseout="this.style.borderColor='#1a3a2a'">
+            <div id="emoteEquippedSlots" style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;width:100%;"></div>
+            <div style="font-size:.48rem;color:#3a6a5a;">📖 図鑑</div>
+          </div>
+          <div id="emoteSelectWrap" style="display:none;"></div>
+        </div>
+      </div>
 
-    <!-- エモート選択 -->
-    <h3 style="margin-top:12px;">エモート</h3>
-    <p style="font-size:.55rem;color:#4a7a6a;margin:0 0 8px;">装備中セット（クリックで図鑑を開く）</p>
-    <!-- 装備中プレビュー -->
-    <div id="emoteEquippedPreview" onclick="openEmoteCollection()" style="
-      display:flex;gap:8px;align-items:center;flex-wrap:wrap;cursor:pointer;
-      background:#030a10;border:1.5px solid #1a3a2a;border-radius:10px;
-      padding:10px 14px;margin-bottom:8px;transition:border-color .15s;
-    " onmouseover="this.style.borderColor='#3a7a5a'" onmouseout="this.style.borderColor='#1a3a2a'">
-      <div id="emoteEquippedSlots" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
-      <div style="font-size:.55rem;color:#3a6a5a;margin-left:4px;">📖 図鑑を開く</div>
-    </div>
-    <div id="emoteSelectWrap" style="display:none;"></div>
+    </div><!-- /2列グリッド -->
 
-    <button class="start-btn" onclick="saveProfile()">保存してロビーへ →</button>
+    <button class="start-btn" style="margin-top:14px;" onclick="saveProfile()">保存してロビーへ →</button>
   </div>
 </div>
 
@@ -1461,12 +1754,23 @@ body::before{
     <h1 style="letter-spacing:.05em;">手にビじゃん</h1>
   </div>
 
-  <!-- Top nav -->
-  <div style="display:flex;gap:8px;justify-content:center;align-items:center;">
+  <!-- プレイヤーカード -->
+  <div style="display:flex;justify-content:center;align-items:center;gap:8px;">
+    <div id="lobbyPlayerCard" onclick="openProfile()" title="プロフィールを編集">
+      <div class="lpc-icon">
+        <div id="lpcIconInner" class="lpc-icon-empty">アイコン<br>未設定</div>
+      </div>
+      <div class="lpc-info">
+        <div class="lpc-name" id="lpcName">プレイヤー</div>
+        <div class="lpc-ability" id="lpcAbility">⚡ 能力なし</div>
+        <div class="lpc-coins" id="lpcCoins">🪙 ---</div>
+        <div class="lpc-edit">✏️ タップして編集</div>
+      </div>
+    </div>
     <button onclick="toggleTitleSettings()" style="
       background:#030a10;border:1px solid #1a3a2a;border-radius:7px;
       color:#5a8a6a;font-size:1rem;padding:6px 10px;cursor:pointer;
-      transition:all .15s;" title="設定">⚙️</button>
+      transition:all .15s;align-self:stretch;" title="設定">⚙️</button>
   </div>
 
   <!-- タイトル設定パネル -->
@@ -1580,6 +1884,51 @@ body::before{
 
   <!-- Cards row -->
   <div id="lobbyCards">
+  <!-- バナー -->
+  <div id="lobbyBannerWrap" ontouchstart="_bnTouchStart(event)" ontouchend="_bnTouchEnd(event)" style="width:100%;flex-basis:100%;">
+    <div class="lobby-banner-track" id="lobbyBannerTrack">
+
+      <!-- ★ バナー1: お知らせ（テキスト型） -->
+      <div class="lobby-banner-slide">
+        <div class="lbs-inner" style="background:linear-gradient(135deg,#0a1a10,#051508);border:1px solid #1a4a2a;">
+          <span class="lbs-tag" style="background:#0d2a10;color:#3ada8a;border:1px solid #2a6a3a;">📢 お知らせ</span>
+          <div class="lbs-title" style="color:#c9f0d0;">手にビじゃん へようこそ！</div>
+          <div class="lbs-desc" style="color:#5a9a6a;">ガチャを引いて能力を解放しよう。ランクマッチでレートを上げろ！</div>
+        </div>
+      </div>
+
+      <!-- ★ バナー2: コラボガチャ（テキスト型） -->
+      <div class="lobby-banner-slide">
+        <div class="lbs-inner" style="background:linear-gradient(135deg,#0d0a20,#070518);border:1px solid #3a2a6a;">
+          <span class="lbs-tag" style="background:#1a0a30;color:#aa80ff;border:1px solid #5a3aaa;">🌟 コラボガチャ</span>
+          <div class="lbs-title" style="color:#d0b0ff;">コラボガチャ 近日公開予定</div>
+          <div class="lbs-desc" style="color:#7a5aaa;">ガチャ画面のコラボタブをチェック！限定アイコンが登場します。</div>
+        </div>
+      </div>
+
+      <!-- ★ バナー3: Twitch特典（テキスト型） -->
+      <div class="lobby-banner-slide">
+        <div class="lbs-inner" style="background:linear-gradient(135deg,#12082a,#0a0418);border:1px solid #5a3a9a;">
+          <span class="lbs-tag" style="background:#1e0a40;color:#c9a0ff;border:1px solid #7a4acc;">💜 Twitch特典</span>
+          <div class="lbs-title" style="color:#e0c0ff;">サブスクで毎月 🪙1,000コイン</div>
+          <div class="lbs-desc" style="color:#9a70cc;">ショップからTwitchを連携すると毎月コインとTBBコインが受け取れます！</div>
+        </div>
+      </div>
+
+      <!-- ★ バナー4: BOMBじゃん（テキスト型） -->
+      <div class="lobby-banner-slide">
+        <div class="lbs-inner" style="background:linear-gradient(135deg,#1a0505,#0d0202);border:1px solid #5a1a1a;">
+          <span class="lbs-tag" style="background:#2a0808;color:#ff8866;border:1px solid #aa3322;">💣 BOMBじゃん</span>
+          <div class="lbs-title" style="color:#ffaa88;">爆弾を避けて山牌を引け！</div>
+          <div class="lbs-desc" style="color:#aa6655;">ステージ5の倍数クリアでコイン獲得。どこまで進めるか挑戦しよう。</div>
+        </div>
+      </div>
+
+    </div>
+    <!-- ドット -->
+    <div id="lobbyBannerDots"></div>
+  </div>
+
   <!-- Mode select -->
   <div class="lobby-card" id="lobbyMode">
     <h3>モード選択</h3>
@@ -7980,6 +8329,35 @@ function showFinalResult(){
     }
   }
 
+  // ソロ対戦: マット解放チェック（DBに送信）
+  if(!NET.online && myRank===1){
+    const cpuAbilities = G.players
+      .filter((_,i)=>i!==NET.myIdx)
+      .map(p=>p.ability||'');
+    fetch('/api/solo-result',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({rank:1, numPlayers, cpuAbilities})
+    }).then(r=>r.json()).then(d=>{
+      if(!d.ok) return;
+      PROFILE.ownedMats = d.ownedMats;
+      PROFILE.winsVsTenbi2p = d.winsVsTenbi2p;
+      if(d.newlyUnlocked && d.newlyUnlocked.length > 0){
+        const rewardEl = document.getElementById('resultCoinReward');
+        d.newlyUnlocked.forEach(matId=>{
+          const m = MAT_LIST.find(m=>m.id===matId);
+          if(rewardEl) rewardEl.innerHTML +=
+            `<br><span style="color:#c9a84c;font-size:.8rem;">🎴 マット「${m?m.label:matId}」を獲得しました！</span>`;
+        });
+      } else if(cpuAbilities.includes('tenbi') && numPlayers===2 && !(PROFILE.ownedMats||[]).includes('mat01')){
+        // 未解放の場合は進捗表示
+        const rewardEl = document.getElementById('resultCoinReward');
+        if(rewardEl) rewardEl.innerHTML +=
+          `<br><span style="font-size:.65rem;color:#5a7a6a;">🎴 mat01解放まで あと${5-d.winsVsTenbi2p}勝</span>`;
+      }
+    }).catch(()=>{});
+  }
+
   // ランクマッチの場合、ホストがスコアを提出してレートを更新
   const ratingBox=document.getElementById('resultRatingBox');
   if(ratingBox) ratingBox.style.display='none';
@@ -10460,12 +10838,14 @@ function _doSteal(myIdx,fromPidx,discardIdx){
 // ============================================================
 // PROFILE  (localStorage)
 // ============================================================
-let PROFILE = {name:'プレイヤー', ability:'', abilities:[], totalPulls:0, coins:0, matId:''};
+let PROFILE = {name:'プレイヤー', ability:'', abilities:[], totalPulls:0, coins:0, tbbCoins:0, matId:'', ownedMats:[], winsVsTenbi2p:0};
 
 const MAT_LIST = [
-  { id: '',      label: '緑（デフォルト）', url: null },
-  { id: 'mat01', label: 'mat01',            url: 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/mat/mat01.png' },
+  { id: '',      label: '緑（デフォルト）', url: null, free: true },
+  { id: 'mat01', label: 'mat01',            url: 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/mat/mat01.png', free: false,
+    unlockDesc: 'CPU「手にビ」と２人戦で５回勝利' },
 ];
+function _isMatOwned(id){ if(id==='') return true; const m=MAT_LIST.find(m=>m.id===id); const mats=PROFILE.ownedMats||[]; return !!(m&&(m.free||mats.includes(id))); }
 function matUrl(id){ const m=MAT_LIST.find(m=>m.id===id); return m?.url||null; }
 function applyMat(){
   const url=matUrl(PROFILE.matId||'');
@@ -10508,7 +10888,7 @@ function loadProfile(){
     const s=localStorage.getItem('mjProfile');
     if(s){
       const p=JSON.parse(s);
-      const {coins:_c, abilities:_ab, ability:_abl, ...pSafe} = p; // coins/abilities/ability はDBのみで管理
+      const {coins:_c, abilities:_ab, ability:_abl, tbbCoins:_tbb0, ...pSafe} = p; // coins/abilities/ability/tbbCoins はDBのみで管理
       PROFILE=Object.assign({abilities:[],totalPulls:0,coins:0},pSafe);
     }
   }catch(e){}
@@ -10531,8 +10911,13 @@ function loadProfile(){
         twitchLinked:          data.twitchLinked          ?? false,
         twitchSubClaimable:    data.twitchSubClaimable    ?? false,
         twitchEmoteClaimable:  data.twitchEmoteClaimable  ?? false,
+        serverTime:            data.serverTime            ?? null, // サーバー現在時刻
+        ownedMats:             data.ownedMats             ?? PROFILE.ownedMats ?? [],
+        winsVsTenbi2p:         data.winsVsTenbi2p         ?? PROFILE.winsVsTenbi2p ?? 0,
+        tbbCoins:              data.tbbCoins              ?? PROFILE.tbbCoins ?? 0,
+        tbbSubClaimable:       data.tbbSubClaimable       ?? false,
       });
-      const {coins:_coins, abilities:_ab, ability:_abl, ...profileToCache} = PROFILE; // coins/abilities/ability はlocalStorageに保存しない
+      const {coins:_coins, abilities:_ab, ability:_abl, tbbCoins:_tbb, ...profileToCache} = PROFILE; // coins/abilities/ability/tbbCoins はlocalStorageに保存しない
       try{ localStorage.setItem('mjProfile',JSON.stringify(profileToCache)); }catch(e){}
       _applyProfile();
     })
@@ -10622,7 +11007,7 @@ function renderIconCollection(){
 function pickGachaIconFromCollection(id){
   if(!PROFILE.gachaIcons||!PROFILE.gachaIcons.includes(id)) return;
   PROFILE.iconId=id;
-  const {coins:_c2, abilities:_ab2, ability:_abl2, ...profileToCache2} = PROFILE; // coins/abilities/ability はlocalStorageに保存しない
+  const {coins:_c2, abilities:_ab2, ability:_abl2, tbbCoins:_tbb2, ...profileToCache2} = PROFILE; // coins/abilities/ability/tbbCoins はlocalStorageに保存しない
   try{ localStorage.setItem('mjProfile',JSON.stringify(profileToCache2)); }catch(e){}
   updateProfileBadge();
   closeIconCollection();
@@ -10655,6 +11040,81 @@ function renderProfileGachaIcons(){
   grid.innerHTML=html;
 }
 function pickIcon(icon){ } // legacy (emoji icons removed)
+// ============================================================
+// ABILITY BOOK（能力図鑑）
+// ============================================================
+function openAbilityBook(){
+  document.getElementById('abilityPopup').style.display='none';
+  document.getElementById('abilityBookScreen').classList.add('active');
+  renderAbilityBook();
+}
+function closeAbilityBook(){
+  document.getElementById('abilityBookScreen').classList.remove('active');
+}
+function renderAbilityBook(){
+  const list = document.getElementById('abilityBookList');
+  if(!list) return;
+  const current = PROFILE.ability||'';
+
+  const PARENT_KEYS = new Set(['sanctuary','pinzu']);
+  const normalAbilities = ALL_ABILITY_DATA.filter(ab => ab.key !== '' && !PARENT_KEYS.has(ab.key));
+  const parentAbilities = ALL_ABILITY_DATA.filter(ab => PARENT_KEYS.has(ab.key));
+
+  function buildCard(ab){
+    const owned    = _isAbilityOwned(ab.key);
+    const equipped = ab.key === current;
+    let cls = 'ab-card';
+    if(equipped) cls += ' equipped-card';
+    else if(owned) cls += ' owned-card';
+    else cls += ' locked-card';
+    const clickAttr = owned ? `onclick="pickAbilityBook('${ab.key}')"` : '';
+    const badge = equipped
+      ? `<span class="ab-badge-equipped">✓ 装備中</span>`
+      : owned
+        ? `<span class="ab-badge-owned">所持済み</span>`
+        : `<span class="ab-badge-locked">🔒 未解放</span>`;
+    const tagHtml = ab.tag ? `<span class="ab-tag">${ab.tag}</span>` : '';
+    const locked = !owned;
+    const icon  = locked ? '？' : ab.icon;
+    const name  = locked ? '？？？' : ab.name;
+    const desc  = locked ? '未解放の能力です' : ab.desc;
+    const tag   = locked ? '' : tagHtml;
+    return `<div class="${cls}" ${clickAttr}>
+      <div class="ab-icon">${icon}</div>
+      <div class="ab-body">
+        <div class="ab-name">${name}</div>
+        <div class="ab-desc">${desc}</div>
+        ${tag}
+      </div>
+      <div class="ab-right">${badge}</div>
+    </div>`;
+  }
+
+  function sectionHeader(label, desc){
+    return `<div style="grid-column:1/-1;margin-top:6px;margin-bottom:2px;">
+      <div style="font-size:.65rem;font-weight:700;color:var(--gold);letter-spacing:.1em;border-bottom:1px solid #1a3a2a;padding-bottom:5px;">${label}</div>
+      <div style="font-size:.52rem;color:#4a7a5a;margin-top:3px;">${desc}</div>
+    </div>`;
+  }
+
+  list.innerHTML =
+    sectionHeader('⚡ アビリティ', 'いつでも使用可能な能力') +
+    normalAbilities.map(buildCard).join('') +
+    sectionHeader('👑 親アビリティ', '親番中のみ発動する特殊能力') +
+    parentAbilities.map(buildCard).join('');
+}
+function pickAbilityBook(ability){
+  if(!_isAbilityOwned(ability)) return;
+  // 同じ能力タップで解除
+  PROFILE.ability = PROFILE.ability === ability ? '' : ability;
+  saveProfileSilent();
+  updateProfileBadge();
+  // プロフィール画面のDisplayも更新
+  pickAbility(PROFILE.ability);
+  // 図鑑を再描画
+  renderAbilityBook();
+}
+
 function toggleAbilityPopup(){
   const p=document.getElementById('abilityPopup');
   const willOpen=p.style.display==='none';
@@ -10667,14 +11127,14 @@ function toggleAbilityPopup(){
 const INITIAL_ABILITY_KEYS = ['pen'];
 const ALL_ABILITY_DATA = [
   {key:'',       icon:'🚫', name:'能力なし',    desc:'特殊能力なし',       tag:'',     initial:true},
-  {key:'mine',   icon:'💣', name:'地雷',        desc:'山牌に地雷を仕掛ける', tag:'妨害系', initial:true},
-  {key:'light',  icon:'☀️', name:'光',          desc:'牌を1枚覗き見する',   tag:'索敵系', initial:true},
-  {key:'haku',   icon:'🀆', name:'白',          desc:'手牌1枚を白に変換',   tag:'変換系', initial:true},
-  {key:'pen',    icon:'🖊️', name:'ペン',        desc:'山牌に絵を描く',       tag:'落書き系',initial:true},
-  {key:'yami',   icon:'🌑', name:'闇',          desc:'オープンリーチ時に牌を裏向きに', tag:'撹乱系', initial:false},
-  {key:'sanctuary',icon:'🏛️',name:'聖域',      desc:'親番中、失点を受けない', tag:'防御系', initial:false},
-  {key:'steal',  icon:'🃏', name:'スチール',    desc:'捨て牌から1枚盗む',   tag:'奪取系', initial:false},
-  {key:'pinzu',  icon:'🔵', name:'ピンズー教',  desc:'筒子の位置が見える',   tag:'情報系', initial:false},
+  {key:'mine',   icon:'💣', name:'地雷',        desc:'１局に１回、山牌に３つ爆弾をしかけられる。爆弾牌を引くと、爆発して捨て牌に。', tag:'妨害系', initial:true},
+  {key:'light',  icon:'☀️', name:'光',          desc:'１局に１回、裏向きの牌を表に出来る。',   tag:'索敵系', initial:true},
+  {key:'haku',   icon:'🀆', name:'白',          desc:'１局に１回、手牌を１枚"白"に変化させられる。',   tag:'変換系', initial:true},
+  {key:'pen',    icon:'🖊️', name:'ペン',        desc:'山牌に絵を描く。',       tag:'落書き系',initial:true},
+  {key:'yami',   icon:'🌑', name:'闇',          desc:'１局に１回、自分の手牌の１枚を闇に染める事が出来る。', tag:'撹乱系', initial:false},
+  {key:'sanctuary',icon:'🏛️',name:'聖域',      desc:'親番中は失点しない。', tag:'防御系', initial:false},
+  {key:'steal',  icon:'🃏', name:'スチール',    desc:'１局に１回、相手プレイヤーの捨て牌から１枚盗める。聴牌時には使用不可。',   tag:'奪取系', initial:false},
+  {key:'pinzu',  icon:'🔵', name:'ピンズー教',  desc:'親番中は筒子の位置が分かる。親番でツモ上りが出来なくなる。',   tag:'情報系', initial:false},
 ];
 
 function _isAbilityOwned(key){
@@ -10717,14 +11177,14 @@ function pickAbility(ability){
   // ──────────────────────────────────────────────────────
   const ABILITY_DATA={
     '':['🚫','能力なし','特殊能力なし'],
-    'mine':['💣','地雷','山牌に地雷を仕掛ける'],
-    'light':['☀️','光','牌を1枚覗き見する'],
-    'yami':['🌑','闇','オープンリーチ時に牌を裏向きに'],
-    'haku':['🀆','白','手牌1枚を白に変換'],
-    'sanctuary':['🏛️','聖域','親番中、失点を受けない'],
-    'steal':['🃏','スチール','捨て牌から1枚盗む'],
-    'pen':['🖊️','ペン','山牌に絵を描く'],
-    'pinzu':['🔵','ピンズー教','筒子の位置が見える'],
+    'mine':['💣','地雷','１局に１回、山牌に３つ爆弾をしかけられる。爆弾牌を引くと、爆発して捨て牌に。'],
+    'light':['☀️','光','１局に１回、裏向きの牌を表に出来る。'],
+    'yami':['🌑','闇','１局に１回、自分の手牌の１枚を闇に染める事が出来る。'],
+    'haku':['🀆','白','１局に１回、手牌を１枚"白"に変化させられる。'],
+    'sanctuary':['🏛️','聖域','親番中は失点しない。'],
+    'steal':['🃏','スチール','１局に１回、相手プレイヤーの捨て牌から１枚盗める。聴牌時には使用不可。'],
+    'pen':['🖊️','ペン','山牌に絵を描く。'],
+    'pinzu':['🔵','ピンズー教','親番中は筒子の位置が分かる。親番でツモ上りが出来なくなる。'],
   };
   PROFILE.ability=ability;
   const d=ABILITY_DATA[ability]||['🚫','能力なし',''];
@@ -10740,7 +11200,7 @@ function pickAbility(ability){
 function saveProfile(){
   const ni=document.getElementById('profileName');
   PROFILE.name=(ni&&ni.value.trim())||'プレイヤー';
-  const {coins:_c3, abilities:_ab3, ability:_abl3, ...profileToCache3} = PROFILE; // coins/abilities/ability はlocalStorageに保存しない
+  const {coins:_c3, abilities:_ab3, ability:_abl3, tbbCoins:_tbb3, ...profileToCache3} = PROFILE; // coins/abilities/ability/tbbCoins はlocalStorageに保存しない
   try{ localStorage.setItem('mjProfile',JSON.stringify(profileToCache3)); }catch(e){}
   updateProfileBadge();
   closeProfile();
@@ -11104,9 +11564,37 @@ function updateGachaCoinDisplay(){
   if(el) el.textContent=(PROFILE.coins||0).toLocaleString();
 }
 
+let _gachaCurrentTab = 'standard';
+
+function switchGachaTab(tab){
+  _gachaCurrentTab = tab;
+  const isStd = tab === 'standard';
+
+  // パネル切り替え
+  document.getElementById('gachaPanelStandard').style.display = isStd ? '' : 'none';
+  document.getElementById('gachaPanelCollab').style.display   = isStd ? 'none' : '';
+
+  // タブボタンのアクティブスタイル
+  const tabStd    = document.getElementById('gachaTabStd');
+  const tabCollab = document.getElementById('gachaTabCollab');
+  if(tabStd){
+    tabStd.style.background     = isStd ? 'linear-gradient(135deg,#0a1a10,#051008)' : '#030a10';
+    tabStd.style.borderColor    = isStd ? '#3ada8a' : '#2a3a4a';
+    tabStd.style.color          = isStd ? '#3ada8a' : '#3a5a6a';
+    tabStd.style.boxShadow      = isStd ? '0 0 10px #3ada8a33' : '';
+  }
+  if(tabCollab){
+    tabCollab.style.background  = !isStd ? 'linear-gradient(135deg,#0a1020,#050818)' : '#030a10';
+    tabCollab.style.borderColor = !isStd ? '#6a8acc' : '#2a3a4a';
+    tabCollab.style.color       = !isStd ? '#8aaaff' : '#3a5a6a';
+    tabCollab.style.boxShadow   = !isStd ? '0 0 10px #6a8acc33' : '';
+  }
+}
+
 function openGacha(){
   document.getElementById('lobby').style.display='none';
   document.getElementById('gachaScreen').classList.add('active');
+  switchGachaTab(_gachaCurrentTab); // タブ状態を復元
   renderGachaCollection();
   updateGachaStat();
   updateGachaCoinDisplay();
@@ -11117,7 +11605,7 @@ function closeGacha(){
 }
 
 function saveProfileSilent(){
-  const {coins:_c4, abilities:_ab4, ability:_abl4, ...profileToCache4} = PROFILE; // coins/abilities/ability はlocalStorageに保存しない
+  const {coins:_c4, abilities:_ab4, ability:_abl4, tbbCoins:_tbb4, ...profileToCache4} = PROFILE; // coins/abilities/ability/tbbCoins はlocalStorageに保存しない
   try{ localStorage.setItem('mjProfile',JSON.stringify(profileToCache4)); }catch(e){}
   updateProfileBadge();
   // サーバー（Neon PostgreSQL）に保存（coins/totalPullsはサーバー管理のため送信しない）
@@ -11143,6 +11631,28 @@ function updateProfileBadge(){
     const abilityLabels={'':'能力なし','mine':'💣 地雷','light':'☀️ 光','yami':'🌑 闇','haku':'🀆 白','sanctuary':'🏛️ 聖域','pinzu':'🔵 ピンズー教','steal':'🃏 スチール','pen':'🖊️ ペン'};
     ba.textContent=abilityLabels[PROFILE.ability||'']||'能力なし';
   }
+  // ── ロビープレイヤーカード更新 ──
+  const lpcName = document.getElementById('lpcName');
+  const lpcAbility = document.getElementById('lpcAbility');
+  const lpcCoins = document.getElementById('lpcCoins');
+  const lpcIconInner = document.getElementById('lpcIconInner');
+  if(lpcName) lpcName.textContent = PROFILE.name||'プレイヤー';
+  if(lpcAbility){
+    const abilityIcons={'':'⚡ 能力なし','mine':'💣 地雷師','light':'☀️ 光の探偵','yami':'🌑 闇使い','haku':'🀆 白術士','sanctuary':'🏛️ 聖域守り','pinzu':'🔵 ピンズー教','steal':'🃏 盗賊','pen':'🖊️ ペン','tenbi':'🀄 手にビ'};
+    lpcAbility.textContent = abilityIcons[PROFILE.ability||'']||'⚡ 能力なし';
+  }
+  if(lpcCoins) lpcCoins.textContent = '🪙 ' + (PROFILE.coins!=null ? PROFILE.coins.toLocaleString() : '---');
+  if(lpcIconInner){
+    if(PROFILE.iconId){
+      lpcIconInner.innerHTML = `<img src="${gachaIconUrl(PROFILE.iconId)}" alt="${PROFILE.iconId}">`;
+      lpcIconInner.style.fontSize='';
+      lpcIconInner.style.color='';
+    } else {
+      lpcIconInner.innerHTML = 'アイコン<br>未設定';
+      lpcIconInner.style.fontSize='.48rem';
+      lpcIconInner.style.color='#2a4a3a';
+    }
+  }
 }
 
 function selectAbility(el,ability){
@@ -11150,6 +11660,71 @@ function selectAbility(el,ability){
   el.classList.add('selected');
   PROFILE.ability=ability;
 }
+
+// ============================================================
+// LOBBY BANNER
+// ============================================================
+(function(){
+  const BANNER_INTERVAL = 4000; // 4秒ごと自動スライド
+  let _bnIdx = 0;
+  let _bnTimer = null;
+  let _bnTotal = 0;
+  let _bnTouchX = 0;
+
+  function _bnInit(){
+    const track = document.getElementById('lobbyBannerTrack');
+    const dotsEl = document.getElementById('lobbyBannerDots');
+    if(!track || !dotsEl) return;
+    _bnTotal = track.children.length;
+    if(_bnTotal === 0) return;
+
+    // ドット生成
+    dotsEl.innerHTML = '';
+    for(let i=0;i<_bnTotal;i++){
+      const d = document.createElement('div');
+      d.className = 'lbd' + (i===0?' active':'');
+      d.onclick = (()=>{ const idx=i; return ()=>_bnGo(idx,true); })();
+      dotsEl.appendChild(d);
+    }
+    _bnGo(0, false);
+    _bnAutoStart();
+  }
+
+  function _bnGo(idx, resetTimer){
+    const track = document.getElementById('lobbyBannerTrack');
+    if(!track) return;
+    _bnIdx = (idx + _bnTotal) % _bnTotal;
+    track.style.transform = `translateX(-${_bnIdx * 100}%)`;
+    // ドット更新
+    document.querySelectorAll('.lbd').forEach((d,i)=>{
+      d.classList.toggle('active', i===_bnIdx);
+    });
+    if(resetTimer){ _bnAutoStop(); _bnAutoStart(); }
+  }
+
+  function _bnAutoStart(){
+    _bnTimer = setInterval(()=>_bnGo(_bnIdx+1, false), BANNER_INTERVAL);
+  }
+  function _bnAutoStop(){
+    if(_bnTimer){ clearInterval(_bnTimer); _bnTimer=null; }
+  }
+
+  // タッチスワイプ
+  window._bnTouchStart = function(e){
+    _bnTouchX = e.touches[0].clientX;
+    _bnAutoStop();
+  };
+  window._bnTouchEnd = function(e){
+    const dx = e.changedTouches[0].clientX - _bnTouchX;
+    if(Math.abs(dx) > 40) _bnGo(_bnIdx + (dx < 0 ? 1 : -1), false);
+    _bnAutoStart();
+  };
+
+  // ロビーが表示されたタイミングで初期化
+  document.addEventListener('DOMContentLoaded', ()=>{
+    setTimeout(_bnInit, 100);
+  });
+})();
 
 function startTitleBgmOnce(){
   if(!BGM.isPlaying) BGM.fadeIn(_titleBgmKey);
@@ -11171,22 +11746,77 @@ function openProfile(){
   renderAbilityPopup();
   // マット選択UIを生成
   renderMatSelect();
+  _updateMatPreview();
   // エモート選択UIを生成
   renderEmoteSelect();
 }
-function renderMatSelect(){
-  const wrap=document.getElementById('matSelectWrap');
-  if(!wrap) return;
-  wrap.innerHTML=MAT_LIST.map(m=>{
-    const sel=(PROFILE.matId||'')===(m.id);
-    const preview=m.url
-      ? `<img src="${m.url}" style="width:80px;height:54px;object-fit:cover;border-radius:6px;display:block;">`
-      : `<div style="width:80px;height:54px;border-radius:6px;background:linear-gradient(160deg,#0d3d28,#092a1c);display:flex;align-items:center;justify-content:center;font-size:.5rem;color:#4a8a6a;">デフォルト</div>`;
-    return `<div onclick="selectMat('${m.id}')" style="cursor:pointer;border:2px solid ${sel?'var(--gold)':'#1a3a2a'};border-radius:8px;padding:3px;background:${sel?'#1a1500':'#030a10'};transition:border-color .15s;">
+// ============================================================
+// MAT BOOK（マット図鑑）
+// ============================================================
+function openMatBook(){
+  document.getElementById('matBookScreen').classList.add('active');
+  renderMatBook();
+}
+function closeMatBook(){
+  document.getElementById('matBookScreen').classList.remove('active');
+}
+function renderMatBook(){
+  const grid = document.getElementById('matBookGrid');
+  if(!grid) return;
+  const current = PROFILE.matId||'';
+  grid.innerHTML = MAT_LIST.map(m => {
+    const sel = m.id === current;
+    const owned = _isMatOwned(m.id);
+    const preview = m.url
+      ? `<img class="mat-book-preview" src="${m.url}" alt="${m.label}" style="${owned?'':'filter:grayscale(1) brightness(.4);'}">`
+      : `<div class="mat-book-preview-default">デフォルト</div>`;
+    const badge = sel
+      ? `<span class="mat-sel-badge">✓ 使用中</span>`
+      : owned ? '' : `<span style="font-size:.5rem;padding:1px 6px;border-radius:3px;background:#0a0a0a;border:1px solid #2a2a2a;color:#4a4a4a;">🔒 未解放</span>`;
+    const winsProgress = (!owned && m.id==='mat01')
+      ? `<div style="font-size:.48rem;color:#4a6a5a;margin-top:2px;">${PROFILE.winsVsTenbi2p??0}/5勝</div>`
+      : '';
+    const clickAttr = owned ? `onclick="selectMatBook('${m.id}')"` : '';
+    return `<div class="mat-book-card${sel?' mat-selected':''}" ${clickAttr} style="${owned?'':'cursor:default;opacity:.5;filter:grayscale(.5);'}" >
       ${preview}
-      <div style="font-size:.5rem;color:${sel?'var(--gold)':'#4a7a6a'};text-align:center;margin-top:2px;">${m.label}</div>
+      <div class="mat-book-label" style="flex-direction:column;align-items:flex-start;gap:2px;">
+        <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
+          <span style="color:${sel?'var(--gold)':owned?'#5a8a7a':'#3a3a3a'};">${m.label}</span>
+          ${badge}
+        </div>
+        ${owned||!m.unlockDesc?'':'<div style="font-size:.48rem;color:#4a6a5a;line-height:1.4;">'+m.unlockDesc+'</div>'}
+        ${winsProgress}
+      </div>
     </div>`;
   }).join('');
+}
+function selectMatBook(id){
+  if(!_isMatOwned(id)) return;
+  PROFILE.matId = id;
+  applyMat();
+  saveProfileSilent();
+  _updateMatPreview();
+  renderMatBook();
+}
+function _updateMatPreview(){
+  const thumb = document.getElementById('matPreviewThumb');
+  const label = document.getElementById('matPreviewLabel');
+  // 未所持マットが設定されていたらデフォルトに戻す
+  if(PROFILE.matId && !_isMatOwned(PROFILE.matId)) PROFILE.matId='';
+  const m = MAT_LIST.find(m => m.id === (PROFILE.matId||'')) || MAT_LIST[0];
+  if(thumb){
+    if(m.url){
+      thumb.innerHTML = `<img src="${m.url}" style="width:100%;height:100%;object-fit:cover;">`;
+    } else {
+      thumb.innerHTML = `<div style="width:100%;height:100%;background:linear-gradient(160deg,#0d3d28,#092a1c);display:flex;align-items:center;justify-content:center;font-size:.5rem;color:#4a8a6a;">デフォルト</div>`;
+    }
+  }
+  if(label) label.textContent = m.label;
+}
+
+function renderMatSelect(){
+  // プロフィール画面のマット欄は_updateMatPreviewで管理（装備中1枚のみ表示）
+  _updateMatPreview();
 }
 function selectMat(id){
   PROFILE.matId=id;
@@ -11280,8 +11910,8 @@ function _renderEquippedPreview(){
     return;
   }
   el.innerHTML=slots.map(id=>{
-    if(!id) return `<div style="width:40px;height:40px;border-radius:6px;border:1.5px dashed #1a3a2a;background:#020a08;display:flex;align-items:center;justify-content:center;font-size:.5rem;color:#2a4a3a;">−</div>`;
-    return `<img src="${emoteUrl(id)}" style="width:40px;height:40px;border-radius:6px;border:1.5px solid #2a5a3a;background:#020a08;object-fit:contain;padding:2px;" alt="">`;
+    if(!id) return `<div style="aspect-ratio:1;border-radius:6px;border:1.5px dashed #1a3a2a;background:#020a08;display:flex;align-items:center;justify-content:center;font-size:.5rem;color:#2a4a3a;">−</div>`;
+    return `<img src="${emoteUrl(id)}" style="aspect-ratio:1;width:100%;border-radius:6px;border:1.5px solid #2a5a3a;background:#020a08;object-fit:contain;padding:2px;" alt="">`;
   }).join('');
 }
 
@@ -11575,9 +12205,51 @@ function renderTwitchSubPanel(){
         display:flex;justify-content:space-between;align-items:center;
       "><span>🪙 今月の特典コインを受け取る</span><span style="color:#c9a84c;">+1,000コイン</span></button>`;
   } else {
+    // 来月1日0:00までの残り日数をサーバー時刻ベースで計算（ローカル時刻改ざん対策）
+    const _now = PROFILE.serverTime ? new Date(PROFILE.serverTime) : new Date();
+    const _nextMonth = new Date(Date.UTC(_now.getUTCFullYear(), _now.getUTCMonth() + 1, 1, 0, 0, 0));
+    const _diffMs = _nextMonth - _now;
+    const _diffDays = Math.ceil(_diffMs / (1000 * 60 * 60 * 24));
+    const _diffH = Math.floor(_diffMs / (1000 * 60 * 60));
+    const _remainStr = _diffDays <= 1 ? `${_diffH}時間後` : `${_diffDays}日後`;
     coinBtn = `<div style="background:#0a0818;border:1px solid #2a1a4a;border-radius:8px;
-        padding:10px 14px;font-size:.62rem;color:#5a4a7a;">
-        ✅ 今月のコイン特典は受け取り済みです。来月またもらえます！
+        padding:10px 14px;font-size:.62rem;color:#5a4a7a;display:flex;justify-content:space-between;align-items:center;">
+        <span>✅ 今月のコイン特典は受け取り済みです</span>
+        <span style="color:#4a6a9a;background:#0d1a2a;border:1px solid #1a3a5a;border-radius:4px;padding:2px 8px;white-space:nowrap;">🔄 ${_remainStr}にリセット</span>
+       </div>`;
+  }
+
+  // ── ①-b TBBコインボタン ──
+  let tbbCoinBtn;
+  if(!linked){
+    tbbCoinBtn = `<div style="position:relative;opacity:0.75;">
+      <div style="background:linear-gradient(135deg,#1a0a2a,#0d0518);border:1.5px solid #6a3a9a;
+        border-radius:8px;padding:10px 20px;font-size:.7rem;color:#9a70cc;
+        font-weight:700;letter-spacing:.04em;display:flex;justify-content:space-between;align-items:center;">
+        <span>🪙 毎月の特典TBBコイン</span>
+        <span style="color:#88ddff;font-size:.8rem;">+100 TBB</span>
+      </div>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+        background:#00000044;border-radius:8px;font-size:1.1rem;">🔒</div>
+    </div>`;
+  } else if(PROFILE.tbbSubClaimable){
+    tbbCoinBtn = `<button id="tbbCoinBtn" onclick="claimTbbReward()" style="
+        background:linear-gradient(135deg,#0a2a3a,#051418);border:1.5px solid #3a9ae8;
+        border-radius:8px;color:#fff;font-weight:700;font-size:.7rem;
+        padding:10px 20px;cursor:pointer;letter-spacing:.04em;width:100%;
+        display:flex;justify-content:space-between;align-items:center;
+      "><span>🪙 今月の特典TBBコインを受け取る</span><span style="color:#88ddff;">+100 TBB</span></button>`;
+  } else {
+    const _nowT = PROFILE.serverTime ? new Date(PROFILE.serverTime) : new Date();
+    const _nextMonthT = new Date(Date.UTC(_nowT.getUTCFullYear(), _nowT.getUTCMonth() + 1, 1));
+    const _diffMsT = _nextMonthT - _nowT;
+    const _diffDaysT = Math.ceil(_diffMsT / (1000 * 60 * 60 * 24));
+    const _diffHT = Math.floor(_diffMsT / (1000 * 60 * 60));
+    const _remainStrT = _diffDaysT <= 1 ? `${_diffHT}時間後` : `${_diffDaysT}日後`;
+    tbbCoinBtn = `<div style="background:#0a0818;border:1px solid #2a1a4a;border-radius:8px;
+        padding:10px 14px;font-size:.62rem;color:#5a4a7a;display:flex;justify-content:space-between;align-items:center;">
+        <span>✅ 今月のTBBコイン特典は受け取り済みです</span>
+        <span style="color:#4a6a9a;background:#0d1a2a;border:1px solid #1a3a5a;border-radius:4px;padding:2px 8px;white-space:nowrap;">🔄 ${_remainStrT}にリセット</span>
        </div>`;
   }
 
@@ -11652,7 +12324,7 @@ function renderTwitchSubPanel(){
     </div>` : '';
 
   actionEl.innerHTML=`<div style="display:flex;flex-direction:column;gap:8px;">
-    ${coinBtn}${emoteBtn}${linkPrompt}
+    ${coinBtn}${tbbCoinBtn}${emoteBtn}${linkPrompt}
   </div>`;
 }
 
@@ -11668,6 +12340,26 @@ function claimTwitchSubReward(){
       renderShop();
       updateShopCoinDisplay();
       _shopToast(`💜 +${d.earned} コインを受け取りました！（合計 ${d.coins.toLocaleString()} 枚）`);
+    } else {
+      _shopToast(d.error||'受け取りに失敗しました');
+      renderTwitchSubPanel();
+    }
+  }).catch(()=>{
+    _shopToast('エラーが発生しました');
+    renderTwitchSubPanel();
+  });
+}
+
+function claimTbbReward(){
+  const btn = document.getElementById('tbbCoinBtn');
+  if(btn){ btn.disabled=true; btn.textContent='確認中…'; }
+  fetch('/api/twitch/claim-tbb',{method:'POST'})
+  .then(r=>r.json()).then(d=>{
+    if(d.ok){
+      PROFILE.tbbCoins = d.tbbCoins;
+      PROFILE.tbbSubClaimable = false;
+      renderShop();
+      _shopToast(`💙 +${d.earned} TBBコインを受け取りました！（合計 ${d.tbbCoins.toLocaleString()} TBB）`);
     } else {
       _shopToast(d.error||'受け取りに失敗しました');
       renderTwitchSubPanel();

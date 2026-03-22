@@ -73,6 +73,22 @@ async function initDB() {
     await pool.query(`
       ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS twitch_emote_claimed BOOLEAN NOT NULL DEFAULT FALSE
     `);
+    // TBBコイン（別通貨）
+    await pool.query(`
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS tbb_coins INTEGER NOT NULL DEFAULT 0
+    `);
+    // TBBコイン毎月受取日時
+    await pool.query(`
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS tbb_sub_claimed_at TIMESTAMPTZ
+    `);
+    // マット所持管理
+    await pool.query(`
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS owned_mats TEXT NOT NULL DEFAULT '[]'
+    `);
+    // CPU手にビ2人戦勝利数（mat01解放用）
+    await pool.query(`
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS wins_vs_tenbi_2p INTEGER NOT NULL DEFAULT 0
+    `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS rank_ratings (
         google_id   TEXT PRIMARY KEY,
@@ -83,7 +99,7 @@ async function initDB() {
         updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    // BOMBモード結果履歴（コイン付与ログ兼ベストスコア管理）
+    // BOMBモード結果履歴
     await pool.query(`
       CREATE TABLE IF NOT EXISTS bomb_results (
         id          SERIAL PRIMARY KEY,
@@ -191,6 +207,11 @@ app.get("/api/profile", requireAuth, async (req, res) => {
         twitchLinked: false,
         twitchSubClaimable: false,
         twitchEmoteClaimable: false,
+        tbbCoins: 0,
+        tbbSubClaimable: false,
+        serverTime: new Date().toISOString(),
+        ownedMats: [],
+        winsVsTenbi2p: 0,
       });
     }
     await pool.query(
@@ -205,6 +226,13 @@ app.get("/api/profile", requireAuth, async (req, res) => {
       !claimed ||
       (now.getFullYear() > claimed.getFullYear()) ||
       (now.getFullYear() === claimed.getFullYear() && now.getMonth() > claimed.getMonth())
+    );
+    // TBBコイン月次受取可否チェック
+    const tbbClaimed = row.tbb_sub_claimed_at ? new Date(row.tbb_sub_claimed_at) : null;
+    const tbbClaimable = !!row.twitch_user_id && (
+      !tbbClaimed ||
+      (now.getFullYear() > tbbClaimed.getFullYear()) ||
+      (now.getFullYear() === tbbClaimed.getFullYear() && now.getMonth() > tbbClaimed.getMonth())
     );
     const ownedSets = JSON.parse(row.owned_emote_sets || '["01"]');
     const emoteClaimable = !!row.twitch_user_id && !row.twitch_emote_claimed && !ownedSets.includes('02');
@@ -221,6 +249,11 @@ app.get("/api/profile", requireAuth, async (req, res) => {
       twitchLinked:         !!row.twitch_user_id,
       twitchSubClaimable:   claimable,
       twitchEmoteClaimable: emoteClaimable,
+      tbbCoins:             row.tbb_coins ?? 0,
+      tbbSubClaimable:      tbbClaimable,
+      serverTime:           now.toISOString(),
+      ownedMats:            JSON.parse(row.owned_mats || '[]'),
+      winsVsTenbi2p:        row.wins_vs_tenbi_2p ?? 0,
     });
   } catch (err) {
     console.error("プロフィール取得エラー:", err.message);
@@ -347,6 +380,48 @@ app.post("/api/gacha", requireAuth, async (req, res) => {
 });
 
 
+// POST /api/solo-result — ソロ対戦結果（マット解放判定）
+// 条件: CPU手にビ(ability=tenbi)との2人戦で1位 × 5回 → mat01解放
+app.post("/api/solo-result", requireAuth, async (req, res) => {
+  const { rank, numPlayers, cpuAbilities } = req.body;
+  if (!rank || !numPlayers || !Array.isArray(cpuAbilities))
+    return res.status(400).json({ error: "rank / numPlayers / cpuAbilities が必要です" });
+
+  const uid = req.user.id;
+  try {
+    const cur = await pool.query(
+      `SELECT owned_mats, wins_vs_tenbi_2p FROM user_profiles WHERE google_id = $1`, [uid]
+    );
+    if (!cur.rows[0]) return res.status(404).json({ error: "プロフィールが見つかりません" });
+    const row = cur.rows[0];
+    const ownedMats = JSON.parse(row.owned_mats || '[]');
+    let winsVsTenbi2p = row.wins_vs_tenbi_2p ?? 0;
+    const newlyUnlocked = [];
+
+    // CPU手にビ2人戦1位チェック
+    if (rank === 1 && numPlayers === 2 && cpuAbilities.includes('tenbi')) {
+      if (!ownedMats.includes('mat01')) {
+        winsVsTenbi2p += 1;
+        if (winsVsTenbi2p >= 5) {
+          ownedMats.push('mat01');
+          newlyUnlocked.push('mat01');
+        }
+        await pool.query(
+          `UPDATE user_profiles SET wins_vs_tenbi_2p = $2, owned_mats = $3, updated_at = NOW()
+           WHERE google_id = $1`,
+          [uid, winsVsTenbi2p, JSON.stringify(ownedMats)]
+        );
+        console.log(`ソロ結果: google=${uid} wins_vs_tenbi_2p=${winsVsTenbi2p} ownedMats=${JSON.stringify(ownedMats)}`);
+      }
+    }
+
+    res.json({ ok: true, ownedMats, winsVsTenbi2p, newlyUnlocked });
+  } catch (err) {
+    console.error("ソロ結果エラー:", err.message);
+    res.status(500).json({ error: "DB エラー" });
+  }
+});
+
 // POST /api/reward — 対局報酬（1位のみ・numPlayersをサーバーで検証）
 // ルームマッチ報酬テーブル (numPlayers → rank → coins)
 const ROOM_REWARD_TABLE = {
@@ -356,75 +431,12 @@ const ROOM_REWARD_TABLE = {
 };
 
 app.post("/api/reward", requireAuth, async (req, res) => {
-  const uid = req.user.id;
-  const { rank, numPlayers, bombStage, bombScore } = req.body;
-
-  // ── BOMBモード報酬 ──────────────────────────────────────────────
-  if (bombStage !== undefined) {
-    const stage = Number(bombStage);
-    const score = Number(bombScore ?? 0);
-
-    // バリデーション
-    if (!Number.isInteger(stage) || stage < 1 || stage > 200)
-      return res.status(400).json({ error: "bombStage が不正です" });
-    if (!Number.isInteger(score) || score < -999999 || score > 9999999)
-      return res.status(400).json({ error: "bombScore が不正です" });
-
-    // コイン計算: ステージ5の倍数のみ付与（5→5枚, 10→10枚, 15→15枚…）
-    const earned = (stage >= 5 && stage % 5 === 0) ? stage : 0;
-
-    try {
-      // トランザクションでコイン加算 + 結果ログを同時に保存
-      await pool.query("BEGIN");
-
-      // コイン加算（earned=0でも結果ログは記録する）
-      let newCoins;
-      if (earned > 0) {
-        const r = await pool.query(
-          `UPDATE user_profiles SET coins = coins + $2, updated_at = NOW()
-           WHERE google_id = $1
-           RETURNING coins`,
-          [uid, earned]
-        );
-        if (r.rowCount === 0) {
-          await pool.query("ROLLBACK");
-          return res.status(404).json({ error: "プロフィールが見つかりません" });
-        }
-        newCoins = r.rows[0].coins;
-      } else {
-        const r = await pool.query(
-          `SELECT coins FROM user_profiles WHERE google_id = $1`, [uid]
-        );
-        if (r.rowCount === 0) {
-          await pool.query("ROLLBACK");
-          return res.status(404).json({ error: "プロフィールが見つかりません" });
-        }
-        newCoins = r.rows[0].coins;
-      }
-
-      // 結果ログを bomb_results に記録
-      await pool.query(
-        `INSERT INTO bomb_results (google_id, stage, score, earned) VALUES ($1, $2, $3, $4)`,
-        [uid, stage, score, earned]
-      );
-
-      await pool.query("COMMIT");
-
-      console.log(`BOMBモード報酬: google=${uid} stage=${stage} score=${score} earned=${earned} coins=${newCoins}`);
-      res.json({ ok: true, earned, coins: newCoins });
-    } catch (err) {
-      await pool.query("ROLLBACK").catch(() => {});
-      console.error("BOMB報酬付与エラー:", err.message);
-      res.status(500).json({ error: "DB エラー" });
-    }
-    return;
-  }
-
-  // ── ルームマッチ報酬 ────────────────────────────────────────────
+  const { rank, numPlayers } = req.body;
   if (!rank || !numPlayers) return res.status(400).json({ error: "rank と numPlayers が必要です" });
   const table = ROOM_REWARD_TABLE[numPlayers];
   const earned = table?.[rank] ?? 0;
   if (earned === 0) return res.json({ ok: true, earned: 0 });
+  const uid = req.user.id;
   try {
     const r = await pool.query(
       `UPDATE user_profiles SET coins = coins + $2, updated_at = NOW()
@@ -637,6 +649,64 @@ app.post("/api/twitch/claim-sub", requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/twitch/claim-tbb — TBBコイン月次受取（サブスク限定・毎月100枚）
+const TBB_SUB_COINS = 100;
+app.post("/api/twitch/claim-tbb", requireAuth, async (req, res) => {
+  if (!TWITCH_CLIENT_ID || !TWITCH_BROADCASTER_ID) {
+    return res.status(503).json({ error: "Twitch連携が設定されていません" });
+  }
+  const uid = req.user.id;
+  try {
+    const cur = await pool.query(
+      "SELECT twitch_user_id, tbb_sub_claimed_at, tbb_coins FROM user_profiles WHERE google_id = $1",
+      [uid]
+    );
+    if (!cur.rows[0]) return res.status(404).json({ error: "プロフィールが見つかりません" });
+    const row = cur.rows[0];
+    if (!row.twitch_user_id) return res.status(400).json({ error: "Twitchアカウントが未連携です" });
+
+    // 今月すでに受け取り済みか確認
+    const now = new Date();
+    if (row.tbb_sub_claimed_at) {
+      const claimed = new Date(row.tbb_sub_claimed_at);
+      if (
+        now.getFullYear() === claimed.getFullYear() &&
+        now.getMonth() === claimed.getMonth()
+      ) {
+        return res.status(409).json({ error: "今月のTBBコインはすでに受け取り済みです" });
+      }
+    }
+
+    // Twitch APIでサブスク確認
+    const appToken = await getTwitchAppToken();
+    const subRes = await fetch(
+      `https://api.twitch.tv/helix/subscriptions?broadcaster_id=${TWITCH_BROADCASTER_ID}&user_id=${row.twitch_user_id}`,
+      { headers: { "Client-Id": TWITCH_CLIENT_ID, Authorization: `Bearer ${appToken}` } }
+    );
+    const subData = await subRes.json();
+    if (!(Array.isArray(subData.data) && subData.data.length > 0)) {
+      return res.status(403).json({ error: "サブスクライバーではありません" });
+    }
+
+    // TBBコイン付与
+    const result = await pool.query(
+      `UPDATE user_profiles
+         SET tbb_coins = tbb_coins + $2,
+             tbb_sub_claimed_at = NOW(),
+             updated_at = NOW()
+       WHERE google_id = $1
+       RETURNING tbb_coins`,
+      [uid, TBB_SUB_COINS]
+    );
+    const newTbbCoins = result.rows[0].tbb_coins;
+    console.log(`TBBコイン付与: google=${uid} +${TBB_SUB_COINS} 合計=${newTbbCoins}`);
+    res.json({ ok: true, earned: TBB_SUB_COINS, tbbCoins: newTbbCoins });
+  } catch (e) {
+    console.error("TBBコイン付与エラー:", e.message);
+    res.status(500).json({ error: "サーバーエラー" });
+  }
+});
+
 // POST /api/twitch/claim-emote — サブスク初回エモートセット2受取
 app.post("/api/twitch/claim-emote", requireAuth, async (req, res) => {
   if (!TWITCH_CLIENT_ID || !TWITCH_BROADCASTER_ID) {
@@ -683,7 +753,7 @@ app.post("/api/twitch/claim-emote", requireAuth, async (req, res) => {
 app.get("/api/twitch/status", requireAuth, async (req, res) => {
   try {
     const cur = await pool.query(
-      "SELECT twitch_user_id, twitch_sub_claimed_at, twitch_emote_claimed, owned_emote_sets FROM user_profiles WHERE google_id = $1",
+      "SELECT twitch_user_id, twitch_sub_claimed_at, twitch_emote_claimed, owned_emote_sets, tbb_sub_claimed_at FROM user_profiles WHERE google_id = $1",
       [req.user.id]
     );
     const row = cur.rows[0];
@@ -697,47 +767,15 @@ app.get("/api/twitch/status", requireAuth, async (req, res) => {
     );
     const ownedSets = JSON.parse(row.owned_emote_sets || '["01"]');
     const emoteClaimable = !!row.twitch_user_id && !row.twitch_emote_claimed && !ownedSets.includes('02');
-    res.json({ linked: !!row.twitch_user_id, claimable, emoteClaimable });
+    const tbbClaimed2 = row.tbb_sub_claimed_at ? new Date(row.tbb_sub_claimed_at) : null;
+    const tbbClaimable2 = !!row.twitch_user_id && (
+      !tbbClaimed2 ||
+      now.getFullYear() > tbbClaimed2.getFullYear() ||
+      (now.getFullYear() === tbbClaimed2.getFullYear() && now.getMonth() > tbbClaimed2.getMonth())
+    );
+    res.json({ linked: !!row.twitch_user_id, claimable, emoteClaimable, tbbClaimable: tbbClaimable2 });
   } catch (e) {
     res.status(500).json({ error: "DB error" });
-  }
-});
-
-// GET /api/bomb/best — BOMBモードのベストスコア取得
-app.get("/api/bomb/best", requireAuth, async (req, res) => {
-  try {
-    const r = await pool.query(
-      `SELECT stage, score, played_at
-       FROM bomb_results
-       WHERE google_id = $1
-       ORDER BY stage DESC, score DESC
-       LIMIT 1`,
-      [req.user.id]
-    );
-    if (r.rowCount === 0) return res.json({ bestStage: 0, bestScore: null });
-    const row = r.rows[0];
-    res.json({ bestStage: row.stage, bestScore: row.score, playedAt: row.played_at });
-  } catch (err) {
-    console.error("BOMBベスト取得エラー:", err.message);
-    res.status(500).json({ error: "DB エラー" });
-  }
-});
-
-// GET /api/bomb/history — BOMBモードの直近履歴（最大20件）
-app.get("/api/bomb/history", requireAuth, async (req, res) => {
-  try {
-    const r = await pool.query(
-      `SELECT stage, score, earned, played_at
-       FROM bomb_results
-       WHERE google_id = $1
-       ORDER BY played_at DESC
-       LIMIT 20`,
-      [req.user.id]
-    );
-    res.json({ history: r.rows });
-  } catch (err) {
-    console.error("BOMB履歴取得エラー:", err.message);
-    res.status(500).json({ error: "DB エラー" });
   }
 });
 
