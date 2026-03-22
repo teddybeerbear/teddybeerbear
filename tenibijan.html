@@ -1767,9 +1767,12 @@ body::before{
       <button id="rlsStartBtn" class="start-btn" style="display:none;width:100%;margin-bottom:10px;" onclick="hostStartGame()">ゲーム開始 →</button>
     </div>
 
-    <!-- ゲスト: 待機メッセージ -->
-    <div id="rlsGuestWait" style="display:none;font-size:.62rem;color:#4a7a6a;text-align:center;margin-bottom:14px;background:#0d1a10;padding:12px;border-radius:6px;border:1px solid #1a3a2a;">
-      ホストがゲーム開始を待っています<span class="thinking-dots"></span>
+    <!-- ゲスト: 準備ボタン -->
+    <div id="rlsGuestWait" style="display:none;margin-bottom:14px;">
+      <button id="rlsReadyBtn" class="start-btn" style="width:100%;margin-bottom:8px;" onclick="guestToggleReady()">準備OK ✓</button>
+      <div id="rlsReadyStatus" style="font-size:.62rem;color:#4a7a6a;text-align:center;background:#0d1a10;padding:8px;border-radius:6px;border:1px solid #1a3a2a;">
+        ホストの開始を待っています<span class="thinking-dots"></span>
+      </div>
     </div>
 
     <button class="start-btn" onclick="leaveRoomLobby()" style="background:linear-gradient(135deg,#1a0808,#0d0505);border-color:#553333;color:#aa6666;">退出する</button>
@@ -1974,7 +1977,7 @@ body::before{
       <div style="font-size:.6rem;color:#5a8a7a;text-align:center;margin-bottom:8px;font-weight:700;">⚔️ レート変動</div>
       <div id="resultRatingTable" style="font-size:.65rem;"></div>
     </div>
-    <div class="modal-btns"><button class="btn btn-primary" onclick="backToLobby()">ロビーへ戻る</button></div>
+    <div class="modal-btns" id="resultBtns"><button class="btn btn-primary" onclick="backToLobby()">ロビーへ戻る</button></div>
   </div>
 </div>
 
@@ -3193,6 +3196,7 @@ let NET={
   guestAbilities:[], // ゲストの能力 [idx1の能力, idx2の能力, idx3の能力]
   guestIconIds:[],  // ゲストのアイコンID [idx1, idx2, idx3]
   guestEmotes:[],   // ゲストの装備エモート [idx1, idx2, idx3]
+  guestReady:[],    // ゲストの準備状態 [idx1:bool, idx2:bool, idx3:bool]
   guestPeerIds:[],  // ゲストのPeerID [idx1のPeerID, idx2のPeerID, idx3のPeerID]
   _memberDataCache:[], // ゲスト側: ホストから受け取ったメンバーデータのキャッシュ
   // ── P2P分散アーキテクチャ ──
@@ -4128,19 +4132,21 @@ function hideRoomLobby(){
 
 function _buildMemberData(){
   return [
-    {name:PROFILE.name||'あなた', iconId:PROFILE.iconId||'', role:'ホスト'},
+    {name:PROFILE.name||'あなた', iconId:PROFILE.iconId||'', role:'ホスト', ready:true},
     ...NET.conns.map((c,i)=>({
       name:NET.guestNames[i]||`ゲスト${i+1}`,
       iconId:NET.guestIconIds[i]||'',
-      role:`ゲスト${i+1}`
+      role:`ゲスト${i+1}`,
+      ready:!!NET.guestReady[i]
     }))
   ];
 }
 function _broadcastMemberUpdate(){
   if(!NET.isHost) return;
   const memberData = _buildMemberData();
+  // guestReady状態も同梱（ゲスト側でメンバーカードに表示するため）
   NET.conns.forEach(c=>{
-    if(c&&c.open) c.send({type:'memberUpdate', members:memberData.length, memberData});
+    if(c&&c.open) c.send({type:'memberUpdate', members:memberData.length, memberData, guestReady:[...NET.guestReady]});
   });
 }
 
@@ -4167,7 +4173,15 @@ function updateRoomLobbyUI(){
     document.getElementById('rlsModeTobiOn')?.classList.toggle('active', NET.roomTobiMode);
     document.getElementById('rlsModeTobiOff')?.classList.toggle('active', !NET.roomTobiMode);
     const startBtn = document.getElementById('rlsStartBtn');
-    if(startBtn) startBtn.style.display = NET.conns.length>=1?'':'none';
+    if(startBtn){
+      const hasGuests = NET.conns.length>=1;
+      const allReady = NET.conns.length>0 && NET.conns.every((_,i)=>!!NET.guestReady[i]);
+      startBtn.style.display = hasGuests?'':'none';
+      startBtn.disabled = !allReady;
+      startBtn.style.opacity = allReady?'1':'0.45';
+      startBtn.title = allReady?'':'全員が準備OKになると開始できます';
+      startBtn.textContent = allReady?'ゲーム開始 →':`ゲーム開始 (${NET.guestReady.filter(Boolean).length}/${NET.conns.length}人 準備OK)`;
+    }
     // Build member cards
     const members = _buildMemberData().map((m,i)=>({...m, isMe:i===0, connIdx:i-1}));
     _renderRlsMembers(members);
@@ -4200,7 +4214,10 @@ function _renderRlsMembers(members){
         <div class="rls-member-name">${m.name}${m.isMe?' ★':m.role==='ホスト'?' 👑':''}</div>
         <div class="rls-member-role">${m.role}</div>
       </div>
-      ${NET.isHost && m.connIdx>=0 ? `<button class="rls-kick-btn" title="このプレイヤーをキック" onclick="kickPlayer(${m.connIdx})">キック</button>` : ''}
+      <div style="display:flex;gap:6px;align-items:center;">
+        ${m.role!=='ホスト'?`<span style="font-size:.6rem;padding:2px 7px;border-radius:4px;font-weight:700;${m.ready?'background:#0d2a10;color:#5adb8a;border:1px solid #2a6a3a;':'background:#1a0a0a;color:#aa5555;border:1px solid #4a2a2a;'}">${m.ready?'✓ 準備OK':'待機中…'}</span>`:''}
+        ${NET.isHost && m.connIdx>=0 ? `<button class="rls-kick-btn" title="このプレイヤーをキック" onclick="kickPlayer(${m.connIdx})">キック</button>` : ''}
+      </div>
     </div>
   `).join('');
 }
@@ -4216,8 +4233,34 @@ function kickPlayer(connIdx){
   NET.guestAbilities.splice(connIdx, 1);
   NET.guestIconIds.splice(connIdx, 1);
   NET.guestEmotes.splice(connIdx, 1);
+  NET.guestReady.splice(connIdx, 1);
   _broadcastMemberUpdate();
   updateRoomLobbyUI();
+}
+
+// ゲスト: 準備OK/解除トグル
+function guestToggleReady(){
+  const btn = document.getElementById('rlsReadyBtn');
+  const statusEl = document.getElementById('rlsReadyStatus');
+  const isReady = btn && btn.dataset.ready==='1';
+  const nextReady = !isReady;
+  if(btn){
+    btn.dataset.ready = nextReady?'1':'0';
+    btn.textContent = nextReady?'準備完了！✓（タップで解除）':'準備OK ✓';
+    btn.style.background = nextReady
+      ? 'linear-gradient(135deg,#0d2a10,#061408)'
+      : '';
+    btn.style.borderColor = nextReady?'#3a7a3a':'';
+    btn.style.color = nextReady?'#7acc99':'';
+  }
+  if(statusEl){
+    statusEl.textContent = nextReady
+      ? '準備完了！ホストの開始を待っています…'
+      : 'ホストの開始を待っています…';
+  }
+  if(NET.conn&&NET.conn.open){
+    NET.conn.send({type:'guestReady', ready:nextReady});
+  }
 }
 
 function leaveRoomLobby(){
@@ -4230,7 +4273,7 @@ function leaveRoomLobby(){
   if(NET.peer){ try{NET.peer.destroy();}catch(e){} NET.peer=null; }
   hideRoomLobby();
   NET.conns=[]; NET.conn=null; NET.roomCode=null; NET.isHost=false;
-  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
+  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET.guestReady=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
   setOnlineStatus('');
   document.getElementById('lobby').style.display='flex';
   document.getElementById('roomCodeBox').style.display='none';
@@ -4246,6 +4289,8 @@ function copyRlsCode(){
 }
 function hostStartGame(){
   if(NET.conns.length===0)return;
+  // 全ゲストが準備OKでないと開始できない
+  if(!NET.conns.every((_,i)=>!!NET.guestReady[i])) return;
   const membersInfo = [
     {name: PROFILE.name||'あなた', iconId: PROFILE.iconId||'', ability: PROFILE.ability||''},
     ...NET.conns.map((c,i)=>({
@@ -4484,6 +4529,11 @@ function onNetData(msg, senderIdx){
         setRankStatus('ゲーム開始を待っています…');
       } else {
         setOnlineStatus('接続しました！ホストの開始を待っています…');
+        // 準備ボタンを初期状態に戻す
+        const rb=document.getElementById('rlsReadyBtn');
+        if(rb){rb.dataset.ready='0';rb.textContent='準備OK ✓';rb.style.background='';rb.style.borderColor='';rb.style.color='';}
+        const rs=document.getElementById('rlsReadyStatus');
+        if(rs) rs.textContent='ホストの開始を待っています…';
         const gwm = document.getElementById('guestWaitMsg');
         if(gwm) gwm.style.display='';
         updateGuestMemberList(msg.members);
@@ -4496,6 +4546,18 @@ function onNetData(msg, senderIdx){
       updateGuestMemberList(msg.members);
       if(msg.memberData){
         NET._memberDataCache=msg.memberData;
+        // guestReady状態をキャッシュのmemberDataに反映
+        if(msg.guestReady){
+          msg.guestReady.forEach((r,i)=>{ if(NET._memberDataCache[i+1]) NET._memberDataCache[i+1].ready=r; });
+        }
+        updateRoomLobbyUI();
+      }
+    } else if(msg.type==='guestReady'){
+      // ホスト: ゲストの準備状態を更新
+      // senderIdxは1始まりなのでguestReady配列は0始まり(senderIdx-1)
+      if(typeof msg.ready==='boolean'){
+        NET.guestReady[senderIdx-1]=msg.ready;
+        _broadcastMemberUpdate();
         updateRoomLobbyUI();
       }
     } else if(msg.type==='hostDisconnect'){
@@ -4523,6 +4585,9 @@ function onNetData(msg, senderIdx){
       document.getElementById('lobby').style.display='flex';
       setOnlineStatus('ホストにキックされました');
     } else if(msg.type==='gameStart'){
+      // 準備ボタンをリセット
+      const _grb=document.getElementById('rlsReadyBtn');
+      if(_grb){_grb.dataset.ready='0';_grb.textContent='準備OK ✓';_grb.style.background='';_grb.style.borderColor='';_grb.style.color='';}
       numPlayers=msg.totalPlayers;
       G_ABILITY_MODE=msg.abilityMode;
       if(msg.timeMode) G_TIME_MODE=true;
@@ -4801,6 +4866,20 @@ function handleGuestAction(msg, senderIdx){
     case 'kita':      remoteKita(msg.pidx); break;
     case 'riichi':    remoteRiichi(msg.pidx, msg.mode, msg.tidx); break;
     case 'nextRound': nextRound(); break;
+    case 'backToRoom': backToRoom(); break; // ホストから部屋戻り通知
+    case 'requestMyName':
+      // ホストがmyName情報を要求してきた（backToRoom後の再収集）
+      if(NET.conn&&NET.conn.open){
+        NET.conn.send({type:'myName',
+          name:PROFILE.name||'プレイヤー',
+          ability:PROFILE.ability||'',
+          iconId:PROFILE.iconId||'',
+          emote:PROFILE.emote||'',
+          emotes:PROFILE.emotes||['','','',''],
+          peerId:NET.peer?.id||''
+        });
+      }
+      break;
     case 'winReady':
       WIN_READY.readySet.add(senderIdx);
       _checkAllWinReady();
@@ -7238,6 +7317,7 @@ function showFinalResult(){
   }
 
   document.getElementById('resultOverlay').classList.add('show');
+  _setResultBtn();
   broadcastState({finalResult:sorted.map(p=>({name:p.name,wind:p.wind,score:p.score}))});
 }
 
@@ -7299,6 +7379,7 @@ function showFinalResultData(sorted){
   }
 
   document.getElementById('resultOverlay').classList.add('show');
+  _setResultBtn();
 }
 
 async function _fetchRankResultForGuestWithRetry(attempt){
@@ -7331,6 +7412,91 @@ function setTimeMode(v){
 function confirmBackToTitle(){
   document.getElementById('titleConfirmOverlay').classList.add('show');
 }
+
+// リザルトボタンをルームマッチ/通常で切り替え
+function _setResultBtn(){
+  const el=document.getElementById('resultBtns');
+  if(!el) return;
+  if(NET.online && NET.roomCode && !NET.isRankMatch){
+    // ルームマッチ: 「部屋に戻る」ボタン
+    el.innerHTML=`<button class="btn btn-primary" onclick="backToRoom()">部屋に戻る</button>
+      <button class="btn btn-danger" onclick="backToLobby()" style="font-size:.65rem;padding:7px 14px;">ロビーへ戻る</button>`;
+  } else {
+    el.innerHTML=`<button class="btn btn-primary" onclick="backToLobby()">ロビーへ戻る</button>`;
+  }
+}
+
+// ルームマッチ終了後、同じ部屋に全員を戻す
+async function backToRoom(){
+  const code = NET.roomCode;
+  const wasHost = NET.isHost;
+
+  // ゲーム状態をリセット（接続は維持）
+  G={};
+  _penModeOn=false; _wallCanvasInited=false; _doraCanvasInited=false; _wallExpandInited=false;
+  window._activePenOC=null;
+  Object.keys(_penImgCache).forEach(k=>delete _penImgCache[k]);
+  const penBtn=document.getElementById('penToggleBtn');
+  if(penBtn) penBtn.classList.remove('pen-active');
+  const penToolbar=document.getElementById('penToolbarFloat');
+  if(penToolbar) penToolbar.style.display='none';
+  const wc=document.getElementById('wallCanvas');
+  if(wc){wc.classList.remove('pen-on');wc.classList.remove('pick-on');}
+  const wallOv=document.getElementById('wallExpandOverlay');
+  if(wallOv) wallOv.classList.remove('show');
+
+  document.getElementById('resultOverlay').classList.remove('show');
+  document.getElementById('winOverlay').classList.remove('show');
+  document.getElementById('titleConfirmOverlay').classList.remove('show');
+  document.querySelectorAll('.light-peek-overlay').forEach(el=>el.remove());
+  document.getElementById('gameScreen').classList.remove('active');
+  document.getElementById('lobby').style.display='none';
+
+  bgmToTitle();
+  saveProfileSilent();
+  NET.online=false;
+
+  if(wasHost){
+    // ホスト: PeerとサーバールームはそのままでルームLobbySreenに戻る
+    // ゲストの接続は既存connsで維持されているので、全員に部屋戻り通知
+    NET.online=true;
+    netBroadcastAll({type:'backToRoom'});
+    // UI状態をリセットしてルームロビーを再表示
+    NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET.guestReady=[]; NET._memberDataCache=[]; NET.guestReady=new Array(NET.conns.length).fill(false);
+    // 接続中ゲストのmyName情報を再収集
+    NET.conns.forEach(conn=>{
+      if(conn&&conn.open) conn.send({type:'requestMyName'});
+    });
+    NET._lastActionId=0;
+    setOnlineStatus('');
+    updateRoomMemberList();
+    showRoomLobby();
+  } else {
+    // ゲスト: 自分もルームロビーに移動（ホストから backToRoom が来るか、自分で戻るかの両方に対応）
+    NET.online=true;
+    NET._lastActionId=0;
+    setOnlineStatus('');
+    // 準備ボタンをリセット
+    const _rb=document.getElementById('rlsReadyBtn');
+    if(_rb){_rb.dataset.ready='0';_rb.textContent='準備OK ✓';_rb.style.background='';_rb.style.borderColor='';_rb.style.color='';}
+    const _rs=document.getElementById('rlsReadyStatus');
+    if(_rs) _rs.textContent='ホストの開始を待っています…';
+    // ゲストのプレイヤーインデックスを保持したままロビーへ
+    showRoomLobby();
+    // ルームメンバーリスト更新をホストにリクエスト
+    if(NET.conn&&NET.conn.open){
+      NET.conn.send({type:'myName',
+        name:PROFILE.name||'プレイヤー',
+        ability:PROFILE.ability||'',
+        iconId:PROFILE.iconId||'',
+        emote:PROFILE.emote||'',
+        emotes:PROFILE.emotes||['','','',''],
+        peerId:NET.peer?.id||''
+      });
+    }
+  }
+}
+
 function backToLobby(){
   // Gをリセットして次のゲームで能力フラグが残らないようにする
   G={};
@@ -7367,7 +7533,7 @@ function backToLobby(){
   const wasRankMatch = NET.isRankMatch;
   if(NET.peer){try{NET.peer.destroy();}catch(e){} NET.peer=null;NET.conn=null;NET.conns=[];NET.online=false;}
   NET.roomCode=null; NET.isHost=false; NET.isRankMatch=false; NET.roomTimeMode=false; NET.roomTobiMode=true;
-  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
+  NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET.guestReady=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
   RANK.matchId=null; RANK.connectedGuests=0;
   setOnlineStatus('');
   document.getElementById('roomCodeBox').style.display='none';
@@ -10259,10 +10425,20 @@ function renderProfileAbilityList(){
 // ============================================================
 const EMOTE_BASE = 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/emo/';
 // エモートセット定義（setId: セットID, label: 名前, ids: 4枚のエモートID）
+const EMOTE_VC_BASE = 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/emovc/';
 const EMOTE_SETS_MASTER = [
-  { setId:'01', label:'セット1', ids:['01emo01','01emo02','01emo03','01emo04'] },
-  { setId:'02', label:'セット2', ids:['02emo01','02emo02','02emo03','02emo04'] },
+  { setId:'01', label:'セット1', ids:['01emo01','01emo02','01emo03','01emo04'], voices:[null,null,null,null] },
+  { setId:'02', label:'セット2', ids:['02emo01','02emo02','02emo03','02emo04'],
+    voices:['V02emo01.mp3','V02emo02.mp3','V02emo03.mp3','V02emo04.mp3'] },
 ];
+// エモートID→音声URLのマップを事前構築
+const EMOTE_VOICE_MAP = {};
+EMOTE_SETS_MASTER.forEach(s=>{
+  s.ids.forEach((id,i)=>{
+    const v=s.voices&&s.voices[i];
+    if(v) EMOTE_VOICE_MAP[id]=EMOTE_VC_BASE+v;
+  });
+});
 // 後方互換: EMOTES（旧）も維持
 const EMOTES = EMOTE_SETS_MASTER.flatMap(s=>s.ids.map((id,i)=>({id, label:`${s.label} ${i+1}`})));
 function emoteUrl(id){ return EMOTE_BASE + id + '.png'; }
@@ -10465,6 +10641,16 @@ function showEmoteOverlay(pidx, emoteId){
     overlay.innerHTML = `<img src="${emoteUrl(emoteId)}" alt="emote">`;
     orb.appendChild(overlay);
     _emoteTimers[pidx] = setTimeout(()=>{ overlay.remove(); }, 3500);
+  }
+  // エモートボイスを再生
+  const vcUrl = EMOTE_VOICE_MAP[emoteId];
+  if(vcUrl){
+    try{
+      const a = new Audio(vcUrl);
+      const vs = SFX.getSeScale ? SFX.getSeScale('voice') : 1;
+      a.volume = Math.min(1, (SFX.getSeVol ? SFX.getSeVol() : 0.42) * vs);
+      a.play().catch(()=>{});
+    }catch(e){}
   }
 }
 
