@@ -749,6 +749,15 @@ body::before{
 .gacha-pull-10{background:linear-gradient(135deg,#1a0a00,#0a0500);border-color:#aa5500;color:#ffaa33;}
 .gacha-pull-10:hover{border-color:#ffaa33;box-shadow:0 0 12px #ffaa3344;}
 
+/* CPU選択画面 */
+#cpuSelectScreen{
+  position:fixed;inset:0;z-index:60;
+  background:var(--bg);
+  display:none;flex-direction:column;align-items:center;justify-content:flex-start;
+  overflow-y:auto;padding:20px 16px 40px;
+}
+#cpuSelectScreen.active{display:flex;}
+
 /* ショップ画面 */
 #shopScreen{
   position:fixed;inset:0;z-index:50;
@@ -1335,6 +1344,17 @@ body::before{
     color:#5a7a6a;font-size:.75rem;padding:10px 24px;cursor:pointer;">閉じる</button>
 </div>
 
+<!-- CPU SELECT SCREEN -->
+<div id="cpuSelectScreen">
+  <div style="width:100%;max-width:480px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <button onclick="closeCpuSelectScreen()" style="background:none;border:none;color:#5a7a6a;font-size:.75rem;cursor:pointer;padding:4px 0;">← 戻る</button>
+      <div id="cpuSelectTitle" style="font-size:.85rem;font-weight:700;color:var(--gold);letter-spacing:.1em;"></div>
+    </div>
+    <div id="cpuSelectGrid" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;"></div>
+  </div>
+</div>
+
 <!-- SHOP SCREEN -->
 <div id="shopScreen">
   <div style="width:100%;max-width:480px;">
@@ -1599,6 +1619,11 @@ body::before{
         <button class="pcnt-btn active" id="modeTobiOn" onclick="setTobiMode(true)">💀 あり</button>
         <button class="pcnt-btn" id="modeTobiOff" onclick="setTobiMode(false)">🛡 なし</button>
       </div>
+    </div>
+    <!-- CPU設定 -->
+    <div id="cpuSettingsSection" style="margin:10px 0 6px;border-top:1px solid #1a3a2a;padding-top:10px;">
+      <h3 style="font-size:.65rem;color:var(--gold);letter-spacing:.2em;margin-bottom:10px;text-align:center;">CPU設定</h3>
+      <div id="cpuSlotList" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
     <button class="start-btn" onclick="initGame()">ゲーム開始 →</button>
   </div>
@@ -3391,6 +3416,7 @@ function showSolo(){
   document.getElementById('lobbyRank').style.display='none';
   cancelRankQueue();
   document.querySelectorAll('#lobbyMode .pcnt-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
+  renderCpuSlots();
 }
 function showOnline(){
   document.getElementById('lobbySolo').style.display='none';
@@ -5240,9 +5266,223 @@ function startOnlineGame(){
 }
 
 // ── Solo mode ─────────────────────────────────────────────────
+// CPU能力選択の保持（'random'=ランダム, ''=なし, 能力キー=固定）
+let cpuSelectedAbilities = ['random','random','random']; // CPU1〜3
+
+// CPU能力の解放管理（localStorageで永続化）
+// 常に選択可能な能力
+const CPU_ALWAYS_UNLOCKED = new Set(['random','','light']);
+
+// 解放チェーン定義: against の CPU がいる対戦で1位×required 回で unlocks が解放
+const CPU_UNLOCK_CHAIN = [
+  { unlocks:'sanctuary', against:'light',     required:5, label:'☀️ 光の探偵ヒカル' },
+  { unlocks:'mine',      against:'sanctuary', required:5, label:'🏛️ 聖域守りセイ' },
+  { unlocks:'yami',      against:'mine',      required:5, label:'💣 地雷師ナミ' },
+  { unlocks:'steal',     against:'yami',      required:5, label:'🌑 闇使いカゲ' },
+  { unlocks:'haku',      against:'steal',     required:5, label:'🃏 盗賊スティール' },
+  { unlocks:'pinzu',     against:'haku',      required:5, label:'🀆 白術士ハク' },
+];
+// wins追跡キー: wins_<against>
+function _winsKey(against){ return 'wins_'+against; }
+
+function loadCpuUnlocks(){
+  try{
+    const s = localStorage.getItem('cpuUnlocks');
+    if(s) return JSON.parse(s);
+  }catch(e){}
+  return { unlocked:[] };
+}
+function saveCpuUnlocks(data){
+  try{ localStorage.setItem('cpuUnlocks', JSON.stringify(data)); }catch(e){}
+}
+function isCpuUnlocked(key){
+  if(CPU_ALWAYS_UNLOCKED.has(key)) return true;
+  const data = loadCpuUnlocks();
+  return data.unlocked.includes(key);
+}
+
+const CPU_ABILITY_OPTIONS = [
+  {key:'random',    label:'ランダム',        icon:null,  emoji:'🎲'},
+  {key:'',          label:'能力なし',        icon:null,  emoji:'♟'},
+  {key:'light',     label:'光の探偵ヒカル',  icon:'C02', emoji:'☀️'},
+  {key:'sanctuary', label:'聖域守りセイ',    icon:'C05', emoji:'🏛️'},
+  {key:'mine',      label:'地雷師ナミ',      icon:'C01', emoji:'💣'},
+  {key:'yami',      label:'闇使いカゲ',      icon:'C03', emoji:'🌑'},
+  {key:'steal',     label:'盗賊スティール',  icon:'C07', emoji:'🃏'},
+  {key:'haku',      label:'白術士ハク',      icon:'C04', emoji:'🀆'},
+  {key:'pinzu',     label:'筒子教ピン',      icon:'C06', emoji:'🔵'},
+  {key:'tenbi',     label:'手にビ',           icon:'L01', emoji:'🀄'},
+];
+
 function selectCount(n){
   numPlayers=n;
   document.querySelectorAll('#lobbySolo .pcnt-btn').forEach((b,i)=>b.classList.toggle('active',i===n-2));
+  renderCpuSlots();
+}
+
+// 現在開いているCPUスロットインデックス
+let _cpuSelectSlot = -1;
+
+function renderCpuSlots(){
+  try{
+    const el = document.getElementById('cpuSlotList');
+    if(!el) return;
+    const cpuCount = numPlayers - 1;
+    const winds = ['南','西','北'];
+    const ud = loadCpuUnlocks();
+    const isUnlocked = v => CPU_ALWAYS_UNLOCKED.has(v) || ud.unlocked.includes(v);
+
+    // ロック中なら'random'にリセット
+    for(let i=0;i<3;i++) if(!isUnlocked(cpuSelectedAbilities[i])) cpuSelectedAbilities[i]='random';
+
+    el.innerHTML = '';
+    // 横並びコンテナ
+    const rowWrap = document.createElement('div');
+    rowWrap.style.cssText = 'display:flex;gap:8px;justify-content:flex-start;';
+    el.appendChild(rowWrap);
+
+    for(let slotIdx=0; slotIdx<cpuCount; slotIdx++){
+      const selected = cpuSelectedAbilities[slotIdx] ?? 'random';
+      const selOpt = CPU_ABILITY_OPTIONS.find(o=>o.key===selected) || CPU_ABILITY_OPTIONS[0];
+
+      const card = document.createElement('div');
+      card.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;' +
+        'border:1.5px solid #1a3a2a;border-radius:10px;padding:8px 6px;background:#030a10;' +
+        'flex:1;min-width:0;transition:border-color .15s;';
+
+      // 席ラベル
+      const windLabel = document.createElement('div');
+      windLabel.textContent = `CPU ${winds[slotIdx]}`;
+      windLabel.style.cssText = 'font-size:.52rem;color:#5a7a6a;';
+      card.appendChild(windLabel);
+
+      // アイコン
+      const iconWrap = document.createElement('div');
+      iconWrap.style.cssText = 'width:52px;height:72px;border-radius:7px;border:2px solid #c9a84c;background:#020a08;overflow:hidden;';
+      if(selOpt.icon && typeof gachaIconUrl==='function'){
+        const img = document.createElement('img');
+        img.src = gachaIconUrl(selOpt.icon);
+        img.style.cssText = 'width:100%;height:100%;object-fit:contain;';
+        img.alt = '';
+        iconWrap.appendChild(img);
+      } else {
+        iconWrap.style.cssText += 'display:flex;align-items:center;justify-content:center;font-size:2rem;';
+        iconWrap.textContent = selOpt.emoji;
+      }
+      card.appendChild(iconWrap);
+
+      // 名前
+      const nameDiv = document.createElement('div');
+      nameDiv.textContent = selOpt.label;
+      nameDiv.style.cssText = 'font-size:.48rem;color:var(--gold);font-weight:700;text-align:center;line-height:1.3;';
+      card.appendChild(nameDiv);
+
+      // タップヒント
+      const hint = document.createElement('div');
+      hint.textContent = 'タップで変更';
+      hint.style.cssText = 'font-size:.42rem;color:#3a6a4a;';
+      card.appendChild(hint);
+
+      const _slot = slotIdx;
+      card.addEventListener('click', ()=>openCpuSelectScreen(_slot));
+      card.addEventListener('mouseover', ()=>{ card.style.borderColor='#3a7a5a'; });
+      card.addEventListener('mouseout',  ()=>{ card.style.borderColor='#1a3a2a'; });
+
+      rowWrap.appendChild(card);
+    }
+  }catch(e){ console.error('renderCpuSlots error:', e); }
+}
+
+function openCpuSelectScreen(slotIdx){
+  _cpuSelectSlot = slotIdx;
+  const winds = ['南','西','北'];
+  const titleEl = document.getElementById('cpuSelectTitle');
+  if(titleEl) titleEl.textContent = `CPU ${winds[slotIdx]} を選択`;
+
+  const ud = loadCpuUnlocks();
+  const isUnlocked = v => CPU_ALWAYS_UNLOCKED.has(v) || ud.unlocked.includes(v);
+  const selected = cpuSelectedAbilities[slotIdx] ?? 'random';
+
+  const grid = document.getElementById('cpuSelectGrid');
+  if(!grid) return;
+  grid.innerHTML = '';
+
+  for(const o of CPU_ABILITY_OPTIONS){
+    // 手にビは解放済みの場合のみ表示
+    if(o.key==='tenbi' && !isUnlocked('tenbi')) continue;
+    const locked = !isUnlocked(o.key);
+    const isSel = (o.key === selected);
+
+    const card = document.createElement('div');
+    card.style.cssText =
+      'width:80px;display:flex;flex-direction:column;align-items:center;gap:5px;' +
+      'padding:8px 4px 6px;border-radius:10px;cursor:' + (locked?'default':'pointer') + ';' +
+      'border:2px solid ' + (isSel?'#c9a84c':locked?'#1a2a1a':'#1a3a2a') + ';' +
+      'background:' + (isSel?'#1a1400':locked?'#050a05':'#030a10') + ';' +
+      'transition:border-color .15s;';
+
+    // アイコン
+    const iconBox = document.createElement('div');
+    iconBox.style.cssText = 'width:60px;height:84px;border-radius:6px;overflow:hidden;position:relative;';
+    if(o.icon && typeof gachaIconUrl==='function'){
+      const img = document.createElement('img');
+      img.src = gachaIconUrl(o.icon);
+      img.style.cssText = 'width:100%;height:100%;object-fit:contain;' + (locked?'filter:brightness(0.15);':'');
+      img.alt = '';
+      iconBox.appendChild(img);
+    } else {
+      iconBox.style.display = 'flex';
+      iconBox.style.alignItems = 'center';
+      iconBox.style.justifyContent = 'center';
+      iconBox.style.fontSize = '2.2rem';
+      iconBox.style.opacity = locked ? '0.15' : '1';
+      iconBox.textContent = o.emoji;
+    }
+    if(locked){
+      const ov = document.createElement('div');
+      ov.textContent = '🔒';
+      ov.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.4rem;';
+      iconBox.appendChild(ov);
+    }
+    card.appendChild(iconBox);
+
+    // 名前
+    const name = document.createElement('div');
+    name.textContent = locked ? '？' : o.label;
+    name.style.cssText = 'font-size:.48rem;text-align:center;color:' + (isSel?'#c9a84c':locked?'#2a3a2a':'#5a8a6a') + ';line-height:1.3;font-weight:' + (isSel?'700':'400') + ';';
+    card.appendChild(name);
+
+    // 選択中バッジ
+    if(isSel){
+      const badge = document.createElement('div');
+      badge.textContent = '選択中';
+      badge.style.cssText = 'font-size:.42rem;color:#c9a84c;border:1px solid #c9a84c;border-radius:3px;padding:1px 5px;';
+      card.appendChild(badge);
+    }
+
+    if(!locked){
+      const _key = o.key;
+      card.addEventListener('click', ()=>{
+        cpuSelectedAbilities[_cpuSelectSlot] = _key;
+        closeCpuSelectScreen();
+        renderCpuSlots();
+      });
+      if(!isSel){
+        card.addEventListener('mouseover', ()=>{ card.style.borderColor='#3a7a5a'; });
+        card.addEventListener('mouseout',  ()=>{ card.style.borderColor='#1a3a2a'; });
+      }
+    }
+    grid.appendChild(card);
+  }
+
+  document.getElementById('lobby').style.display='none';
+  document.getElementById('cpuSelectScreen').classList.add('active');
+}
+
+function closeCpuSelectScreen(){
+  document.getElementById('cpuSelectScreen').classList.remove('active');
+  document.getElementById('lobby').style.display='flex';
+  _cpuSelectSlot = -1;
 }
 
 function initGame(){
@@ -5276,8 +5516,22 @@ function makePlayer(id,dealer){
     pname = (PROFILE.name||'あなた'); // 自分の名前、CPU名は後でpAbilityから設定
     if(id !== 0) pname = ''; // CPU側は後で上書き
   }
-  const cpuAbilities=['mine','light','yami','haku','sanctuary','pinzu','steal'];
-  const pAbility = !G_ABILITY_MODE ? '' : (id===NET.myIdx) ? (PROFILE.ability||'') : (NET.isHost && NET.guestAbilities[id-1]!==undefined) ? NET.guestAbilities[id-1] : cpuAbilities[Math.floor(Math.random()*cpuAbilities.length)];
+  const cpuAbilities=['mine','light','yami','haku','sanctuary','pinzu','steal','tenbi'];
+  let pAbility;
+  if(!G_ABILITY_MODE){
+    pAbility = '';
+  } else if(id===NET.myIdx){
+    pAbility = PROFILE.ability||'';
+  } else if(NET.isHost && NET.guestAbilities[id-1]!==undefined){
+    pAbility = NET.guestAbilities[id-1];
+  } else if(!NET.online){
+    // ソロCPU: cpuSelectedAbilities から取得
+    const cpuSlot = id - 1; // id=1→slot0, id=2→slot1, id=3→slot2
+    const sel = (typeof cpuSelectedAbilities!=='undefined' && cpuSelectedAbilities[cpuSlot]) ?? 'random';
+    pAbility = sel==='random' ? cpuAbilities[Math.floor(Math.random()*cpuAbilities.length)] : sel;
+  } else {
+    pAbility = cpuAbilities[Math.floor(Math.random()*cpuAbilities.length)];
+  }
 
   // 能力別CPU名とアイコン
   const CPU_PROFILE = {
@@ -5289,6 +5543,7 @@ function makePlayer(id,dealer){
     'pinzu':     {name:'筒子教ピン',    icon:'C06'},
     'steal':     {name:'盗賊スティール', icon:'C07'},
     '':          {name:'CPU',          icon:'C08'},
+    'tenbi':     {name:'手にビ',         icon:'L01'},
   };
   // ソロCPU名をpAbilityから設定
   if(!NET.online && id !== NET.myIdx){
@@ -5460,18 +5715,25 @@ function countDoras(hand,p){
 // ============================================================
 // DRAW / DISCARD
 // ============================================================
-function drawTile(pidx){
+function drawTile(pidx, opts={}){
   if(G.deck.length===0)return null;
   const p2=G.players[pidx];
   let idx;
   // 地雷能力所持者: 地雷スロットの牌を避けて引く
   if(p2&&p2.ability==='mine'&&G.mineSlots&&G.mineSlots.length>0&&G.deck.length>1){
-    const mineTile=G.deckSlots[G.mineSlots[0]]; // 最初の地雷を避ける
+    const mineTile=G.deckSlots[G.mineSlots[0]];
     if(mineTile){
-      // 地雷の牌と同じsui/numでないインデックスを選ぶ
       const safeIdxs=G.deck.map((_,i)=>i).filter(i=>!(G.deck[i].suit===mineTile.suit&&G.deck[i].num===mineTile.num));
       idx=safeIdxs.length>0?safeIdxs[Math.floor(Math.random()*safeIdxs.length)]:Math.floor(Math.random()*G.deck.length);
     } else idx=Math.floor(Math.random()*G.deck.length);
+  } else if(opts.preferSuit && G.deck.length>1){
+    // 指定スーツの牌を優先して引く（なければランダム）
+    const prefIdxs=G.deck.map((t,i)=>t.suit===opts.preferSuit?i:-1).filter(i=>i>=0);
+    idx=prefIdxs.length>0?prefIdxs[Math.floor(Math.random()*prefIdxs.length)]:Math.floor(Math.random()*G.deck.length);
+  } else if(opts.avoidSuit && G.deck.length>1){
+    // 指定スーツを避けて引く（それしかなければランダム）
+    const avoidIdxs=G.deck.map((t,i)=>t.suit!==opts.avoidSuit?i:-1).filter(i=>i>=0);
+    idx=avoidIdxs.length>0?avoidIdxs[Math.floor(Math.random()*avoidIdxs.length)]:Math.floor(Math.random()*G.deck.length);
   } else {
     idx=Math.floor(Math.random()*G.deck.length);
   }
@@ -6664,7 +6926,17 @@ function cpuAction(){
         return;
       }
     }
-    const tile=drawTile(idx);if(!tile){handleExhausted();return;}
+    // ピンズー教CPU（親）: 聴牌前→筒子を優先して引く / 聴牌後→筒子を避けて引く
+    let _drawOpts = {};
+    if(p.ability==='pinzu' && p.isDealer){
+      if(!p.tenpai) _drawOpts = {preferSuit:'pin'};
+      else          _drawOpts = {avoidSuit:'pin'};
+    }
+    // 手にビCPU: 常に字牌を優先して引く
+    if(p.ability==='tenbi'){
+      _drawOpts = {preferSuit:'honor'};
+    }
+    const tile=drawTile(idx, _drawOpts);if(!tile){handleExhausted();return;}
     // 💣 CPU mine hit?
     if(G._mineHit){
       G._mineHit=null;
@@ -6852,14 +7124,62 @@ function cpuDiscard(){
     }
   }
 
-  // ピンズー教CPU: 筒子以外を優先捨て（清一色狙い）
-  const isPinzuCpu = p.ability==='pinzu';
   // 🌑 闇能力: 30%で次の捨て牌を闇に
   if(p.ability==='yami' && !p.abilityUsed && !p.riichi && Math.random()<0.3){
     p.abilityUsed=true;
     p._cpuNextYami=true;
     addLog(`🌑 ${p.name}が闇を使う...`,'log-dora');
   }
+
+  // 手にビCPU: 萬子・索子・筒子が手牌にあれば必ずそれを捨てる（字牌のみ残す）
+  if(p.ability==='tenbi' && !p.riichi){
+    const nonHonorIdxs = p.hand.map((t,i)=>t.suit!=='honor'?i:-1).filter(i=>i>=0);
+    if(nonHonorIdxs.length>0){
+      const doras=getDoras();
+      let worst=-1, worstScore=Infinity;
+      for(const i of nonHonorIdxs){
+        const t=p.hand[i];
+        const test=p.hand.filter((_,j)=>j!==i);
+        const sh=calcShanten(test);
+        const uk=calcUkeire(test);
+        const isDanger=dangerTiles.has(tk(t));
+        const isDora=doras.some(d=>teq(d,t));
+        const score = sh*10000 - uk*100 + (isDanger?5000:0) + (isDora?3000:0);
+        if(score<worstScore){ worstScore=score; worst=i; }
+      }
+      discardAction(idx, worst>=0 ? worst : nonHonorIdxs[0]);
+      return;
+    }
+    // 全部字牌になったら通常AI
+  }
+
+  // ピンズー教CPU: 萬子・索子・字牌が手牌にあれば必ずそれを捨てる
+  if(p.ability==='pinzu' && !p.riichi){
+    // 非筒子牌のインデックス一覧
+    const nonPinIdxs = p.hand.map((t,i)=>t.suit!=='pin'?i:-1).filter(i=>i>=0);
+    if(nonPinIdxs.length>0){
+      // 非筒子の中でシャンテン・受け入れ最悪の牌を選ぶ（どうせ捨てる牌の中で最も不要なものを）
+      const doras=getDoras();
+      let worst=-1, worstScore=Infinity;
+      for(const i of nonPinIdxs){
+        const t=p.hand[i];
+        const test=p.hand.filter((_,j)=>j!==i);
+        const sh=calcShanten(test);
+        const uk=calcUkeire(test);
+        const isDanger=dangerTiles.has(tk(t));
+        const isDora=doras.some(d=>teq(d,t));
+        // 捨てやすさスコア（小さいほど捨てやすい）
+        const score = sh*10000 - uk*100
+          + (isDanger ? 5000 : 0)
+          + (isDora ? 3000 : 0);
+        if(score<worstScore){ worstScore=score; worst=i; }
+      }
+      discardAction(idx, worst>=0 ? worst : nonPinIdxs[0]);
+      return;
+    }
+    // 全部筒子になったら通常AI
+  }
+
   // ドラ・役牌リスト
   const doras=getDoras();
   const yakuTiles=new Set(['honor_白','honor_発','honor_中',
@@ -6871,18 +7191,13 @@ function cpuDiscard(){
     const test=p.hand.filter((_,j)=>j!==i);
     const sh=calcShanten(test);
     const uk=calcUkeire(test);
-    // ペナルティ・ボーナス
     const isDanger = dangerTiles.has(tk(t));
     const isDora = doras.some(d=>teq(d,t));
     const isYaku = yakuTiles.has(tk(t));
-    const isNonPinzu = isPinzuCpu && t.suit!=='pin';
-    // スコア: シャンテン最小を最優先、次に受け入れ枚数最大
-    // ドラ・役牌は保持（捨てにくい）、危険牌は捨てやすい
     const score = -sh*10000 + uk*100
       - (isDanger ? 5000 : 0)
       - (isDora ? 300 : 0)
-      - (isYaku ? 200 : 0)
-      - (isNonPinzu ? 500 : 0);
+      - (isYaku ? 200 : 0);
     if(score>bestScore){ bestScore=score; best=i; bestShanten=sh; bestUkeire=uk; }
   }
   discardAction(idx,best);
@@ -7313,6 +7628,53 @@ function showFinalResult(){
   }).catch(()=>{});
   saveProfileSilent();
 
+  // ソロ対戦: 解放チェーン進捗を更新（能力ありルールのみカウント）
+  if(!NET.online && myRank===1 && G_ABILITY_MODE){
+    const ud = loadCpuUnlocks();
+    let unlockMsg = '';
+    CPU_UNLOCK_CHAIN.forEach(chain=>{
+      // このチェーンの対象CPUが今回の対戦にいたか
+      const hasTarget = G.players.some((p,i)=>i!==NET.myIdx && p.ability===chain.against);
+      if(!hasTarget) return;
+      if(ud.unlocked.includes(chain.unlocks)) return; // 解放済みスキップ
+      const wKey = _winsKey(chain.against);
+      ud[wKey] = (ud[wKey]||0) + 1;
+      if(ud[wKey] >= chain.required){
+        ud.unlocked.push(chain.unlocks);
+        const opt = CPU_ABILITY_OPTIONS.find(o=>o.key===chain.unlocks);
+        unlockMsg += `<br><span style="color:#44ffaa;font-size:.8rem;">${opt?opt.label:'新CPU'} が解放されました！CPU設定で選択できます</span>`;
+      }
+    });
+    saveCpuUnlocks(ud);
+    if(unlockMsg){
+      const rewardEl = document.getElementById('resultCoinReward');
+      if(rewardEl) rewardEl.innerHTML += unlockMsg;
+    }
+
+    // 手にビチャレンジ条件チェック（通常4人戦→チャレンジ発生）
+    const ud2 = loadCpuUnlocks();
+    const tenbUnlocked = ud2.unlocked.includes('tenbi');
+    const pinzuCpuCount = G.players.filter((p,i)=>i!==NET.myIdx && p.ability==='pinzu').length;
+    if(!tenbUnlocked && numPlayers===4 && pinzuCpuCount===3 && !_tenbiBattleActive){
+      _tenbiBattlePending = true;
+    }
+
+    // 手にビ対戦で1位 → 解放！
+    if(_tenbiBattleActive && numPlayers===2){
+      const tenbCpu = G.players.find((p,i)=>i!==NET.myIdx && p.ability==='tenbi');
+      if(tenbCpu){
+        _tenbiBattleActive = false;
+        const ud3 = loadCpuUnlocks();
+        if(!ud3.unlocked.includes('tenbi')){
+          ud3.unlocked.push('tenbi');
+          saveCpuUnlocks(ud3);
+          const rewardEl2 = document.getElementById('resultCoinReward');
+          if(rewardEl2) rewardEl2.innerHTML += '<br><span style="color:#ffd700;font-size:.85rem;">🀄 CPU「手にビ」が解放されました！</span>';
+        }
+      }
+    }
+  }
+
   // ランクマッチの場合、ホストがスコアを提出してレートを更新
   const ratingBox=document.getElementById('resultRatingBox');
   if(ratingBox) ratingBox.style.display='none';
@@ -7331,6 +7693,10 @@ function showFinalResult(){
   _setResultBtn();
   broadcastState({finalResult:sorted.map(p=>({name:p.name,wind:p.wind,score:p.score}))});
 }
+
+// 手にビチャレンジ中フラグ
+let _tenbiBattlePending = false;
+let _tenbiBattleActive  = false;
 
 
 function _showRatingChanges(changes){
@@ -7429,12 +7795,47 @@ function _setResultBtn(){
   const el=document.getElementById('resultBtns');
   if(!el) return;
   if(NET.online && NET.roomCode && !NET.isRankMatch){
-    // ルームマッチ: 「部屋に戻る」ボタン
     el.innerHTML=`<button class="btn btn-primary" onclick="backToRoom()">部屋に戻る</button>
       <button class="btn btn-danger" onclick="backToLobby()" style="font-size:.65rem;padding:7px 14px;">ロビーへ戻る</button>`;
+  } else if(_tenbiBattlePending){
+    // 手にビチャレンジ発生！
+    el.innerHTML=`<div style="text-align:center;margin-bottom:8px;">
+      <div style="font-size:.7rem;color:#ffd700;font-weight:700;margin-bottom:4px;">✨ 特別挑戦者が現れた！</div>
+      <div style="font-size:.58rem;color:#9a70cc;">謎のCPU「手にビ」が1対1の勝負を挑んでくる…</div>
+    </div>
+    <button class="btn btn-primary" onclick="startTenbiBattle()" style="background:linear-gradient(135deg,#4a0a7a,#2a0050);border-color:#9a40e8;">🀄 手にビと対決する！</button>
+    <button class="btn btn-danger" onclick="declineTenbiBattle()" style="font-size:.65rem;padding:7px 14px;margin-top:4px;">逃げる…</button>`;
   } else {
     el.innerHTML=`<button class="btn btn-primary" onclick="backToLobby()">ロビーへ戻る</button>`;
   }
+}
+
+function startTenbiBattle(){
+  _tenbiBattlePending = false;
+  _tenbiBattleActive  = true;
+  // リザルトを閉じてゲーム開始
+  document.getElementById('resultOverlay').classList.remove('show');
+  if(WIN_READY.timer){ clearInterval(WIN_READY.timer); WIN_READY.timer=null; }
+  // 2人対戦・能力あり・手にビ vs 自分
+  numPlayers = 2;
+  G_ABILITY_MODE = true;
+  cpuSelectedAbilities[0] = 'tenbi'; // CPU南 = 手にビ
+  bgmToGame();
+  G={players:[],deck:[],deckSlots:[],doraInds:[],uraInds:[],doraPile:[],rinshan:[],rinshanIdx:6,
+     kanDoraCount:0,lightMode:false,lightUserIdx:null,lightRevealedSlots:{},lightRevealedHand:{},
+     stealMode:false,mineSlots:[],mineRinshanIdxs:[],mineOwners:{},mineRinshanOwners:{},mineCount:0,
+     penDrawings:{},yamiChallenge:null,
+     dealer:Math.floor(Math.random()*2),current:0,roundNum:1,roundWind:'東',honba:0,riichiPot:0,
+     pendingRiichi:null,riichiValidIdx:null,
+     phase:'idle',firstRound:true,log:[],savedScores:null,_dealerWon:false};
+  document.getElementById('gameScreen').classList.add('active');
+  scaleTable();
+  startRound();
+}
+
+function declineTenbiBattle(){
+  _tenbiBattlePending = false;
+  backToLobby();
 }
 
 // ルームマッチ終了後、同じ部屋に全員を戻す
@@ -11003,6 +11404,7 @@ function _shopToast(msg){
 (function(){
   loadProfile();
   loadSettings(); // ★ 音量・BGM設定を復元
+  renderCpuSlots(); // CPU設定スロットを初期描画
   if(!localStorage.getItem('mjProfile')){
     // First visit: open profile screen right away
     setTimeout(()=>{
