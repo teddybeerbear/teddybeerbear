@@ -1582,9 +1582,12 @@ body::before{
   <div class="lobby-card" id="lobbyMode">
     <h3>モード選択</h3>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
-      <button class="pcnt-btn active" onclick="startTitleBgmOnce();showSolo()" style="padding:10px 4px;text-align:center;">CPU対戦</button>
-      <button class="pcnt-btn" onclick="showOnline()" style="padding:10px 4px;text-align:center;">ルームマッチ</button>
-      <button class="pcnt-btn" onclick="showRank()" style="padding:10px 4px;text-align:center;">ランクマッチ</button>
+      <button id="modeBtn-solo" class="pcnt-btn active" onclick="startTitleBgmOnce();showSolo()" style="padding:10px 4px;text-align:center;">CPU対戦</button>
+      <button id="modeBtn-online" class="pcnt-btn" onclick="showOnline()" style="padding:10px 4px;text-align:center;">ルームマッチ</button>
+      <button id="modeBtn-rank" class="pcnt-btn" onclick="showRank()" style="padding:10px 4px;text-align:center;">ランクマッチ</button>
+      <button id="modeBtn-bomb" class="pcnt-btn" onclick="startTitleBgmOnce();showBomb()" style="padding:10px 4px;text-align:center;border-color:#cc4422;color:#ff8866;background:linear-gradient(135deg,#200808,#100404);font-weight:700;letter-spacing:.08em;">💣 手にビBOMBじゃん</button>
+      <button class="pcnt-btn" disabled style="padding:10px 4px;text-align:center;border-color:#1a2a2a;color:#2a3a3a;background:#030a10;cursor:default;"></button>
+      <button class="pcnt-btn" disabled style="padding:10px 4px;text-align:center;border-color:#1a2a2a;color:#2a3a3a;background:#030a10;cursor:default;"></button>
       <button class="pcnt-btn" onclick="startTitleBgmOnce();openGacha()" style="padding:10px 4px;text-align:center;border-color:#aa7700;color:#ffd700;background:linear-gradient(135deg,#1a0e00,#0a0500);">✨ ガチャ</button>
       <button class="pcnt-btn" onclick="startTitleBgmOnce();openShop()" style="padding:10px 4px;text-align:center;border-color:#007799;color:#00ccff;background:linear-gradient(135deg,#001a1a,#000a10);">🏪 ショップ</button>
       <button class="pcnt-btn" onclick="startTitleBgmOnce();openProfile()" style="padding:10px 4px;text-align:center;border-color:#2a5a3a;color:#c0e0c0;background:#030a10;">👤 プロフィール</button>
@@ -1592,7 +1595,7 @@ body::before{
   </div>
 
   <!-- Solo card -->
-  <div class="lobby-card" id="lobbySolo">
+  <div class="lobby-card" id="lobbySolo" style="display:none">
     <h3>プレイヤー数</h3>
     <div class="pcnt">
       <button class="pcnt-btn" onclick="selectCount(2)">２人</button>
@@ -1626,6 +1629,31 @@ body::before{
       <div id="cpuSlotList" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
     <button class="start-btn" onclick="initGame()">ゲーム開始 →</button>
+  </div>
+
+  <!-- BOMBじゃん card -->
+  <div class="lobby-card" id="lobbyBomb" style="display:none;">
+    <h3 style="color:#ff8866;border-bottom-color:#3a1a0a;">💣 手にビBOMBじゃん</h3>
+    <div class="rule-box" style="margin-bottom:14px;border:1px solid #3a1a0a;">
+      <strong style="color:#ff8866;">ルール</strong><br>
+      山牌に爆弾が隠れている。爆弾の隣を引くと数字のヒントが出る。<br>
+      <strong>上がるか全て引ききる</strong>と次のステージへ。<br>
+      <strong style="color:#ff4444;">爆弾を引いたらゲームオーバー！</strong><br>
+      ステージが進むごとに爆弾が1個ずつ増えていく。
+    </div>
+    <div style="text-align:center;margin-bottom:14px;">
+      <div style="font-size:.6rem;color:#5a7a6a;margin-bottom:6px;">初期爆弾数</div>
+      <div style="font-size:1.4rem;color:#ff8866;font-weight:700;">💣 × 7</div>
+      <div style="font-size:.55rem;color:#4a6a5a;margin-top:3px;">ステージ2以降：8個、9個…と増加</div>
+    </div>
+    <div id="bombBestDisplay" style="text-align:center;margin-bottom:12px;padding:8px 10px;background:#0d0505;border:1px solid #3a1a0a;border-radius:8px;display:none;">
+      <div style="font-size:.55rem;color:#5a7a6a;letter-spacing:.1em;margin-bottom:4px;">🏆 自己ベスト</div>
+      <div style="display:flex;justify-content:center;gap:18px;">
+        <div><div style="font-size:.55rem;color:#7a5a4a;">最高ステージ</div><div id="bombBestStageEl" style="font-size:1.2rem;font-weight:700;color:#ff8866;"></div></div>
+        <div><div style="font-size:.55rem;color:#7a5a4a;">最高持ち点</div><div id="bombBestScoreEl" style="font-size:1.0rem;font-weight:700;color:var(--gold2);"></div></div>
+      </div>
+    </div>
+    <button class="start-btn" style="background:linear-gradient(135deg,#4a1008,#2a0804);border-color:#cc4422;color:#ff8866;" onclick="startBombGame()">手にビBOMBじゃん 開始 →</button>
   </div>
 
   <!-- Online card -->
@@ -2738,6 +2766,7 @@ const TILE_IMG={
   // ページ読み込み完了後にプリロード開始
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', preloadTileImages);
+    document.addEventListener('DOMContentLoaded', ()=>{ showSolo(); });
   } else {
     preloadTileImages();
   }
@@ -3410,30 +3439,70 @@ function isOnlineGuestIdx(pidx){
 }
 
 // ── Lobby mode toggles ───────────────────────────────────────
+function _setModeActive(id){
+  ['modeBtn-solo','modeBtn-online','modeBtn-rank','modeBtn-bomb'].forEach(bid=>{
+    const b=document.getElementById(bid);
+    if(b) b.classList.toggle('active', bid===id);
+  });
+}
 function showSolo(){
   document.getElementById('lobbySolo').style.display='';
   document.getElementById('lobbyOnline').style.display='none';
   document.getElementById('lobbyRank').style.display='none';
+  document.getElementById('lobbyBomb').style.display='none';
   cancelRankQueue();
-  document.querySelectorAll('#lobbyMode .pcnt-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
-  renderCpuSlots();
+  _setModeActive('modeBtn-solo');
+  // numPlayersとロビーUIのアクティブボタンを同期（BOMBモード(1人)から戻った時に3人ボタンが正しく選択される）
+  selectCount(numPlayers);
 }
 function showOnline(){
   document.getElementById('lobbySolo').style.display='none';
   document.getElementById('lobbyOnline').style.display='';
   document.getElementById('lobbyRank').style.display='none';
+  document.getElementById('lobbyBomb').style.display='none';
   cancelRankQueue();
-  document.querySelectorAll('#lobbyMode .pcnt-btn').forEach((b,i)=>b.classList.toggle('active',i===1));
-  showRejoinPanel(); // 復帰セッションがあれば表示
+  _setModeActive('modeBtn-online');
+  showRejoinPanel();
 }
 function showRank(){
   document.getElementById('lobbySolo').style.display='none';
   document.getElementById('lobbyOnline').style.display='none';
   document.getElementById('lobbyRank').style.display='';
-  document.querySelectorAll('#lobbyMode .pcnt-btn').forEach((b,i)=>b.classList.toggle('active',i===2));
-  _rankReset();
+  document.getElementById('lobbyBomb').style.display='none';
+  cancelRankQueue();
+  _setModeActive('modeBtn-rank');
   _loadMyRating();
-  showRejoinPanel(); // ★ランクマッチ中の切断からも復帰できるように
+}
+function showBomb(){
+  document.getElementById('lobbySolo').style.display='none';
+  document.getElementById('lobbyOnline').style.display='none';
+  document.getElementById('lobbyRank').style.display='none';
+  document.getElementById('lobbyBomb').style.display='';
+  cancelRankQueue();
+  _setModeActive('modeBtn-bomb');
+  _updateBombBestDisplay();
+}
+function _updateBombBestDisplay(){
+  const bestStage = PROFILE.bombBestStage||0;
+  const bestScore = PROFILE.bombBestScore;
+  const box = document.getElementById('bombBestDisplay');
+  if(!box) return;
+  if(!bestStage){ box.style.display='none'; return; }
+  box.style.display='';
+  const stEl = document.getElementById('bombBestStageEl');
+  const scEl = document.getElementById('bombBestScoreEl');
+  if(stEl) stEl.textContent = 'ステージ ' + bestStage;
+  if(scEl) scEl.textContent = (bestScore!=null ? bestScore.toLocaleString() + ' 点' : '---');
+}
+function startBombGame(){
+  NET.myIdx=0;
+  NET.online=false;
+  NET.isHost=true;
+  numPlayers=1;
+  G_ABILITY_MODE=false;
+  const wa=document.getElementById('wallArea');
+  if(wa) wa.style.marginTop='-400px';
+  initGame();
 }
 
 // ── ランクマッチ（3人固定・時間制限あり） ──────────────────────
@@ -5251,7 +5320,7 @@ function startOnlineGame(){
   scaleTable();
   updateEmoteAreaVisibility();
   G={players:[],deck:[],deckSlots:[],doraInds:[],uraInds:[],doraPile:[],rinshan:[],rinshanIdx:6,kanDoraCount:0,lightMode:false,lightUserIdx:null,lightRevealedSlots:{},lightRevealedHand:{},stealMode:false,mineSlots:[],mineRinshanIdxs:[],mineOwners:{},mineRinshanOwners:{},mineCount:0,penDrawings:{},yamiChallenge:null,
-     dealer:Math.floor(Math.random()*numPlayers),current:0,roundNum:1,roundWind:'東',honba:0,riichiPot:0,
+     dealer:numPlayers===1?0:Math.floor(Math.random()*numPlayers),current:0,roundNum:1,roundWind:'東',honba:0,riichiPot:0,
      pendingRiichi:null,riichiValidIdx:null,
      phase:'idle',firstRound:true,log:[],savedScores:null,_dealerWon:false};
   startRound();
@@ -5316,7 +5385,8 @@ const CPU_ABILITY_OPTIONS = [
 
 function selectCount(n){
   numPlayers=n;
-  document.querySelectorAll('#lobbySolo .pcnt-btn').forEach((b,i)=>b.classList.toggle('active',i===n-2));
+  // ２人=index0、３人=index1、４人=index2（１人ボタン削除済み）
+  document.querySelectorAll('#lobbySolo .pcnt-btn').forEach((b,i)=>b.classList.toggle('active',i===(n-2)));
   renderCpuSlots();
 }
 
@@ -5325,9 +5395,13 @@ let _cpuSelectSlot = -1;
 
 function renderCpuSlots(){
   try{
+    // 1人モードはCPU設定を非表示
+    const sec = document.getElementById('cpuSettingsSection');
+    if(sec) sec.style.display = (numPlayers===1) ? 'none' : '';
     const el = document.getElementById('cpuSlotList');
     if(!el) return;
     const cpuCount = numPlayers - 1;
+    if(cpuCount===0){ el.innerHTML=''; return; }
     const winds = ['南','西','北'];
     const ud = loadCpuUnlocks();
     const isUnlocked = v => CPU_ALWAYS_UNLOCKED.has(v) || ud.unlocked.includes(v);
@@ -5493,7 +5567,8 @@ function initGame(){
   G={players:[],deck:[],deckSlots:[],doraInds:[],uraInds:[],doraPile:[],rinshan:[],rinshanIdx:6,kanDoraCount:0,lightMode:false,lightUserIdx:null,lightRevealedSlots:{},lightRevealedHand:{},stealMode:false,mineSlots:[],mineRinshanIdxs:[],mineOwners:{},mineRinshanOwners:{},mineCount:0,penDrawings:{},yamiChallenge:null,
      dealer:Math.floor(Math.random()*numPlayers),current:0,roundNum:1,roundWind:'東',honba:0,riichiPot:0,
      pendingRiichi:null,riichiValidIdx:null,
-     phase:'idle',firstRound:true,log:[],savedScores:null,_dealerWon:false};
+     phase:'idle',firstRound:true,log:[],savedScores:null,_dealerWon:false,
+     _soloStage:1}; // ソロモード: ステージ数（爆弾数 = 6 + stage）
   startRound();
 }
 
@@ -5645,6 +5720,20 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; _wallEx
   G.mineCount=0;
   G.minePlantPlayers=[];
   G._mineHit=null;
+
+  // ── 1人モード: 爆弾をランダム配置（ステージごとに+1）──────────────
+  if(numPlayers===1){
+    const bombCount = Math.min(6 + (G._soloStage||1), 20); // 最大20個
+    const avail=G.deckSlots.map((_,i)=>i).filter(i=>G.deckSlots[i]!=null);
+    for(let i=avail.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[avail[i],avail[j]]=[avail[j],avail[i]];}
+    const bombSlots=avail.slice(0,bombCount);
+    bombSlots.forEach(si=>{G.mineSlots.push(si);G.mineOwners[si]=-1;G.mineCount++;});
+    G._soloBombs=new Set(bombSlots); // ソロ爆弾セット（表示用）
+    addLog(`💣 ステージ${G._soloStage||1}：爆弾が${bombCount}個隠れている！`,'log-dora');
+  } else {
+    G._soloBombs=null;
+  }
+  G._soloRevealed=new Set(); // 連鎖展開済みスロット
   G.yamiSelectMode=false;
   G.stealMode=false;
   G.hakuSelectPlayers=[];
@@ -5676,9 +5765,10 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; _wallEx
       }
     });
   }
-  cpuPlantMines(); // CPU地雷能力: 1巡目に即設置
+  cpuPlantMines(); // CPU地雷能力: 1巡目に即設置（ソロ爆弾モードは除く）
   // 人間プレイヤー（自分 or オンラインゲスト）が地雷能力を持つ場合、minePlantModeをONに
-  if(G_ABILITY_MODE){
+  // ※ソロ爆弾モード(numPlayers===1 かつ _soloStage あり)は爆弾が自動配置済みなのでスキップ
+  if(G_ABILITY_MODE && !(numPlayers===1 && G._soloStage)){
     const mineHuman = G.players.find((p,i)=>
       p.ability==='mine' && !p.abilityUsed && !p.isCpu
     );
@@ -5872,6 +5962,8 @@ function discardAction(pidx,tidx,isYami=false){ if(pidx===NET.myIdx){ _timerSave
       }else if(cpuDecideRon(i,tile)){handleRon(i,tile,pidx);return;}
     }
   }
+  // 1人モードは自分の番に即戻る（ポン・ロンなし）
+  if(numPlayers===1){ nextTurn(0); broadcastState(); return; }
   if(!checkPon(pidx,tile)){nextTurn((pidx+1)%numPlayers);}
   broadcastState();
 }
@@ -6596,17 +6688,64 @@ function humanPickWall(slotIdx){
   if(G.mineSlots&&G.mineSlots.includes(slotIdx)){
     G.mineSlots=G.mineSlots.filter(s=>s!==slotIdx);
     if(G.mineOwners) delete G.mineOwners[slotIdx];
+    // ソロ爆弾セット更新
+    if(G._soloBombs) G._soloBombs.delete(slotIdx);
     const mineTile=p.hand.splice(p.hand.length-1,1)[0];
     p.discards.push(mineTile);p.drawnTile=null;
     updateTenpai(p);
     SFX.mineExplode();
-    addLog(`💥 ${p.name} が地雷を踏んだ！[${emj(mineTile)}] を強制捨て`,'log-win');
-    renderAll();broadcastState();
-    setTimeout(()=>{
-      if(!checkPon(myIdx,mineTile)) nextTurn((myIdx+1)%numPlayers);
-      broadcastState();
-    },900);
+    if(numPlayers===1){
+      addLog(`💥 爆弾を踏んだ！ゲームオーバー（ステージ${G._soloStage||1}まで到達）`,'log-win');
+      renderAll();broadcastState();
+      setTimeout(()=>_soloShowFinalResult(false), 1200);
+    } else {
+      addLog(`💥 ${p.name} が地雷を踏んだ！[${emj(mineTile)}] を強制捨て`,'log-win');
+      renderAll();broadcastState();
+      setTimeout(()=>{
+        if(!checkPon(myIdx,mineTile)) nextTurn((myIdx+1)%numPlayers);
+        broadcastState();
+      },900);
+    }
     return;
+  }
+
+  // ── ソロモード: 爆弾ヒント0連鎖展開（マインスイーパー式）──
+  if(numPlayers===1 && G.mineSlots){
+    if(!G._soloRevealed) G._soloRevealed=new Set();
+    G._soloRevealed.add(slotIdx);
+    // 周囲の爆弾数を数える
+    const totalSlots=G.deckSlots.length;
+    const rows2=Math.ceil(totalSlots/W_COLS);
+    const adjBombs=(si)=>{
+      let cnt=0;
+      const c=si%W_COLS, r=Math.floor(si/W_COLS);
+      for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++){
+        if(dr===0&&dc===0) continue;
+        const nr=r+dr, nc=c+dc;
+        if(nr<0||nr>=rows2||nc<0||nc>=W_COLS) continue;
+        if(G.mineSlots.includes(nr*W_COLS+nc)) cnt++;
+      }
+      return cnt;
+    };
+    // 引いたスロットが0なら連鎖BFS
+    if(adjBombs(slotIdx)===0){
+      const queue=[slotIdx];
+      while(queue.length>0){
+        const cur=queue.shift();
+        const cc=cur%W_COLS, cr=Math.floor(cur/W_COLS);
+        for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++){
+          if(dr===0&&dc===0) continue;
+          const nr=cr+dr, nc=cc+dc;
+          if(nr<0||nr>=rows2||nc<0||nc>=W_COLS) continue;
+          const ni=nr*W_COLS+nc;
+          if(G._soloRevealed.has(ni)) continue;
+          if(G.mineSlots.includes(ni)) continue;
+          if(G.deckSlots[ni]===null) continue;
+          G._soloRevealed.add(ni);
+          if(adjBombs(ni)===0) queue.push(ni);
+        }
+      }
+    }
   }
 
   G.phase='discard';
@@ -6746,6 +6885,14 @@ function humanYamiChallenge(action){
 }
 
 function handleExhausted(){
+  if(numPlayers===1){
+    // ソロ: 爆弾以外を全て引ききった → ステージクリア
+    addLog(`✅ ステージ${G._soloStage||1} クリア！次のステージへ…`,'log-win');
+    G.phase='end'; G._soloStage=(G._soloStage||1)+1;
+    saveScores(); renderAll(); broadcastState();
+    setTimeout(()=>startRound(), 2000);
+    return;
+  }
   G.phase='end';
   addLog('山牌が尽きました。流局です。','log-draw');
   const tp=G.players.filter(p=>p.tenpai);
@@ -6805,6 +6952,10 @@ function handleWin(widx,winTile,isTsumo,losidx){
   const{score,han}=calcScore(yakus,w.isDealer,isTsumo);
   const rb=G.riichiPot;
   if(isTsumo){
+    // 💣 ソロBOMBモード: 対戦相手がいないので上がり点をそのまま加算
+    if(numPlayers===1){
+      w.score+=score+rb;
+    } else {
     const ea=Math.round(score/(numPlayers-1));
     let totalPaid=0;
     G.players.forEach((p,i)=>{
@@ -6813,11 +6964,17 @@ function handleWin(widx,winTile,isTsumo,losidx){
       if(!isSanctuary){p.score-=ea;totalPaid+=ea;}
     });
     w.score+=totalPaid+rb;
+    }
   }else{
-    const loser=G.players[losidx];
-    const isSanctuary = G_ABILITY_MODE && loser.ability==='sanctuary' && loser.isDealer;
-    if(!isSanctuary){loser.score-=score;w.score+=score+rb;}
-    else{w.score+=rb;addLog(`🏛️ 聖域！${loser.name}の支払いが免除された`,'log-dora');}
+    // 💣 ソロBOMBモード: 対戦相手がいないのでロン点もそのまま加算
+    if(numPlayers===1){
+      w.score+=score+rb;
+    } else {
+      const loser=G.players[losidx];
+      const isSanctuary = G_ABILITY_MODE && loser.ability==='sanctuary' && loser.isDealer;
+      if(!isSanctuary){loser.score-=score;w.score+=score+rb;}
+      else{w.score+=rb;addLog(`🏛️ 聖域！${loser.name}の支払いが免除された`,'log-dora');}
+    }
   }
   G.riichiPot=0;
   G._dealerWon=w.isDealer;
@@ -7569,6 +7726,13 @@ function nextRound(){
   if(NET.online && amIHost()) netSend({type:'nextRound'});
   if(checkTobi())return;
   if(checkEnd())return;
+  // ── ソロモード: 上がり → ステージアップして次の局 ──
+  if(numPlayers===1){
+    G._soloStage=(G._soloStage||1)+1;
+    addLog(`🎉 ステージ${G._soloStage-1} クリア！次は爆弾${Math.min(6+G._soloStage,20)}個`,'log-win');
+    startRound();
+    return;
+  }
   advanceRound(G._dealerWon);G._dealerWon=false;
 }
 function advanceRound(dealerWon){
@@ -7606,6 +7770,71 @@ function checkEnd(){
   }
   return false;
 }
+function _soloShowFinalResult(cleared){
+  // ソロモード専用ファイナルリザルト（爆弾ゲームオーバー時）
+  clearRejoinSession();
+  const stage = G._soloStage||1;
+  const bombCount = Math.min(6+stage, 20);
+  const score = (G.players&&G.players[0]) ? G.players[0].score : 0;
+  document.getElementById('resultTable').innerHTML=
+    `<tr class="result-winner"><td colspan="3" style="text-align:center;font-size:1.1rem;padding:10px 0;">
+      💣 ステージ <span style="color:var(--gold2);font-size:1.4rem;">${stage}</span> で爆弾を踏んだ！
+    </td></tr>
+    <tr><td colspan="3" style="text-align:center;color:#7a9a8a;font-size:.75rem;padding:6px 0;">
+      爆弾 ${bombCount} 個のステージまで到達
+    </td></tr>
+    <tr><td colspan="3" style="text-align:center;padding:8px 0;">
+      <span style="font-size:.65rem;color:#5a7a6a;letter-spacing:.1em;">持ち点</span><br>
+      <span style="font-size:1.3rem;font-weight:700;color:${score>=0?'var(--gold2)':'#ff7777'};">${score.toLocaleString()} 点</span>
+    </td></tr>`;
+  const rewardEl=document.getElementById('resultCoinReward');
+  if(rewardEl) rewardEl.innerHTML=`🎯 スコア：ステージ ${stage} 到達 / ${score.toLocaleString()} 点${bombEarned===0?' <span style="font-size:.6rem;color:#5a5a5a;">（ステージ5の倍数で報酬）</span>':''}`;
+  // 💣 BOMBモード: ステージ数に応じてコイン付与（1〜4は0枚、5の倍数のみ付与）
+  // ステージ5→5枚、ステージ10→10枚、ステージ15→15枚…
+  const bombEarned = (stage >= 5 && stage % 5 === 0) ? stage : 0;
+  fetch('/api/reward',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({rank:1, numPlayers:1, bombStage:stage, bombScore:score})})
+  .then(r=>r.json()).then(d=>{
+    if(d.ok){
+      PROFILE.coins=d.coins??PROFILE.coins;
+      const earned=d.earned??bombEarned;
+      if(rewardEl && earned>0){
+        rewardEl.innerHTML=
+          `🪙 +${earned} 手にビコイン獲得！（合計 ${PROFILE.coins.toLocaleString()} 枚）`+
+          `<br><span style="font-size:.65rem;color:#5a7a6a;">💣 ステージ${stage}到達報酬：+${earned}枚</span>`;
+      }
+    } else {
+      // APIが bombStage 未対応の場合はクライアント側でフォールバック付与
+      PROFILE.coins=(PROFILE.coins||0)+bombEarned;
+      if(rewardEl && bombEarned>0){
+        rewardEl.innerHTML=
+          `🪙 +${bombEarned} 手にビコイン獲得！（合計 ${PROFILE.coins.toLocaleString()} 枚）`+
+          `<br><span style="font-size:.65rem;color:#5a7a6a;">💣 ステージ${stage}到達報酬：+${bombEarned}枚</span>`;
+      }
+      saveProfileSilent();
+    }
+  }).catch(()=>{
+    // オフライン時もクライアント側でフォールバック付与
+    PROFILE.coins=(PROFILE.coins||0)+bombEarned;
+    if(rewardEl && bombEarned>0){
+      rewardEl.innerHTML=
+        `🪙 +${bombEarned} 手にビコイン獲得！（合計 ${PROFILE.coins.toLocaleString()} 枚）`+
+        `<br><span style="font-size:.65rem;color:#5a7a6a;">💣 ステージ${stage}到達報酬：+${bombEarned}枚</span>`;
+    }
+    saveProfileSilent();
+  });
+  // 自己ベスト更新
+  if(stage > (PROFILE.bombBestStage||0)){
+    PROFILE.bombBestStage = stage;
+    PROFILE.bombBestScore = score;
+  } else if(stage === (PROFILE.bombBestStage||0) && score > (PROFILE.bombBestScore??-Infinity)){
+    PROFILE.bombBestScore = score;
+  }
+  saveProfileSilent();
+  document.getElementById('resultOverlay').classList.add('show');
+  _setResultBtn();
+}
+
 function showFinalResult(){
   clearRejoinSession(); // 対局正常終了 → 復帰セッション不要
   const sorted=[...G.players].sort((a,b)=>b.score-a.score);
@@ -7933,6 +8162,12 @@ async function backToRoom(){
 function backToLobby(){
   // Gをリセットして次のゲームで能力フラグが残らないようにする
   G={};
+  // 💣 BOMBモードの山牌オフセットをリセット
+  const _wa=document.getElementById('wallArea');
+  if(_wa) _wa.style.marginTop='';
+  // 💣 BOMBモード(numPlayers===1)で終了した場合、numPlayersをデフォルト(3)に戻す
+  // これをしないと他のモードで山牌の描画スケールが1.5倍のままになる
+  if(numPlayers===1) numPlayers=3;
   // ── ペン描画状態を完全リセット ──
   _penModeOn = false;
   _wallCanvasInited = false;
@@ -7975,6 +8210,9 @@ function backToLobby(){
   if(wasRankMatch){
     showRank();
   } else {
+    // BOMBモードで能力OFFにした場合、ロビーのUI設定に戻す
+    const abilityOnBtn = document.getElementById('modeAbilityOn');
+    G_ABILITY_MODE = abilityOnBtn ? abilityOnBtn.classList.contains('active') : true;
     showSolo();
   }
   bgmToTitle();
@@ -8306,6 +8544,11 @@ function renderCornerAbilityBtns(){
 
 // ─── Wall Canvas constants ───────────────────────────────
 const W_TW=36, W_TH=48, W_GAP=2, W_COLS=15;
+// 💣 BOMBモード(numPlayers===1)では山牌を1.5倍表示
+function _wScale(){ return (typeof numPlayers!=="undefined" && numPlayers===1) ? 1.5 : 1.0; }
+function _wTW(){ return Math.round(W_TW*_wScale()); }
+function _wTH(){ return Math.round(W_TH*_wScale()); }
+function _wGAP(){ return Math.round(W_GAP*_wScale()); }
 let   _wallCanvasInited=false;
 let   _penModeOn=false;
 const _penImgCache={}; // ペンON/OFFトグル
@@ -8459,8 +8702,8 @@ function renderWallExpand(){
   // 元の wallCanvas と同じ論理サイズで計算し、画面に収まるようスケール
   const total = G.deckSlots.length;
   const rows  = Math.ceil(total / W_COLS);
-  const logW  = W_COLS * (W_TW + W_GAP) - W_GAP;
-  const logH  = rows  * (W_TH + W_GAP) - W_GAP;
+  const logW  = W_COLS * (_wTW() + _wGAP()) - _wGAP();
+  const logH  = rows  * (_wTH() + _wGAP()) - _wGAP();
 
   // 利用可能領域（閉じるボタン分を除く）
   const availW = window.innerWidth  * 0.98;
@@ -8641,8 +8884,9 @@ function togglePenMode(){
 
 function _wallSlotAt(x,y){
   // ピクセル座標からスロットインデックスを返す
-  const col=Math.floor(x/(W_TW+W_GAP));
-  const row=Math.floor(y/(W_TH+W_GAP));
+  const tw=_wTW(),th=_wTH(),gap=_wGAP();
+  const col=Math.floor(x/(tw+gap));
+  const row=Math.floor(y/(th+gap));
   if(col<0||col>=W_COLS) return -1;
   const idx=row*W_COLS+col;
   if(idx<0||!G.deckSlots||idx>=G.deckSlots.length) return -1;
@@ -8650,12 +8894,13 @@ function _wallSlotAt(x,y){
 }
 
 function _wallTileRect(idx){
+  const tw=_wTW(),th=_wTH(),gap=_wGAP();
   const col=idx%W_COLS;
   const row=Math.floor(idx/W_COLS);
   return {
-    x: col*(W_TW+W_GAP),
-    y: row*(W_TH+W_GAP),
-    w: W_TW, h: W_TH
+    x: col*(tw+gap),
+    y: row*(th+gap),
+    w: tw, h: th
   };
 }
 
@@ -8676,8 +8921,8 @@ const _doraImgCache={};
 
   const total=G.deckSlots.length;
   const rows=Math.ceil(total/W_COLS);
-  const cw=W_COLS*(W_TW+W_GAP)-W_GAP;
-  const ch=rows*(W_TH+W_GAP)-W_GAP;
+  const cw=W_COLS*(_wTW()+_wGAP())-_wGAP();
+  const ch=rows*(_wTH()+_wGAP())-_wGAP();
 
   // canvasサイズ設定
   if(wc.width!==cw||wc.height!==ch){ wc.width=cw; wc.height=ch; }
@@ -8696,7 +8941,32 @@ const _doraImgCache={};
     const r=_wallTileRect(i);
 
     if(slot===null){
-      // 引き済み: 透明（何も描かない）
+      // 引き済み: ソロモードなら周囲の爆弾数をヒント表示
+      if(numPlayers===1 && G.mineSlots && G.mineSlots.length>0){
+        const rows2=Math.ceil(total/W_COLS);
+        const col2=i%W_COLS, row2=Math.floor(i/W_COLS);
+        let bombHint=0;
+        for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++){
+          if(dr===0&&dc===0) continue;
+          const nr=row2+dr, nc=col2+dc;
+          if(nr<0||nr>=rows2||nc<0||nc>=W_COLS) continue;
+          const ni=nr*W_COLS+nc;
+          if(G.mineSlots.includes(ni)&&G.deckSlots[ni]!==null) bombHint++;
+        }
+        if(bombHint>0){
+          const bombColors=['','#4488ff','#44bb44','#ff4444','#8800aa','#aa2200','#008888','#000000','#888888'];
+          const grad2=ctx.createLinearGradient(r.x,r.y,r.x+r.w,r.y+r.h);
+          grad2.addColorStop(0,'#0d1e2a'); grad2.addColorStop(1,'#071018');
+          ctx.fillStyle=grad2;
+          _roundRect(ctx,r.x,r.y,r.w,r.h,3,true,false);
+          ctx.strokeStyle='#1a3a4a'; ctx.lineWidth=1;
+          _roundRect(ctx,r.x,r.y,r.w,r.h,3,false,true);
+          ctx.fillStyle=bombColors[Math.min(bombHint,8)]||'#ff4444';
+          ctx.font=`bold ${Math.round(18*_wScale())}px sans-serif`;
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.fillText(String(bombHint),r.x+r.w/2,r.y+r.h/2);
+        }
+      }
       continue;
     }
 
@@ -8704,6 +8974,8 @@ const _doraImgCache={};
     const isRevealed= !!(G.lightRevealedSlots?.[i]);
     const isPinzu   = isPinzuMode && slot.suit==='pin';
     const penImg    = slot?._pkey ? G.penDrawings?.[slot._pkey] : null; // _pkeyベース
+    // ソロ連鎖展開: 安全確定スロット
+    const isSoloSafe= numPlayers===1 && !!(G._soloRevealed&&G._soloRevealed.has(i)) && G.deckSlots[i]!==null;
 
     // 牌の背景グラデーション
     const grad=ctx.createLinearGradient(r.x,r.y,r.x+r.w,r.y+r.h);
@@ -8711,6 +8983,8 @@ const _doraImgCache={};
       grad.addColorStop(0,'#f0e8d0'); grad.addColorStop(1,'#e0d0b0');
     } else if(isMine){
       grad.addColorStop(0,'#3a1a10'); grad.addColorStop(1,'#1a0a08');
+    } else if(isSoloSafe){
+      grad.addColorStop(0,'#0d2e1a'); grad.addColorStop(1,'#071810');
     } else {
       grad.addColorStop(0,'#1a3a50'); grad.addColorStop(1,'#0d2035');
     }
@@ -8720,9 +8994,11 @@ const _doraImgCache={};
     // ボーダー
     const isPickable= (canPick||plantMode||lightPickMode) && !_penModeOn;
     const isPenTarget= _penModeOn && !isRevealed;
-    ctx.strokeStyle= isPickable ? '#6aaa6a'
+    ctx.strokeStyle= isPickable && isSoloSafe ? '#33dd66'
+      : isPickable ? '#6aaa6a'
       : isPenTarget ? '#3ada8a55'
       : isMine ? '#cc4422'
+      : isSoloSafe ? '#2a6a3a'
       : '#2a5a70';
     ctx.lineWidth= isPickable ? 1.5 : 1;
     _roundRect(ctx,r.x,r.y,r.w,r.h,3,false,true);
@@ -8756,7 +9032,7 @@ const _doraImgCache={};
       _roundRect(ctx,r.x,r.y,r.w,r.h,3,true,false);
       ctx.strokeStyle='#ffffff'; ctx.lineWidth=2.5;
       _roundRect(ctx,r.x,r.y,r.w,r.h,3,false,true);
-      ctx.fillStyle='#ffee44'; ctx.font='bold 11px sans-serif';
+      ctx.fillStyle='#ffee44'; ctx.font=`bold ${Math.round(11*_wScale())}px sans-serif`;
       ctx.textAlign='right'; ctx.textBaseline='top';
       ctx.fillText('✓',r.x+r.w-2,r.y+2);
     }
@@ -8766,7 +9042,7 @@ const _doraImgCache={};
       _roundRect(ctx,r.x,r.y,r.w,r.h,3,false,true);
     }
     // テキスト（絵文字 or アイコン）
-    ctx.font=`${isRevealed?44:28}px serif`;
+    ctx.font=`${Math.round((isRevealed?44:28)*_wScale())}px serif`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
     if(isRevealed){
       // 光で表にした牌: 画像があれば描画
@@ -8785,12 +9061,12 @@ const _doraImgCache={};
         // 白(haku)など画像なし: 空白
       }
     } else if(isMine){
-      ctx.font='34px serif'; ctx.fillText('💣',r.x+r.w/2,r.y+r.h/2);
+      ctx.font=`${Math.round(34*_wScale())}px serif`; ctx.fillText('💣',r.x+r.w/2,r.y+r.h/2);
     } else if(isPinzu){
-      ctx.font='34px serif'; ctx.fillText('🔵',r.x+r.w/2,r.y+r.h/2);
+      ctx.font=`${Math.round(34*_wScale())}px serif`; ctx.fillText('🔵',r.x+r.w/2,r.y+r.h/2);
     } else if(!penImg){
       // 裏面アイコン（小さく）
-      ctx.fillStyle='#3a6a8a'; ctx.font='28px serif';
+      ctx.fillStyle='#3a6a8a'; ctx.font=`${Math.round(28*_wScale())}px serif`;
       ctx.fillText('🀫',r.x+r.w/2,r.y+r.h/2);
     }
   }
@@ -9381,7 +9657,10 @@ function renderTable(){
   // オンライン時は操作プレイヤー(NET.myIdx)が常にbottomに来るようローテーション
   let seatMap; // seatMap[seatIdx] = playerIdx or -1 (empty)
   const myIdx = NET.online ? NET.myIdx : 0;
-  if(numPlayers===2){
+  if(numPlayers===1){
+    // 1人: bottom=自分のみ、他は空席
+    seatMap=[0, -1, -1, -1];
+  } else if(numPlayers===2){
     // 2人: bottom=自分, top=相手
     seatMap=[myIdx, -1, (myIdx+1)%2, -1];
   } else if(numPlayers===3){
@@ -9955,7 +10234,7 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
         if(canRiichi){
           const dbl=canDoubleRiichi();
           html+=`<button class="btn btn-riichi" onclick="humanDeclareRiichi('riichi')">${dbl?'ダブルリーチ':'リーチ'}</button>`;
-          html+=`<button class="btn btn-open-riichi" onclick="humanDeclareRiichi('open')">${dbl?'ダブルオープンリーチ':'オープンリーチ'}</button>`;
+          if(numPlayers!==1) html+=`<button class="btn btn-open-riichi" onclick="humanDeclareRiichi('open')">${dbl?'ダブルオープンリーチ':'オープンリーチ'}</button>`;
         }
       }
       // 白・闇: セレクトモード中のヒント+キャンセルのみ（ボタン本体はcornerBtns）
@@ -10155,7 +10434,8 @@ function loadProfile(){
     const s=localStorage.getItem('mjProfile');
     if(s){
       const p=JSON.parse(s);
-      PROFILE=Object.assign({abilities:[],totalPulls:0,coins:0},p);
+      const {coins:_c, abilities:_ab, ability:_abl, ...pSafe} = p; // coins/abilities/ability はDBのみで管理
+      PROFILE=Object.assign({abilities:[],totalPulls:0,coins:0},pSafe);
     }
   }catch(e){}
   _applyProfile();
@@ -10178,7 +10458,8 @@ function loadProfile(){
         twitchSubClaimable:    data.twitchSubClaimable    ?? false,
         twitchEmoteClaimable:  data.twitchEmoteClaimable  ?? false,
       });
-      try{ localStorage.setItem('mjProfile',JSON.stringify(PROFILE)); }catch(e){}
+      const {coins:_coins, abilities:_ab, ability:_abl, ...profileToCache} = PROFILE; // coins/abilities/ability はlocalStorageに保存しない
+      try{ localStorage.setItem('mjProfile',JSON.stringify(profileToCache)); }catch(e){}
       _applyProfile();
     })
     .catch(()=>{ /* サーバー未接続時はlocalStorageのデータをそのまま使う */ });
@@ -10267,7 +10548,8 @@ function renderIconCollection(){
 function pickGachaIconFromCollection(id){
   if(!PROFILE.gachaIcons||!PROFILE.gachaIcons.includes(id)) return;
   PROFILE.iconId=id;
-  try{ localStorage.setItem('mjProfile',JSON.stringify(PROFILE)); }catch(e){}
+  const {coins:_c2, abilities:_ab2, ability:_abl2, ...profileToCache2} = PROFILE; // coins/abilities/ability はlocalStorageに保存しない
+  try{ localStorage.setItem('mjProfile',JSON.stringify(profileToCache2)); }catch(e){}
   updateProfileBadge();
   closeIconCollection();
 }
@@ -10384,7 +10666,8 @@ function pickAbility(ability){
 function saveProfile(){
   const ni=document.getElementById('profileName');
   PROFILE.name=(ni&&ni.value.trim())||'プレイヤー';
-  try{ localStorage.setItem('mjProfile',JSON.stringify(PROFILE)); }catch(e){}
+  const {coins:_c3, abilities:_ab3, ability:_abl3, ...profileToCache3} = PROFILE; // coins/abilities/ability はlocalStorageに保存しない
+  try{ localStorage.setItem('mjProfile',JSON.stringify(profileToCache3)); }catch(e){}
   updateProfileBadge();
   closeProfile();
 }
@@ -10760,7 +11043,8 @@ function closeGacha(){
 }
 
 function saveProfileSilent(){
-  try{ localStorage.setItem('mjProfile',JSON.stringify(PROFILE)); }catch(e){}
+  const {coins:_c4, abilities:_ab4, ability:_abl4, ...profileToCache4} = PROFILE; // coins/abilities/ability はlocalStorageに保存しない
+  try{ localStorage.setItem('mjProfile',JSON.stringify(profileToCache4)); }catch(e){}
   updateProfileBadge();
   // サーバー（Neon PostgreSQL）に保存（coins/totalPullsはサーバー管理のため送信しない）
   fetch('/api/profile',{
@@ -11637,6 +11921,8 @@ function showLightPeek(tile, label, isMine=false){
 
 // CPU地雷能力: startRound直後に1巡目3カ所ランダム設置
 function cpuPlantMines(){
+  // ソロ爆弾モードは爆弾が自動配置済みなのでスキップ
+  if(numPlayers===1 && G._soloStage) return;
   G.players.forEach((p,idx)=>{
     // 自分（人間）またはオンラインゲスト（人間）はスキップ、CPUのみ自動設置
     if(p.ability!=='mine') return;

@@ -83,6 +83,20 @@ async function initDB() {
         updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    // BOMBモード結果履歴（コイン付与ログ兼ベストスコア管理）
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bomb_results (
+        id          SERIAL PRIMARY KEY,
+        google_id   TEXT NOT NULL REFERENCES user_profiles(google_id) ON DELETE CASCADE,
+        stage       INTEGER NOT NULL,
+        score       INTEGER NOT NULL,
+        earned      INTEGER NOT NULL DEFAULT 0,
+        played_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS bomb_results_google_id_idx ON bomb_results(google_id)
+    `);
     console.log("✓ DBテーブル準備完了");
   } catch (err) {
     console.error("✗ DBテーブル作成失敗:", err.message);
@@ -342,12 +356,75 @@ const ROOM_REWARD_TABLE = {
 };
 
 app.post("/api/reward", requireAuth, async (req, res) => {
-  const { rank, numPlayers } = req.body;
+  const uid = req.user.id;
+  const { rank, numPlayers, bombStage, bombScore } = req.body;
+
+  // ── BOMBモード報酬 ──────────────────────────────────────────────
+  if (bombStage !== undefined) {
+    const stage = Number(bombStage);
+    const score = Number(bombScore ?? 0);
+
+    // バリデーション
+    if (!Number.isInteger(stage) || stage < 1 || stage > 200)
+      return res.status(400).json({ error: "bombStage が不正です" });
+    if (!Number.isInteger(score) || score < -999999 || score > 9999999)
+      return res.status(400).json({ error: "bombScore が不正です" });
+
+    // コイン計算: ステージ5の倍数のみ付与（5→5枚, 10→10枚, 15→15枚…）
+    const earned = (stage >= 5 && stage % 5 === 0) ? stage : 0;
+
+    try {
+      // トランザクションでコイン加算 + 結果ログを同時に保存
+      await pool.query("BEGIN");
+
+      // コイン加算（earned=0でも結果ログは記録する）
+      let newCoins;
+      if (earned > 0) {
+        const r = await pool.query(
+          `UPDATE user_profiles SET coins = coins + $2, updated_at = NOW()
+           WHERE google_id = $1
+           RETURNING coins`,
+          [uid, earned]
+        );
+        if (r.rowCount === 0) {
+          await pool.query("ROLLBACK");
+          return res.status(404).json({ error: "プロフィールが見つかりません" });
+        }
+        newCoins = r.rows[0].coins;
+      } else {
+        const r = await pool.query(
+          `SELECT coins FROM user_profiles WHERE google_id = $1`, [uid]
+        );
+        if (r.rowCount === 0) {
+          await pool.query("ROLLBACK");
+          return res.status(404).json({ error: "プロフィールが見つかりません" });
+        }
+        newCoins = r.rows[0].coins;
+      }
+
+      // 結果ログを bomb_results に記録
+      await pool.query(
+        `INSERT INTO bomb_results (google_id, stage, score, earned) VALUES ($1, $2, $3, $4)`,
+        [uid, stage, score, earned]
+      );
+
+      await pool.query("COMMIT");
+
+      console.log(`BOMBモード報酬: google=${uid} stage=${stage} score=${score} earned=${earned} coins=${newCoins}`);
+      res.json({ ok: true, earned, coins: newCoins });
+    } catch (err) {
+      await pool.query("ROLLBACK").catch(() => {});
+      console.error("BOMB報酬付与エラー:", err.message);
+      res.status(500).json({ error: "DB エラー" });
+    }
+    return;
+  }
+
+  // ── ルームマッチ報酬 ────────────────────────────────────────────
   if (!rank || !numPlayers) return res.status(400).json({ error: "rank と numPlayers が必要です" });
   const table = ROOM_REWARD_TABLE[numPlayers];
   const earned = table?.[rank] ?? 0;
   if (earned === 0) return res.json({ ok: true, earned: 0 });
-  const uid = req.user.id;
   try {
     const r = await pool.query(
       `UPDATE user_profiles SET coins = coins + $2, updated_at = NOW()
@@ -623,6 +700,44 @@ app.get("/api/twitch/status", requireAuth, async (req, res) => {
     res.json({ linked: !!row.twitch_user_id, claimable, emoteClaimable });
   } catch (e) {
     res.status(500).json({ error: "DB error" });
+  }
+});
+
+// GET /api/bomb/best — BOMBモードのベストスコア取得
+app.get("/api/bomb/best", requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT stage, score, played_at
+       FROM bomb_results
+       WHERE google_id = $1
+       ORDER BY stage DESC, score DESC
+       LIMIT 1`,
+      [req.user.id]
+    );
+    if (r.rowCount === 0) return res.json({ bestStage: 0, bestScore: null });
+    const row = r.rows[0];
+    res.json({ bestStage: row.stage, bestScore: row.score, playedAt: row.played_at });
+  } catch (err) {
+    console.error("BOMBベスト取得エラー:", err.message);
+    res.status(500).json({ error: "DB エラー" });
+  }
+});
+
+// GET /api/bomb/history — BOMBモードの直近履歴（最大20件）
+app.get("/api/bomb/history", requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT stage, score, earned, played_at
+       FROM bomb_results
+       WHERE google_id = $1
+       ORDER BY played_at DESC
+       LIMIT 20`,
+      [req.user.id]
+    );
+    res.json({ history: r.rows });
+  } catch (err) {
+    console.error("BOMB履歴取得エラー:", err.message);
+    res.status(500).json({ error: "DB エラー" });
   }
 });
 
