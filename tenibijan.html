@@ -486,8 +486,10 @@ body{
   cursor:default;
   box-shadow:1px 2px 4px var(--tile-shadow),inset 0 1px 2px #ffffff88;
   position:relative;user-select:none;flex-shrink:0;
+  -webkit-user-drag:none;
   transition:transform .12s,box-shadow .12s,border-color .12s;
 }
+.tile img, .tile *{ -webkit-user-drag:none; user-drag:none; pointer-events:none; }
 .tile.man{color:#880000;}
 .tile.pin{color:#002288;}
 .tile.sou{color:#005500;}
@@ -8274,25 +8276,29 @@ function humanSelect(idx){
 let _dragState = null;
 
 function _attachTileDrag(tileEl, i, canDiscard){
+  tileEl.addEventListener('dragstart', e=>e.preventDefault());
   tileEl.addEventListener('pointerdown', e=>{
     if(e.button && e.button !== 0) return;
-    e.stopPropagation();
-    tileEl.setPointerCapture(e.pointerId);
     const rect = tileEl.getBoundingClientRect();
     const ghost = tileEl.cloneNode(true);
     ghost.style.cssText += `;position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;z-index:99999;pointer-events:none;opacity:0.9;transition:none;transform:scale(1.15);box-shadow:0 8px 24px #000a;`;
     document.body.appendChild(ghost);
     const handWrap = tileEl.closest('.hand-wrap');
     const handEls = handWrap ? Array.from(handWrap.querySelectorAll('.tile[data-idx]')) : [];
-    _dragState = { tileEl, idx:i, startX:e.clientX, startY:e.clientY, ghost, rect, handEls, swapped:false };
+    _dragState = { tileEl, idx:i, startX:e.clientX, startY:e.clientY, ghost, rect, handEls, swapped:false, pointerId:e.pointerId, captured:false };
     tileEl._dragMoved = false;
     tileEl.style.opacity = '0.35';
-  },{passive:false});
+  },{passive:true});
 
   tileEl.addEventListener('pointermove', e=>{
     if(!_dragState || _dragState.tileEl !== tileEl) return;
     const dx = e.clientX - _dragState.startX;
     const dy = e.clientY - _dragState.startY;
+    // 一定距離動いたらドラッグ確定してキャプチャ
+    if(!_dragState.captured && (Math.abs(dx) > 8 || Math.abs(dy) > 8)){
+      try{ tileEl.setPointerCapture(_dragState.pointerId); }catch(err){}
+      _dragState.captured = true;
+    }
     _dragState.ghost.style.left = (_dragState.rect.left + dx) + 'px';
     _dragState.ghost.style.top  = (_dragState.rect.top  + dy) + 'px';
     if(!autoSortEnabled && Math.abs(dx) > Math.abs(dy) * 1.2 && Math.abs(dx) > 12){
@@ -8318,7 +8324,6 @@ function _attachTileDrag(tileEl, i, canDiscard){
     const dx = e.clientX - _dragState.startX;
     const dy = e.clientY - _dragState.startY;
     const absDx = Math.abs(dx), absDy = Math.abs(dy);
-    // 一定距離以上動いたらドラッグとみなしクリックをブロック
     if(absDx > 8 || absDy > 8) tileEl._dragMoved = true;
     const savedIdx = _dragState.idx;
     const swapTarget = _dragState._swapTarget ?? -1;
@@ -8352,6 +8357,19 @@ function _cleanDrag(){
   if(_dragState.ghost && _dragState.ghost.parentNode) _dragState.ghost.parentNode.removeChild(_dragState.ghost);
   if(_dragState.tileEl) _dragState.tileEl.style.opacity = '';
 }
+
+// ドキュメントレベルでゴースト残像をクリーンアップ（キャプチャなしの時タイル外でpointerupが発火する）
+document.addEventListener('pointerup', e=>{
+  if(!_dragState) return;
+  if(_dragState.tileEl && e.target === _dragState.tileEl) return; // タイル上は個別ハンドラに任せる
+  if(_dragState.handEls) _dragState.handEls.forEach(el=>{ el.style.outline=''; });
+  _cleanDrag(); _dragState=null;
+},{passive:true});
+document.addEventListener('pointercancel', ()=>{
+  if(!_dragState) return;
+  if(_dragState.handEls) _dragState.handEls.forEach(el=>{ el.style.outline=''; });
+  _cleanDrag(); _dragState=null;
+},{passive:true});
 
 function humanDiscard(){
   const myTurn = NET.online ? G.current===NET.myIdx : G.current===0;
