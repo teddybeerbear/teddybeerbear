@@ -487,6 +487,7 @@ body{
   box-shadow:1px 2px 4px var(--tile-shadow),inset 0 1px 2px #ffffff88;
   position:relative;user-select:none;flex-shrink:0;
   -webkit-user-drag:none;
+  -webkit-touch-callout:none;
   transition:transform .12s,box-shadow .12s,border-color .12s;
 }
 .tile img, .tile *{ -webkit-user-drag:none; user-drag:none; pointer-events:none; }
@@ -3883,9 +3884,21 @@ function isOnlineGuestIdx(pidx){
 
 // ── Lobby mode toggles ───────────────────────────────────────
 function _setModeActive(id){
+  const defaultBorders = {
+    'modeBtn-solo':  '#2a4a3a',
+    'modeBtn-online': '',
+    'modeBtn-rank':  '',
+    'modeBtn-bomb':  '#cc4422',
+  };
   ['modeBtn-solo','modeBtn-online','modeBtn-rank','modeBtn-bomb'].forEach(bid=>{
     const b=document.getElementById(bid);
-    if(b) b.classList.toggle('active', bid===id);
+    if(!b) return;
+    const isActive = bid===id;
+    b.classList.toggle('active', isActive);
+    // インラインborder-colorを上書き（activeの時はゴールド、非activeはデフォルト色）
+    b.style.borderColor = isActive ? 'var(--gold)' : (defaultBorders[bid]||'');
+    if(isActive) b.style.boxShadow = '0 0 10px #c9a84c55';
+    else b.style.boxShadow = '';
   });
 }
 function showSolo(){
@@ -8291,7 +8304,7 @@ function _attachTileDrag(tileEl, i, canDiscard){
   },{passive:true});
 
   tileEl.addEventListener('pointermove', e=>{
-    if(!_dragState || _dragState.tileEl !== tileEl) return;
+    if(!_dragState || _dragState.pointerId !== e.pointerId) return;
     const dx = e.clientX - _dragState.startX;
     const dy = e.clientY - _dragState.startY;
     // 一定距離動いたらドラッグ確定してキャプチャ
@@ -8301,14 +8314,16 @@ function _attachTileDrag(tileEl, i, canDiscard){
     }
     _dragState.ghost.style.left = (_dragState.rect.left + dx) + 'px';
     _dragState.ghost.style.top  = (_dragState.rect.top  + dy) + 'px';
-    if(!autoSortEnabled && Math.abs(dx) > Math.abs(dy) * 1.2 && Math.abs(dx) > 12){
-      const ghostCx = _dragState.rect.left + _dragState.rect.width/2 + dx;
-      let targetEl = null, targetIdx = -1;
+    if(!autoSortEnabled && Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(dx) > 10){
+      // 指の現在位置に最も近い牌を探す
+      const fingerX = e.clientX;
+      let targetEl = null, targetIdx = -1, minDist = Infinity;
       for(const el of _dragState.handEls){
         if(el === tileEl) continue;
         const r = el.getBoundingClientRect();
         const cx = r.left + r.width/2;
-        if(Math.abs(ghostCx - cx) < r.width * 0.6){ targetEl = el; targetIdx = parseInt(el.dataset.idx); break; }
+        const dist = Math.abs(fingerX - cx);
+        if(dist < r.width * 0.8 && dist < minDist){ minDist = dist; targetEl = el; targetIdx = parseInt(el.dataset.idx); }
       }
       _dragState.handEls.forEach(el=>{ if(el!==tileEl) el.style.outline=''; });
       if(targetEl) targetEl.style.outline = '2px solid #c9a84c';
@@ -8320,13 +8335,15 @@ function _attachTileDrag(tileEl, i, canDiscard){
   },{passive:true});
 
   tileEl.addEventListener('pointerup', e=>{
-    if(!_dragState || _dragState.tileEl !== tileEl) return;
+    if(!_dragState || _dragState.pointerId !== e.pointerId) return;
     const dx = e.clientX - _dragState.startX;
     const dy = e.clientY - _dragState.startY;
     const absDx = Math.abs(dx), absDy = Math.abs(dy);
     if(absDx > 8 || absDy > 8) tileEl._dragMoved = true;
     const savedIdx = _dragState.idx;
     const swapTarget = _dragState._swapTarget ?? -1;
+    const savedHandEls = _dragState.handEls;
+    const savedTileEl = _dragState.tileEl;
     _dragState.handEls.forEach(el=>{ el.style.outline=''; });
     _cleanDrag();
     _dragState = null;
@@ -8335,12 +8352,25 @@ function _attachTileDrag(tileEl, i, canDiscard){
       humanDiscard();
       return;
     }
-    if(!autoSortEnabled && absDx > 30 && absDx > absDy * 1.2 && swapTarget >= 0){
+    if(!autoSortEnabled && absDx > 20 && absDx > absDy * 1.5){
+      // 離した指の位置で最終ターゲットを決定
+      let finalTarget = swapTarget;
+      if(finalTarget < 0){
+        // swapTargetが未確定の場合、指の現在位置から探す
+        const fingerX = e.clientX;
+        for(const el of (savedHandEls||[])){
+          if(el === savedTileEl) continue;
+          const r = el.getBoundingClientRect();
+          const cx = r.left + r.width/2;
+          if(Math.abs(fingerX - cx) < r.width * 0.8){ finalTarget = parseInt(el.dataset.idx); break; }
+        }
+      }
       const p = G && G.players && G.players[NET.myIdx];
-      if(p && swapTarget < p.hand.length && savedIdx < p.hand.length){
-        [p.hand[savedIdx], p.hand[swapTarget]] = [p.hand[swapTarget], p.hand[savedIdx]];
-        if(selIdx === savedIdx) selIdx = swapTarget;
-        else if(selIdx === swapTarget) selIdx = savedIdx;
+      if(p && finalTarget >= 0 && finalTarget < p.hand.length && savedIdx < p.hand.length){
+        [p.hand[savedIdx], p.hand[finalTarget]] = [p.hand[finalTarget], p.hand[savedIdx]];
+        if(selIdx === savedIdx) selIdx = finalTarget;
+        else if(selIdx === finalTarget) selIdx = savedIdx;
+        SFX.draw();
         renderAll();
       }
     }
@@ -8361,6 +8391,7 @@ function _cleanDrag(){
 // ドキュメントレベルでゴースト残像をクリーンアップ（キャプチャなしの時タイル外でpointerupが発火する）
 document.addEventListener('pointerup', e=>{
   if(!_dragState) return;
+  if(_dragState.pointerId !== e.pointerId) return;
   if(_dragState.tileEl && e.target === _dragState.tileEl) return; // タイル上は個別ハンドラに任せる
   if(_dragState.handEls) _dragState.handEls.forEach(el=>{ el.style.outline=''; });
   _cleanDrag(); _dragState=null;
@@ -8370,6 +8401,10 @@ document.addEventListener('pointercancel', ()=>{
   if(_dragState.handEls) _dragState.handEls.forEach(el=>{ el.style.outline=''; });
   _cleanDrag(); _dragState=null;
 },{passive:true});
+// スマホ長押しのコンテキストメニュー・テキスト選択をブロック（手牌タイル上のみ）
+document.addEventListener('contextmenu', e=>{
+  if(e.target.closest('.tile, .hand-wrap, .hand-outer')) e.preventDefault();
+});
 
 function humanDiscard(){
   const myTurn = NET.online ? G.current===NET.myIdx : G.current===0;
@@ -10984,7 +11019,9 @@ function renderTable(){
               else humanSelect(i);
             }
           });
-          // ドラッグ（上→捨て、横→入れ替え）
+        }
+        // ドラッグ: 自動理牌OFFなら相手ターン中も横入れ替え可能、捨ては自分のターンのみ
+        if(!autoSortEnabled || G.phase==='discard'){
           const canDragDiscard = G.phase==='discard' && !G.yamiSelectMode && !(G.hakuSelectPlayers&&G.hakuSelectPlayers.includes(NET.myIdx));
           _attachTileDrag(tileEl, i, canDragDiscard);
         }
