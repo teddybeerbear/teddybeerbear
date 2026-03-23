@@ -4819,15 +4819,56 @@ function kickPlayer(connIdx){
   updateRoomLobbyUI();
 }
 
-// ホスト: CPUをルームに追加
+// ホスト: CPUをルームに追加（選択ダイアログ経由）
 function addCpuToRoom(){
   if(!NET.isHost) return;
-  if(NET.conns.length >= 3) return; // 最大3スロット（ホスト含む4人）
-  // 解放済み能力からランダム選択
-  const cpuAbilities=['mine','light','yami','haku','sanctuary','pinzu','steal','tenbi'];
-  const unlockedAbs = cpuAbilities.filter(a => isCpuUnlocked(a));
-  const pool = unlockedAbs.length > 0 ? unlockedAbs : ['light'];
-  const ability = pool[Math.floor(Math.random() * pool.length)];
+  if(NET.conns.length >= 3) return;
+  _openRoomCpuSelect();
+}
+
+function _openRoomCpuSelect(){
+  const ov = document.getElementById('roomCpuSelectOverlay');
+  if(!ov) return;
+  const grid = document.getElementById('roomCpuSelectGrid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  const ud = loadCpuUnlocks();
+  const isUnlocked = v => CPU_ALWAYS_UNLOCKED.has(v) || ud.unlocked.includes(v);
+  for(const o of CPU_ABILITY_OPTIONS){
+    if(!isUnlocked(o.key)) continue;
+    const btn = document.createElement('button');
+    btn.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 8px;background:#040c12;border:1.5px solid #1a3a2a;border-radius:10px;cursor:pointer;transition:all .15s;min-width:80px;';
+    btn.onmouseover = ()=>btn.style.borderColor='#c9a84c';
+    btn.onmouseout  = ()=>btn.style.borderColor='#1a3a2a';
+    const iconDiv = document.createElement('div');
+    if(o.icon){
+      const img = document.createElement('img');
+      img.src = `https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/gacha/${o.icon}.png`;
+      img.style.cssText = 'width:48px;height:67px;object-fit:contain;border-radius:6px;';
+      iconDiv.appendChild(img);
+    } else {
+      iconDiv.style.cssText = 'width:48px;height:67px;display:flex;align-items:center;justify-content:center;font-size:2rem;';
+      iconDiv.textContent = o.emoji;
+    }
+    const labelDiv = document.createElement('div');
+    labelDiv.style.cssText = 'font-size:.55rem;color:#8aaa8a;text-align:center;white-space:nowrap;';
+    labelDiv.textContent = o.label;
+    btn.appendChild(iconDiv);
+    btn.appendChild(labelDiv);
+    btn.onclick = ()=>{ _addCpuToRoomWithAbility(o.key); _closeRoomCpuSelect(); };
+    grid.appendChild(btn);
+  }
+  ov.style.display = 'flex';
+}
+
+function _closeRoomCpuSelect(){
+  const ov = document.getElementById('roomCpuSelectOverlay');
+  if(ov) ov.style.display = 'none';
+}
+
+function _addCpuToRoomWithAbility(ability){
+  if(!NET.isHost) return;
+  if(NET.conns.length >= 3) return;
   const CPU_PROFILE = {
     'mine':'地雷師ナミ','light':'光の探偵ヒカル','yami':'闇使いカゲ',
     'haku':'白術士ハク','sanctuary':'聖域守りセイ','pinzu':'筒子教ピン',
@@ -4837,16 +4878,22 @@ function addCpuToRoom(){
     'mine':'C01','light':'C02','yami':'C03','haku':'C04',
     'sanctuary':'C05','pinzu':'C06','steal':'C07','tenbi':'L01','':{id:'C08'}
   };
-  const cpuName = CPU_PROFILE[ability] || 'CPU';
-  const cpuIcon = CPU_ICON[ability] || 'C08';
+  let resolvedAbility = ability;
+  if(ability === 'random'){
+    const cpuAbilities=['mine','light','yami','haku','sanctuary','pinzu','steal','tenbi'];
+    const unlockedAbs = cpuAbilities.filter(a => isCpuUnlocked(a));
+    const pool = unlockedAbs.length > 0 ? unlockedAbs : ['light'];
+    resolvedAbility = pool[Math.floor(Math.random() * pool.length)];
+  }
+  const cpuName = CPU_PROFILE[resolvedAbility] || 'CPU';
+  const cpuIcon = CPU_ICON[resolvedAbility] || 'C08';
   const slot = NET.conns.length;
-  // connsにnullを入れてスロットを確保（実接続なし）
   NET.conns.push(null);
   NET.guestNames[slot]     = cpuName;
-  NET.guestAbilities[slot] = ability;
+  NET.guestAbilities[slot] = resolvedAbility;
   NET.guestIconIds[slot]   = cpuIcon;
   NET.guestEmotes[slot]    = '';
-  NET.guestReady[slot]     = true;  // CPUは常に準備OK
+  NET.guestReady[slot]     = true;
   NET.guestIsCpu[slot]     = true;
   _broadcastMemberUpdate();
   updateRoomLobbyUI();
@@ -7295,7 +7342,7 @@ let _bombAutoPickOn = false; // トグル状態
 function _updateBombAutoPickBtn(){
   const btn = document.getElementById('bombAutoPickBtn');
   if(!btn) return;
-  const isBomb = numPlayers===1 && G && G._soloStage;
+  const isBomb = numPlayers===1 && G && G._soloStage && !NET.online;
   const safe = isBomb ? _bombGetSafeSlots() : [];
   // ON状態のスタイル
   if(_bombAutoPickOn){
@@ -13444,6 +13491,30 @@ function plantMineRinshan(ri){
           </table>
         </div>
       </div>
+<!-- タイトル背景選択オーバーレイ -->
+<!-- ルームCPU選択オーバーレイ -->
+<div id="roomCpuSelectOverlay" style="
+  display:none;position:fixed;inset:0;z-index:99999;
+  background:#000000cc;backdrop-filter:blur(4px);
+  align-items:center;justify-content:center;padding:20px;
+">
+  <div style="
+    background:linear-gradient(135deg,#060e18,#091422);
+    border:1px solid #1a3a2a;border-radius:14px;
+    padding:18px;width:100%;max-width:480px;
+  ">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:.85rem;font-weight:700;color:var(--gold);letter-spacing:.1em;">🤖 CPUを選択</div>
+      <button onclick="_closeRoomCpuSelect()" style="
+        background:#030a10;border:1px solid #2a3a4a;border-radius:7px;
+        color:#5a7a8a;font-size:.7rem;padding:5px 10px;cursor:pointer;
+      ">✕ 閉じる</button>
+    </div>
+    <div id="roomCpuSelectGrid" style="
+      display:flex;flex-wrap:wrap;gap:10px;justify-content:center;
+    "></div>
+  </div>
+</div>
 <!-- タイトル背景選択オーバーレイ -->
 <div id="titleBgOverlay" style="
   display:none;position:fixed;inset:0;z-index:99999;
