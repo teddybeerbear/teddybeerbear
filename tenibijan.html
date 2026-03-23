@@ -3987,6 +3987,7 @@ function startBombGame(){
   if(wb){ wb.style.opacity='0'; wb.style.pointerEvents='none'; }
   const adb=document.getElementById('autoDrawBtn');
   if(adb){ adb.style.display='none'; }
+  autoDrawEnabled=false; _updateAutoDrawBtn(); // 手にボム：自動引き強制OFF
   const dzb=document.getElementById('discardZoomBtn');
   if(dzb){ dzb.style.display='none'; }
   initGame();
