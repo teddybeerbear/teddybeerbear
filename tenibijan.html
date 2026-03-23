@@ -8693,6 +8693,7 @@ function nextRound(){
 }
 function advanceRound(dealerWon){
   if(!dealerWon){G.dealer=(G.dealer+1)%numPlayers;G.roundNum++;G.honba=0;}
+  else{G.honba++;} // 親で上がり → 本場+1
   // numPlayers局で1周（3人なら3局、4人なら4局）
   if(G.roundNum>numPlayers){G.roundNum=1;G.roundWind=G.roundWind==='東'?'南':'東';}
   if(G.roundWind==='南'&&G.roundNum>numPlayers){showFinalResult();return;}
