@@ -5777,6 +5777,8 @@ function remoteWallPick(pidx,slotIdx){
     scheduleForPlayer(pidx,550,()=>{discardAction(pidx,p.hand.length-1);broadcastState();});
   }else{
     addLog(`${emj(tile)} ツモ`,'log-new');
+    // 自分の番なら自動切りを発火
+    if(pidx===NET.myIdx) _triggerAutoAction(NET.myIdx, 350);
   }
   renderAll();broadcastState();
 }
@@ -6227,9 +6229,12 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; _wallEx
   autoDiscardEnabled=false; _updateAutoDiscardBtn(); updateAutoMenuLabel();
   _updateAutoSortBtn(); // 自動理牌ボタン状態を更新
   // 安全自動ボタンをリセット・強制非表示（手にボム以外では表示しない）
-  _bombAutoPickOn = false;
+  // 手にボムソロモード中は _bombAutoPickOn を維持する
+  if(!(numPlayers===1 && G && G._soloStage)){
+    _bombAutoPickOn = false;
+  }
   const _bapBtn = document.getElementById('bombAutoPickBtn');
-  if(_bapBtn) _bapBtn.style.display = 'none';
+  if(_bapBtn && !(numPlayers===1 && G && G._soloStage)) _bapBtn.style.display = 'none';
   // ペンモードOFFにリセット（局をまたいでペン状態が残らないよう）
   if(_penModeOn){ _penModeOn=false; window._activePenOC=null; const pb=document.getElementById('penToggleBtn');if(pb)pb.classList.remove('pen-active'); const pt=document.getElementById('penToolbarFloat');if(pt)pt.style.display='none'; const wc=document.getElementById('wallCanvas');if(wc){wc.classList.remove('pen-on');wc.classList.remove('pick-on');} const wo=document.getElementById('wallExpandOverlay');if(wo)wo.classList.remove('show'); }
   // 前局の白変換を元に戻す（players再生成前に処理）
@@ -6739,9 +6744,14 @@ function nextTurn(pidx){
 
   // Human draw — show wall for selection
   const myIdx=NET.myIdx;
+  // 💣 手にボムソロ: 引ける牌（爆弾以外）が残っていなければステージクリア
+  if(numPlayers===1 && G._soloStage){
+    const hasNonBomb = G.deckSlots.some((s,i)=>s!==null && !G.mineSlots.includes(i));
+    if(!hasNonBomb){ handleExhausted(); return; }
+  }
   if(G.deck.length===0){handleExhausted();return;}
   G.phase='draw_wait'; // wait for humanPickWall()
-  setTimeout(()=>{ _updateBombAutoPickBtn(); _updateBombFlagBtn(); if(_bombAutoPickOn) _bombTryAutoPick(); }, 80); // 💣 BOMBモードボタン更新
+  setTimeout(()=>{ _updateBombAutoPickBtn(); _updateBombFlagBtn(); if(_bombAutoPickOn) _bombTryAutoPick(); }, 150); // 💣 BOMBモードボタン更新
   timerOnMyTurn(); // 制限時間モード: タイマー起動（autoDrawON時も）
   if(autoDrawEnabled){
     renderAll();broadcastState();
@@ -7020,8 +7030,8 @@ function _triggerAutoAction(myIdx, delay=200){
       if(autoDiscardEnabled) setTimeout(()=>{ if(G.current===myIdx&&G.phase==='discard') _triggerAutoAction(myIdx,200); },400);
       return;
     }
-    // 自動捨て（💣BOMBモード安全自動引きONの場合は自動捨てしない）
-    if(autoDiscardEnabled && !(_bombAutoPickOn && numPlayers===1 && G._soloStage)) humanAutoDiscard();
+    // 自動捨て（旗モード中は自動切りしない）
+    if(autoDiscardEnabled && !_bombFlagMode) humanAutoDiscard();
   }, delay);
 }
 // 自動ツモ切り: リーチ中はドロー牌を切る、それ以外は最後の牌を切る
@@ -7348,18 +7358,21 @@ function _updateBombAutoPickBtn(){
   if(!btn) return;
   const isBomb = numPlayers===1 && G && G._soloStage && !NET.online;
   const safe = isBomb ? _bombGetSafeSlots() : [];
-  // ON状態のスタイル
   if(_bombAutoPickOn){
-    btn.style.background   = 'linear-gradient(135deg,#082a3a,#041828)';
+    // ON: 青く光る
+    btn.style.background   = 'linear-gradient(135deg,#052a40,#031820)';
     btn.style.borderColor  = '#22aaff';
-    btn.style.boxShadow    = '0 0 8px #22aaff66';
+    btn.style.boxShadow    = '0 0 10px #22aaff88, 0 0 20px #22aaff44';
     btn.style.color        = '#66ccff';
+    btn.style.fontWeight   = '700';
     btn.textContent        = `💣 安全自動 ON(${safe.length})`;
   } else {
-    btn.style.background   = 'linear-gradient(135deg,#1a0808,#0d0404)';
-    btn.style.borderColor  = '#cc4422';
+    // OFF: 薄いグレー系
+    btn.style.background   = '#030a10';
+    btn.style.borderColor  = '#2a4a5a';
     btn.style.boxShadow    = '';
-    btn.style.color        = '#ff8866';
+    btn.style.color        = '#3a6a7a';
+    btn.style.fontWeight   = '400';
     btn.textContent        = `💣 安全自動(${safe.length})`;
   }
   btn.style.display = isBomb ? '' : 'none';
@@ -7379,9 +7392,18 @@ function toggleBombAutoPick(){
 
 function _bombTryAutoPick(){
   if(!_bombAutoPickOn) return;
+  if(_bombFlagMode) return; // 旗モード中は自動引きしない
   if(!G || G.phase!=='draw_wait' || G.current!==NET.myIdx) return;
   const safe = _bombGetSafeSlots();
-  if(safe.length===0) return;
+  if(safe.length===0){
+    // 安全スロットがまだない場合は少し待ってリトライ（_soloRevealedの更新待ち）
+    setTimeout(()=>{
+      if(!_bombAutoPickOn || _bombFlagMode || !G || G.phase!=='draw_wait' || G.current!==NET.myIdx) return;
+      const safe2 = _bombGetSafeSlots();
+      if(safe2.length>0) humanPickWall(safe2[0]);
+    }, 150);
+    return;
+  }
   humanPickWall(safe[0]);
 }
 
@@ -7508,8 +7530,8 @@ function humanPickWall(slotIdx){
   else if(p.tenpai)addLog(`${emj(tile)} ツモ。テンパイ中。`,'log-new');
   else addLog(`${emj(tile)} ツモ`,'log-new');
   renderAll();broadcastState();
-  // 自動発火（💣 安全自動ONの場合はdiscard自動発火しない）
-  if(G.current===myIdx && G.phase==='discard' && !(_bombAutoPickOn && numPlayers===1 && G._soloStage)) _triggerAutoAction(myIdx, 350);
+  // 自動発火
+  if(G.current===myIdx && G.phase==='discard') _triggerAutoAction(myIdx, 350);
 }
 
 // ============================================================
