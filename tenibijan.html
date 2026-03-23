@@ -1866,15 +1866,15 @@ body{
     <div id="titleTabContentOperation" style="display:none;">
       <div style="font-size:.6rem;color:#5a7a6a;margin-bottom:10px;letter-spacing:.05em;">🀇 捨て方式</div>
       <div style="display:flex;flex-direction:column;gap:6px;">
-        <label id="discardModeSelectLabel" style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;border:2px solid var(--gold);background:#0a1a0a;">
-          <input type="radio" name="discardMode" value="select" checked style="margin-top:2px;accent-color:var(--gold);" onchange="setDiscardMode('select')">
+        <label id="discardModeSelectLabel" style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;border:2px solid #1a3a2a;background:#030a10;">
+          <input type="radio" name="discardMode" value="select" style="margin-top:2px;accent-color:var(--gold);" onchange="setDiscardMode('select')">
           <div>
             <div class="discard-mode-title" style="font-size:.7rem;font-weight:700;color:var(--gold);">選択捨て</div>
             <div style="font-size:.55rem;color:#5a7a6a;margin-top:2px;">1クリックで選択 → もう1クリックで捨て</div>
           </div>
         </label>
-        <label id="discardModeOneClickLabel" style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;border:2px solid #1a3a2a;background:#030a10;">
-          <input type="radio" name="discardMode" value="oneclick" style="margin-top:2px;accent-color:var(--gold);" onchange="setDiscardMode('oneclick')">
+        <label id="discardModeOneClickLabel" style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;border:2px solid var(--gold);background:#0a1a0a;">
+          <input type="radio" name="discardMode" value="oneclick" checked style="margin-top:2px;accent-color:var(--gold);" onchange="setDiscardMode('oneclick')">
           <div>
             <div class="discard-mode-title" style="font-size:.7rem;font-weight:700;color:#8aaa8a;">１クリック</div>
             <div style="font-size:.55rem;color:#5a7a6a;margin-top:2px;">クリックした牌をすぐ捨てる</div>
@@ -1967,7 +1967,7 @@ body{
       <div class="lobby-banner-slide" onclick="openShop()" style="cursor:pointer;">
         <div class="lbs-inner" style="background:linear-gradient(135deg,#12082a,#0a0418);border:1px solid #5a3a9a;">
           <span class="lbs-tag" style="background:#1e0a40;color:#c9a0ff;border:1px solid #7a4acc;">💜 Twitch特典</span>
-          <div class="lbs-title" style="color:#e0c0ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:clamp(.7rem,2.5vw,1rem);">サブスクで毎月 <img src="https://github.com/teddybeerbear/teddybeerbear/blob/main/coin/tenibi.png?raw=true" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin:0 1px;">1,000 手にビ ＋ <img src="https://github.com/teddybeerbear/teddybeerbear/blob/main/coin/tbb.png?raw=true" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin:0 1px;">100 TBB</div>
+          <div class="lbs-title" style="color:#e0c0ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:clamp(.55rem,2vw,.82rem);display:flex;align-items:center;gap:2px;flex-wrap:nowrap;">サブスクで毎月 <img src="https://github.com/teddybeerbear/teddybeerbear/blob/main/coin/tenibi.png?raw=true" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;flex-shrink:0;">1,000 手にビ ＋ <img src="https://github.com/teddybeerbear/teddybeerbear/blob/main/coin/tbb.png?raw=true" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;flex-shrink:0;">100 TBB</div>
           <div class="lbs-desc" style="color:#9a70cc;">ショップからTwitchを連携すると毎月コイン＆TBBコインを受け取れます！さらに🔊ボイス付きエモート（サブスク限定）もゲット。</div>
         </div>
       </div>
@@ -2324,9 +2324,9 @@ body{
       ">💣 安全自動</button>
       <div style="display:flex;gap:4px;align-items:center;">
         <button id="autoDrawBtn" onclick="toggleAutoDraw()" style="
-          background:#030a10;border:1px solid #1a4a2a;border-radius:7px;
-          color:#5a9a7a;font-size:.6rem;padding:5px 9px;cursor:pointer;
-          transition:all .2s;letter-spacing:.04em;white-space:nowrap;
+          background:#030a10;border:1px solid #44ff88;border-radius:7px;
+          color:#44ff88;font-size:.6rem;padding:5px 9px;cursor:pointer;
+          transition:all .2s;letter-spacing:.04em;white-space:nowrap;box-shadow:0 0 8px #44ff8866;
         ">引く</button>
       <div style="position:relative;">
         <button id="autoMenuToggle" onclick="toggleAutoMenu()" style="
@@ -3672,12 +3672,12 @@ function doraFromIndicator(ind){
 let G={};
 let selIdx=-1;
 let _lightPending=null; // 光能力: 選択中の牌 {type,si/di/pidx/idx}
-let autoDrawEnabled=false;  // 自動ツモON/OFF
+let autoDrawEnabled=true;   // 自動ツモON/OFF
 let autoDiscardEnabled=false; // 自動切りON/OFF
 let autoKitaEnabled=false;    // 自動北抜きON/OFF
 let autoWinEnabled=false;     // 自動上がりON/OFF
-let autoSortEnabled=true;     // 自動理牌ON/OFF
-let oneClickDiscard=false;    // 1クリック捨てON/OFF
+let autoSortEnabled=false;    // 自動理牌ON/OFF
+let oneClickDiscard=true;     // 1クリック捨てON/OFF
 let playerAFK=false;
 let noMeldEnabled=false;          // 離席モード
 let numPlayers=3;
@@ -9327,7 +9327,7 @@ function backToLobby(){
 // WIN MODAL
 // ============================================================
 // 役満動画マップ
-let _yakumanVideoVol = 0.2; // 役満動画音量
+let _yakumanVideoVol = 0.1; // 役満動画音量
 const YAKUMAN_VIDEOS = {
   '国士無双（東南西北中）': 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/yakuman/kokusimusou.mp4',
   '人和':         'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/yakuman/renhou.mp4',
@@ -13702,7 +13702,7 @@ function plantMineRinshan(ri){
           <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">能力</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="['light','yami','haku','steal','mine'].forEach(k=>SFX.setSeScale(k,+this.value));saveSettings();"></div>
           <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">マイターン</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('myTurn',+this.value);saveSettings();"></div>
           <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">カウントダウン</span><input type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:var(--gold);" oninput="SFX.setSeScale('countdown',+this.value);saveSettings();"></div>
-          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">役満動画</span><input id="sliderYakuVid" type="range" min="0" max="1" step="0.05" value="0.2" style="flex:1;accent-color:var(--gold);" oninput="_yakumanVideoVol=+this.value;saveSettings();"></div>
+          <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">役満動画</span><input id="sliderYakuVid" type="range" min="0" max="1" step="0.05" value="0.1" style="flex:1;accent-color:var(--gold);" oninput="_yakumanVideoVol=+this.value;saveSettings();"></div>
           <div style="border-top:1px solid #1a3a2a;margin:4px 0;padding-top:4px;color:#7acc99;font-size:.5rem;">🎤 アイコンボイス（MP3）</div>
           <div style="display:flex;align-items:center;gap:4px;margin:2px 0;"><span style="width:56px;flex-shrink:0;">ボイス音量</span><input id="sliderVoiceVol" type="range" min="0" max="1" step="0.05" value="1" style="flex:1;accent-color:#7acc99;" oninput="SFX.setSeScale('voice',+this.value);saveSettings();"></div>
         </div>
@@ -13871,7 +13871,7 @@ function plantMineRinshan(ri){
     background:#030a10;border:1px solid #1a3a2a;border-radius:7px;
     color:#3a6a5a;font-size:.6rem;padding:5px 9px;cursor:pointer;
     transition:all .2s;letter-spacing:.04em;white-space:nowrap;text-align:left;
-  ">🀫 自動理牌 ON</button>
+  ">🀫 自動理牌</button>
 </div>
 </body>
 </html>
