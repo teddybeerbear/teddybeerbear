@@ -2315,7 +2315,7 @@ body{
         </div>
       </div>
       <button id="bombAutoPickBtn" onclick="toggleBombAutoPick()" style="
-        background:#030a10;border:1px solid #cc4422;border-radius:7px;
+        display:none;background:#030a10;border:1px solid #cc4422;border-radius:7px;
         color:#ff8866;font-size:.6rem;padding:5px 9px;cursor:pointer;
         transition:all .2s;letter-spacing:.04em;white-space:nowrap;
       ">💣 安全自動</button>
@@ -6226,6 +6226,10 @@ function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; _wallEx
   // 自動切りは局をまたいでリセット
   autoDiscardEnabled=false; _updateAutoDiscardBtn(); updateAutoMenuLabel();
   _updateAutoSortBtn(); // 自動理牌ボタン状態を更新
+  // 安全自動ボタンをリセット・強制非表示（手にボム以外では表示しない）
+  _bombAutoPickOn = false;
+  const _bapBtn = document.getElementById('bombAutoPickBtn');
+  if(_bapBtn) _bapBtn.style.display = 'none';
   // ペンモードOFFにリセット（局をまたいでペン状態が残らないよう）
   if(_penModeOn){ _penModeOn=false; window._activePenOC=null; const pb=document.getElementById('penToggleBtn');if(pb)pb.classList.remove('pen-active'); const pt=document.getElementById('penToolbarFloat');if(pt)pt.style.display='none'; const wc=document.getElementById('wallCanvas');if(wc){wc.classList.remove('pen-on');wc.classList.remove('pick-on');} const wo=document.getElementById('wallExpandOverlay');if(wo)wo.classList.remove('show'); }
   // 前局の白変換を元に戻す（players再生成前に処理）
