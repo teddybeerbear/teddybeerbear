@@ -8290,40 +8290,36 @@ let _dragState = null;
 
 function _attachTileDrag(tileEl, i, canDiscard){
   tileEl.addEventListener('dragstart', e=>e.preventDefault());
-  tileEl.addEventListener('pointerdown', e=>{
-    if(e.button && e.button !== 0) return;
+
+  // 共通: ドラッグ開始処理
+  function _startDrag(clientX, clientY){
     const rect = tileEl.getBoundingClientRect();
     const ghost = tileEl.cloneNode(true);
     ghost.style.cssText += `;position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;z-index:99999;pointer-events:none;opacity:0.9;transition:none;transform:scale(1.15);box-shadow:0 8px 24px #000a;`;
     document.body.appendChild(ghost);
     const handWrap = tileEl.closest('.hand-wrap');
     const handEls = handWrap ? Array.from(handWrap.querySelectorAll('.tile[data-idx]')) : [];
-    _dragState = { tileEl, idx:i, startX:e.clientX, startY:e.clientY, ghost, rect, handEls, swapped:false, pointerId:e.pointerId, captured:false };
+    _dragState = { tileEl, idx:i, startX:clientX, startY:clientY, ghost, rect, handEls, _swapTarget:-1 };
     tileEl._dragMoved = false;
     tileEl.style.opacity = '0.35';
-  },{passive:true});
+  }
 
-  tileEl.addEventListener('pointermove', e=>{
-    if(!_dragState || _dragState.pointerId !== e.pointerId) return;
-    const dx = e.clientX - _dragState.startX;
-    const dy = e.clientY - _dragState.startY;
-    // 一定距離動いたらドラッグ確定してキャプチャ
-    if(!_dragState.captured && (Math.abs(dx) > 8 || Math.abs(dy) > 8)){
-      try{ tileEl.setPointerCapture(_dragState.pointerId); }catch(err){}
-      _dragState.captured = true;
-    }
+  // 共通: ドラッグ移動処理
+  function _moveDrag(clientX, clientY){
+    if(!_dragState || _dragState.tileEl !== tileEl) return;
+    const dx = clientX - _dragState.startX;
+    const dy = clientY - _dragState.startY;
+    if(Math.abs(dx) > 8 || Math.abs(dy) > 8) tileEl._dragMoved = true;
     _dragState.ghost.style.left = (_dragState.rect.left + dx) + 'px';
     _dragState.ghost.style.top  = (_dragState.rect.top  + dy) + 'px';
     if(!autoSortEnabled && Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(dx) > 10){
-      // 指の現在位置に最も近い牌を探す
-      const fingerX = e.clientX;
       let targetEl = null, targetIdx = -1, minDist = Infinity;
       for(const el of _dragState.handEls){
         if(el === tileEl) continue;
         const r = el.getBoundingClientRect();
         const cx = r.left + r.width/2;
-        const dist = Math.abs(fingerX - cx);
-        if(dist < r.width * 0.8 && dist < minDist){ minDist = dist; targetEl = el; targetIdx = parseInt(el.dataset.idx); }
+        const dist = Math.abs(clientX - cx);
+        if(dist < r.width * 0.85 && dist < minDist){ minDist = dist; targetEl = el; targetIdx = parseInt(el.dataset.idx); }
       }
       _dragState.handEls.forEach(el=>{ if(el!==tileEl) el.style.outline=''; });
       if(targetEl) targetEl.style.outline = '2px solid #c9a84c';
@@ -8332,53 +8328,107 @@ function _attachTileDrag(tileEl, i, canDiscard){
       _dragState.handEls.forEach(el=>{ if(el!==tileEl) el.style.outline=''; });
       _dragState._swapTarget = -1;
     }
-  },{passive:true});
+  }
 
-  tileEl.addEventListener('pointerup', e=>{
-    if(!_dragState || _dragState.pointerId !== e.pointerId) return;
-    const dx = e.clientX - _dragState.startX;
-    const dy = e.clientY - _dragState.startY;
+  // 共通: ドラッグ終了処理
+  function _endDrag(clientX, clientY){
+    if(!_dragState || _dragState.tileEl !== tileEl) return;
+    const dx = clientX - _dragState.startX;
+    const dy = clientY - _dragState.startY;
     const absDx = Math.abs(dx), absDy = Math.abs(dy);
-    if(absDx > 8 || absDy > 8) tileEl._dragMoved = true;
     const savedIdx = _dragState.idx;
-    const swapTarget = _dragState._swapTarget ?? -1;
+    let swapTarget = _dragState._swapTarget ?? -1;
     const savedHandEls = _dragState.handEls;
-    const savedTileEl = _dragState.tileEl;
     _dragState.handEls.forEach(el=>{ el.style.outline=''; });
     _cleanDrag();
     _dragState = null;
+    // 上スワイプ → 捨て
     if(canDiscard && dy < -40 && absDy > absDx){
       selIdx = savedIdx;
       humanDiscard();
       return;
     }
+    // 横スワイプ → 入れ替え
     if(!autoSortEnabled && absDx > 20 && absDx > absDy * 1.5){
-      // 離した指の位置で最終ターゲットを決定
-      let finalTarget = swapTarget;
-      if(finalTarget < 0){
-        // swapTargetが未確定の場合、指の現在位置から探す
-        const fingerX = e.clientX;
+      if(swapTarget < 0){
         for(const el of (savedHandEls||[])){
-          if(el === savedTileEl) continue;
+          if(el === tileEl) continue;
           const r = el.getBoundingClientRect();
           const cx = r.left + r.width/2;
-          if(Math.abs(fingerX - cx) < r.width * 0.8){ finalTarget = parseInt(el.dataset.idx); break; }
+          if(Math.abs(clientX - cx) < r.width * 0.85){ swapTarget = parseInt(el.dataset.idx); break; }
         }
       }
       const p = G && G.players && G.players[NET.myIdx];
-      if(p && finalTarget >= 0 && finalTarget < p.hand.length && savedIdx < p.hand.length){
-        [p.hand[savedIdx], p.hand[finalTarget]] = [p.hand[finalTarget], p.hand[savedIdx]];
-        if(selIdx === savedIdx) selIdx = finalTarget;
-        else if(selIdx === finalTarget) selIdx = savedIdx;
+      if(p && swapTarget >= 0 && swapTarget < p.hand.length && savedIdx < p.hand.length){
+        [p.hand[savedIdx], p.hand[swapTarget]] = [p.hand[swapTarget], p.hand[savedIdx]];
+        if(selIdx === savedIdx) selIdx = swapTarget;
+        else if(selIdx === swapTarget) selIdx = savedIdx;
         SFX.draw();
         renderAll();
       }
     }
+  }
+
+  // ── Touch Events（スマホ）──
+  let _touchId = null;
+  tileEl.addEventListener('touchstart', e=>{
+    if(_touchId !== null) return;
+    const t = e.changedTouches[0];
+    _touchId = t.identifier;
+    _startDrag(t.clientX, t.clientY);
+    e.preventDefault(); // スクロール・長押しメニューを防ぐ
+  },{passive:false});
+
+  tileEl.addEventListener('touchmove', e=>{
+    if(_touchId === null) return;
+    for(const t of e.changedTouches){
+      if(t.identifier === _touchId){
+        _moveDrag(t.clientX, t.clientY);
+        e.preventDefault();
+        return;
+      }
+    }
+  },{passive:false});
+
+  tileEl.addEventListener('touchend', e=>{
+    if(_touchId === null) return;
+    for(const t of e.changedTouches){
+      if(t.identifier === _touchId){
+        _touchId = null;
+        _endDrag(t.clientX, t.clientY);
+        // タップ（小移動）はclickに委ねる
+        return;
+      }
+    }
+  },{passive:false});
+
+  tileEl.addEventListener('touchcancel', e=>{
+    _touchId = null;
+    if(_dragState && _dragState.tileEl===tileEl){ _dragState.handEls?.forEach(el=>el.style.outline=''); _cleanDrag(); _dragState=null; }
+  },{passive:false});
+
+  // ── Pointer Events（PCマウス・スタイラス）──
+  tileEl.addEventListener('pointerdown', e=>{
+    if(e.pointerType === 'touch') return; // タッチはTouch Eventsで処理
+    if(e.button && e.button !== 0) return;
+    tileEl.setPointerCapture(e.pointerId);
+    _startDrag(e.clientX, e.clientY);
+  },{passive:false});
+
+  tileEl.addEventListener('pointermove', e=>{
+    if(e.pointerType === 'touch') return;
+    _moveDrag(e.clientX, e.clientY);
   },{passive:true});
 
-  tileEl.addEventListener('pointercancel', ()=>{
-    if(_dragState && _dragState.handEls) _dragState.handEls.forEach(el=>{ el.style.outline=''; });
-    _cleanDrag(); _dragState=null;
+  tileEl.addEventListener('pointerup', e=>{
+    if(e.pointerType === 'touch') return;
+    if(!_dragState || _dragState.tileEl !== tileEl) return;
+    _endDrag(e.clientX, e.clientY);
+  },{passive:true});
+
+  tileEl.addEventListener('pointercancel', e=>{
+    if(e.pointerType === 'touch') return;
+    if(_dragState && _dragState.tileEl===tileEl){ _dragState.handEls?.forEach(el=>el.style.outline=''); _cleanDrag(); _dragState=null; }
   },{passive:true});
 }
 
@@ -8388,16 +8438,15 @@ function _cleanDrag(){
   if(_dragState.tileEl) _dragState.tileEl.style.opacity = '';
 }
 
-// ドキュメントレベルでゴースト残像をクリーンアップ（キャプチャなしの時タイル外でpointerupが発火する）
+// ドキュメントレベルでゴースト残像をクリーンアップ（PC用フォールバック）
 document.addEventListener('pointerup', e=>{
-  if(!_dragState) return;
-  if(_dragState.pointerId !== e.pointerId) return;
-  if(_dragState.tileEl && e.target === _dragState.tileEl) return; // タイル上は個別ハンドラに任せる
+  if(!_dragState || e.pointerType === 'touch') return;
+  if(_dragState.tileEl && e.target === _dragState.tileEl) return;
   if(_dragState.handEls) _dragState.handEls.forEach(el=>{ el.style.outline=''; });
   _cleanDrag(); _dragState=null;
 },{passive:true});
-document.addEventListener('pointercancel', ()=>{
-  if(!_dragState) return;
+document.addEventListener('pointercancel', e=>{
+  if(!_dragState || e.pointerType === 'touch') return;
   if(_dragState.handEls) _dragState.handEls.forEach(el=>{ el.style.outline=''; });
   _cleanDrag(); _dragState=null;
 },{passive:true});
