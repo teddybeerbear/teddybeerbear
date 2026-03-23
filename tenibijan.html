@@ -1540,7 +1540,7 @@ body::before{
       </div>
       <!-- コイン残高 -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;justify-content:center;">
-        <span style="font-size:1.1rem;">🪙</span>
+        <img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/coin/tenibi.png" style="width:22px;height:22px;object-fit:contain;">
         <span style="font-size:.85rem;font-weight:700;color:var(--gold);" id="gachaCoinDisplay">0</span>
         <span style="font-size:.62rem;color:#5a7a6a;">手にビコイン</span>
       </div>
@@ -1601,13 +1601,19 @@ body::before{
   <div style="width:100%;max-width:480px;">
     <button onclick="closeShop()" style="background:none;border:none;color:#5a7a6a;font-size:.75rem;cursor:pointer;padding:4px 0;margin-bottom:8px;">← ロビーへ戻る</button>
     <div class="shop-title">🏪 ショップ</div>
-    <div class="shop-sub">手にビコインで購入できます</div>
 
     <!-- コイン残高 -->
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;justify-content:center;">
-      <span style="font-size:1.1rem;">🪙</span>
-      <span style="font-size:.85rem;font-weight:700;color:var(--gold);" id="shopCoinDisplay">0</span>
-      <span style="font-size:.62rem;color:#5a7a6a;">手にビコイン</span>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:4px;justify-content:center;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/coin/tenibi.png" style="width:22px;height:22px;object-fit:contain;">
+        <span style="font-size:.85rem;font-weight:700;color:var(--gold);" id="shopCoinDisplay">0</span>
+        <span style="font-size:.62rem;color:#5a7a6a;">手にビコイン</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/coin/tbb.png" style="width:22px;height:22px;object-fit:contain;">
+        <span style="font-size:.85rem;font-weight:700;color:#88ddff;" id="shopTbbDisplay">0</span>
+        <span style="font-size:.62rem;color:#5a7a6a;">TBBコイン</span>
+      </div>
     </div>
 
     <div class="shop-section-title">⚡ 能力を購入</div>
@@ -1754,8 +1760,7 @@ body::before{
 <div id="lobby">
 <div id="lobbyInner">
   <div class="lobby-title">
-    <div class="lobby-tiles">🍺🐻🀇🀙</div>
-    <h1 style="letter-spacing:.05em;">手にビじゃん</h1>
+    <img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/logo.png" alt="手にビじゃん" style="max-width:320px;width:80%;height:auto;display:block;margin:0 auto;">
   </div>
 
   <!-- プレイヤーカード -->
@@ -1767,8 +1772,8 @@ body::before{
       <div class="lpc-info">
         <div class="lpc-name" id="lpcName">プレイヤー</div>
         <div class="lpc-ability" id="lpcAbility">⚡ 能力なし</div>
-        <div class="lpc-coins" id="lpcCoins">🪙 ---</div>
-        <div class="lpc-edit">✏️ タップして編集</div>
+        <div class="lpc-coins" id="lpcCoins"><img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/coin/tenibi.png" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:2px;">---</div>
+        <div class="lpc-coins" id="lpcTbbCoins"><img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/coin/tbb.png" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:2px;">---</div>
       </div>
     </div>
     <button onclick="toggleTitleSettings()" style="
@@ -6912,6 +6917,10 @@ function _triggerAutoAction(myIdx, delay=200){
     }
     // 自動捨て
     if(autoDiscardEnabled) humanAutoDiscard();
+    // 💣 BOMBモード安全自動引きON: 自動ツモ切りで次の draw_wait へ繋げる
+    else if(_bombAutoPickOn && numPlayers===1 && !canWin(p.hand)){
+      selIdx=p.hand.length-1; humanDiscard();
+    }
   }, delay);
 }
 // 自動ツモ切り: リーチ中はドロー牌を切る、それ以外は最後の牌を切る
@@ -7471,8 +7480,11 @@ function humanYamiChallenge(action){
 function handleExhausted(){
   if(numPlayers===1){
     // ソロ: 爆弾以外を全て引ききった → ステージクリア
-    addLog(`✅ ステージ${G._soloStage||1} クリア！次のステージへ…`,'log-win');
-    G.phase='end'; G._soloStage=(G._soloStage||1)+1;
+    const _exStage = G._soloStage||1;
+    const _exScore = (G.players&&G.players[0]) ? G.players[0].score : 0;
+    addLog(`✅ ステージ${_exStage} クリア！次のステージへ…`,'log-win');
+    G.phase='end'; G._soloStage=_exStage+1;
+    _bombSendResult(_exStage, _exScore); // クリア結果をDB送信
     saveScores(); renderAll(); broadcastState();
     setTimeout(()=>startRound(), 2000);
     return;
@@ -8312,8 +8324,11 @@ function nextRound(){
   if(checkEnd())return;
   // ── ソロモード: 上がり → ステージアップして次の局 ──
   if(numPlayers===1){
-    G._soloStage=(G._soloStage||1)+1;
-    addLog(`🎉 ステージ${G._soloStage-1} クリア！次は爆弾${Math.min(6+G._soloStage,20)}個`,'log-win');
+    const _clearStage = G._soloStage||1;
+    const _clearScore = (G.players&&G.players[0]) ? G.players[0].score : 0;
+    G._soloStage=_clearStage+1;
+    addLog(`🎉 ステージ${_clearStage} クリア！次は爆弾${Math.min(6+G._soloStage,20)}個`,'log-win');
+    _bombSendResult(_clearStage, _clearScore); // クリア結果をDB送信
     startRound();
     return;
   }
@@ -8354,8 +8369,34 @@ function checkEnd(){
   }
   return false;
 }
+// 💣 BOMBモード: 結果をDBに送信する共通ヘルパー
+function _bombSendResult(stage, score){
+  const bombEarned = (stage >= 5 && stage % 5 === 0) ? stage : 0;
+  fetch('/api/bomb/result',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({stage, score})})
+  .then(r=>r.json()).then(d=>{
+    if(d.ok){
+      PROFILE.coins = d.coins ?? PROFILE.coins;
+      if(d.bombBestStage != null) PROFILE.bombBestStage = d.bombBestStage;
+      if(d.bombBestScore != null) PROFILE.bombBestScore = d.bombBestScore;
+    } else {
+      PROFILE.coins = (PROFILE.coins||0) + bombEarned;
+      if(stage > (PROFILE.bombBestStage||0)){ PROFILE.bombBestStage=stage; PROFILE.bombBestScore=score; }
+      else if(stage===(PROFILE.bombBestStage||0) && score>(PROFILE.bombBestScore??-Infinity)){ PROFILE.bombBestScore=score; }
+      saveProfileSilent();
+    }
+  }).catch(()=>{
+    PROFILE.coins = (PROFILE.coins||0) + bombEarned;
+    if(stage > (PROFILE.bombBestStage||0)){ PROFILE.bombBestStage=stage; PROFILE.bombBestScore=score; }
+    else if(stage===(PROFILE.bombBestStage||0) && score>(PROFILE.bombBestScore??-Infinity)){ PROFILE.bombBestScore=score; }
+    saveProfileSilent();
+  });
+  // クライアント側ベストも楽観的に更新
+  if(stage > (PROFILE.bombBestStage||0)){ PROFILE.bombBestStage=stage; PROFILE.bombBestScore=score; }
+  else if(stage===(PROFILE.bombBestStage||0) && score>(PROFILE.bombBestScore??-Infinity)){ PROFILE.bombBestScore=score; }
+}
+
 function _soloShowFinalResult(cleared){
-  // ソロモード専用ファイナルリザルト（爆弾ゲームオーバー時）
   clearRejoinSession();
   const stage = G._soloStage||1;
   const bombCount = Math.min(6+stage, 20);
@@ -8375,55 +8416,15 @@ function _soloShowFinalResult(cleared){
   const bombEarned = (stage >= 5 && stage % 5 === 0) ? stage : 0;
   const rewardEl=document.getElementById('resultCoinReward');
   if(rewardEl) rewardEl.innerHTML=`🎯 スコア：ステージ ${stage} 到達 / ${score.toLocaleString()} 点${bombEarned===0?' <span style="font-size:.6rem;color:#5a5a5a;">（ステージ5の倍数で報酬）</span>':''}`;
-  fetch('/api/bomb/result',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({stage, score})})
-  .then(r=>r.json()).then(d=>{
-    if(d.ok){
-      PROFILE.coins=d.coins??PROFILE.coins;
-      if(d.bombBestStage != null) PROFILE.bombBestStage = d.bombBestStage;
-      if(d.bombBestScore != null) PROFILE.bombBestScore = d.bombBestScore;
-      const earned=d.earned??bombEarned;
-      if(rewardEl && earned>0){
-        rewardEl.innerHTML=
-          `🪙 +${earned} 手にビコイン獲得！（合計 ${PROFILE.coins.toLocaleString()} 枚）`+
-          `<br><span style="font-size:.65rem;color:#5a7a6a;">💣 ステージ${stage}到達報酬：+${earned}枚</span>`;
-      }
-    } else {
-      // オフライン・エラー時はクライアント側でフォールバック
-      PROFILE.coins=(PROFILE.coins||0)+bombEarned;
-      if(stage > (PROFILE.bombBestStage||0)){
-        PROFILE.bombBestStage = stage; PROFILE.bombBestScore = score;
-      } else if(stage === (PROFILE.bombBestStage||0) && score > (PROFILE.bombBestScore??-Infinity)){
-        PROFILE.bombBestScore = score;
-      }
-      if(rewardEl && bombEarned>0){
-        rewardEl.innerHTML=
-          `🪙 +${bombEarned} 手にビコイン獲得！（合計 ${PROFILE.coins.toLocaleString()} 枚）`+
+  // DB送信（共通ヘルパー）
+  _bombSendResult(stage, score);
+  // コイン報酬表示（DB応答を待たずに楽観的表示）
+  if(rewardEl && bombEarned>0){
+    setTimeout(()=>{
+      if(rewardEl && PROFILE.coins!=null)
+        rewardEl.innerHTML=`🪙 +${bombEarned} 手にビコイン獲得！（合計 ${PROFILE.coins.toLocaleString()} 枚）`+
           `<br><span style="font-size:.65rem;color:#5a7a6a;">💣 ステージ${stage}到達報酬：+${bombEarned}枚</span>`;
-      }
-      saveProfileSilent();
-    }
-  }).catch(()=>{
-    // オフライン時もクライアント側でフォールバック付与
-    PROFILE.coins=(PROFILE.coins||0)+bombEarned;
-    if(stage > (PROFILE.bombBestStage||0)){
-      PROFILE.bombBestStage = stage; PROFILE.bombBestScore = score;
-    } else if(stage === (PROFILE.bombBestStage||0) && score > (PROFILE.bombBestScore??-Infinity)){
-      PROFILE.bombBestScore = score;
-    }
-    if(rewardEl && bombEarned>0){
-      rewardEl.innerHTML=
-        `🪙 +${bombEarned} 手にビコイン獲得！（合計 ${PROFILE.coins.toLocaleString()} 枚）`+
-        `<br><span style="font-size:.65rem;color:#5a7a6a;">💣 ステージ${stage}到達報酬：+${bombEarned}枚</span>`;
-    }
-    saveProfileSilent();
-  });
-  // 自己ベスト更新（オンライン時はサーバーレスポンスで上書きされる）
-  if(stage > (PROFILE.bombBestStage||0)){
-    PROFILE.bombBestStage = stage;
-    PROFILE.bombBestScore = score;
-  } else if(stage === (PROFILE.bombBestStage||0) && score > (PROFILE.bombBestScore??-Infinity)){
-    PROFILE.bombBestScore = score;
+    }, 800);
   }
   saveProfileSilent();
   document.getElementById('resultOverlay').classList.add('show');
@@ -9593,7 +9594,19 @@ const _doraImgCache={};
           const ni=nr*W_COLS+nc;
           if(G.mineSlots.includes(ni)&&G.deckSlots[ni]!==null) bombHint++;
         }
-        if(bombHint>0){
+        if(bombHint===0){
+          // 周囲に爆弾なし: 水色背景で強調表示
+          const grad0=ctx.createLinearGradient(r.x,r.y,r.x+r.w,r.y+r.h);
+          grad0.addColorStop(0,'#0a2a3a'); grad0.addColorStop(1,'#051828');
+          ctx.fillStyle=grad0;
+          _roundRect(ctx,r.x,r.y,r.w,r.h,3,true,false);
+          ctx.strokeStyle='#22aadd'; ctx.lineWidth=1.5;
+          _roundRect(ctx,r.x,r.y,r.w,r.h,3,false,true);
+          ctx.fillStyle='#55ddff';
+          ctx.font=`bold ${Math.round(14*_wScale())}px sans-serif`;
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.fillText('0',r.x+r.w/2,r.y+r.h/2);
+        } else {
           const bombColors=['','#4488ff','#44bb44','#ff4444','#8800aa','#aa2200','#008888','#000000','#888888'];
           const grad2=ctx.createLinearGradient(r.x,r.y,r.x+r.w,r.y+r.h);
           grad2.addColorStop(0,'#0d1e2a'); grad2.addColorStop(1,'#071018');
@@ -9836,7 +9849,9 @@ function _initWallCanvasEvents(wc){
     if(_penModeOn) return; // ペンON中はクリック無効
     const p=getPos(e);
     const si=_wallSlotAt(p.x,p.y);
-    if(si<0||G.deckSlots[si]===null) return;
+    // 旗モード中は引き済み(null)スロットへのクリックも通過させる（_bombFlagToggleSlot内でガード）
+    if(si<0) return;
+    if(G.deckSlots[si]===null && !_bombFlagMode) return;
     const plantMode=!!(G.minePlantPlayers&&G.minePlantPlayers.includes(NET.myIdx));
     if(plantMode){ plantMine(si); }
     else if(G.lightMode==='pick'){
@@ -11852,7 +11867,9 @@ function updateProfileBadge(){
     const abilityIcons={'':'⚡ 能力なし','mine':'💣 地雷師','light':'☀️ 光の探偵','yami':'🌑 闇使い','haku':'🀆 白術士','sanctuary':'🏛️ 聖域守り','pinzu':'🔵 ピンズー教','steal':'🃏 盗賊','pen':'🖊️ ペン','tenbi':'🀄 手にビ'};
     lpcAbility.textContent = abilityIcons[PROFILE.ability||'']||'⚡ 能力なし';
   }
-  if(lpcCoins) lpcCoins.textContent = '🪙 ' + (PROFILE.coins!=null ? PROFILE.coins.toLocaleString() : '---');
+  if(lpcCoins) lpcCoins.innerHTML = '<img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/coin/tenibi.png" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:2px;">' + (PROFILE.coins!=null ? PROFILE.coins.toLocaleString() : '---');
+  const lpcTbbCoins = document.getElementById('lpcTbbCoins');
+  if(lpcTbbCoins) lpcTbbCoins.innerHTML = '<img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/coin/tbb.png" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:2px;">' + (PROFILE.tbbCoins!=null ? PROFILE.tbbCoins.toLocaleString() : '---');
   if(lpcIconInner){
     if(PROFILE.iconId){
       lpcIconInner.innerHTML = `<img src="${gachaIconUrl(PROFILE.iconId)}" alt="${PROFILE.iconId}">`;
@@ -12336,6 +12353,8 @@ function closeShop(){
 function updateShopCoinDisplay(){
   const el=document.getElementById('shopCoinDisplay');
   if(el) el.textContent=(PROFILE.coins||0).toLocaleString();
+  const tbb=document.getElementById('shopTbbDisplay');
+  if(tbb) tbb.textContent=(PROFILE.tbbCoins||0).toLocaleString();
 }
 // ショップで販売するエモートセット定義
 const SHOP_EMOTE_SETS = [
@@ -12415,7 +12434,7 @@ function renderTwitchSubPanel(){
       <div style="background:linear-gradient(135deg,#1a0a2a,#0d0518);border:1.5px solid #6a3a9a;
         border-radius:8px;padding:10px 20px;font-size:.7rem;color:#9a70cc;
         font-weight:700;letter-spacing:.04em;display:flex;justify-content:space-between;align-items:center;">
-        <span>🪙 毎月の特典コイン</span>
+        <span><img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/coin/tenibi.png" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:3px;">毎月の特典コイン</span>
         <span style="color:#c9a84c;font-size:.8rem;">+1,000コイン</span>
       </div>
       <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
@@ -12427,7 +12446,7 @@ function renderTwitchSubPanel(){
         border-radius:8px;color:#fff;font-weight:700;font-size:.7rem;
         padding:10px 20px;cursor:pointer;letter-spacing:.04em;width:100%;
         display:flex;justify-content:space-between;align-items:center;
-      "><span>🪙 今月の特典コインを受け取る</span><span style="color:#c9a84c;">+1,000コイン</span></button>`;
+      "><span><img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/coin/tenibi.png" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:3px;">今月の特典コインを受け取る</span><span style="color:#c9a84c;">+1,000コイン</span></button>`;
   } else {
     // 来月1日0:00までの残り日数をサーバー時刻ベースで計算（ローカル時刻改ざん対策）
     const _now = PROFILE.serverTime ? new Date(PROFILE.serverTime) : new Date();
@@ -12450,7 +12469,7 @@ function renderTwitchSubPanel(){
       <div style="background:linear-gradient(135deg,#1a0a2a,#0d0518);border:1.5px solid #6a3a9a;
         border-radius:8px;padding:10px 20px;font-size:.7rem;color:#9a70cc;
         font-weight:700;letter-spacing:.04em;display:flex;justify-content:space-between;align-items:center;">
-        <span>🪙 毎月の特典TBBコイン</span>
+        <span><img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/coin/tbb.png" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:3px;">毎月の特典TBBコイン</span>
         <span style="color:#88ddff;font-size:.8rem;">+100 TBB</span>
       </div>
       <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
@@ -12462,7 +12481,7 @@ function renderTwitchSubPanel(){
         border-radius:8px;color:#fff;font-weight:700;font-size:.7rem;
         padding:10px 20px;cursor:pointer;letter-spacing:.04em;width:100%;
         display:flex;justify-content:space-between;align-items:center;
-      "><span>🪙 今月の特典TBBコインを受け取る</span><span style="color:#88ddff;">+100 TBB</span></button>`;
+      "><span><img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/coin/tbb.png" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:3px;">今月の特典TBBコインを受け取る</span><span style="color:#88ddff;">+100 TBB</span></button>`;
   } else {
     const _nowT = PROFILE.serverTime ? new Date(PROFILE.serverTime) : new Date();
     const _nextMonthT = new Date(Date.UTC(_nowT.getUTCFullYear(), _nowT.getUTCMonth() + 1, 1));
