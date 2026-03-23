@@ -270,9 +270,12 @@ body::before{
 }
 /* ===== LOBBY ===== */
 #lobby{
-  position:relative;z-index:10;
+  position:fixed;inset:0;z-index:10;
+  overflow-y:auto;overflow-x:hidden;
+}
+#lobbyInner{
   display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
-  height:100%;gap:20px;padding:50px 20px;overflow-y:auto;
+  min-height:100%;gap:20px;padding:50px 20px;
   max-width:1000px;width:100%;margin:0 auto;
 }
 #lobbyCards{
@@ -298,7 +301,7 @@ body::before{
   color:#5a7a6a;border-radius:7px;font-family:inherit;font-size:.85rem;cursor:pointer;transition:all .2s;
 }
 .pcnt-btn.active{border-color:var(--gold);background:linear-gradient(135deg,#1a2a1a,#0d1a0d);color:var(--gold);}
-.pcnt-btn:hover{border-color:var(--gold);color:var(--gold2);}
+.pcnt-btn:hover{border-color:var(--gold)!important;color:var(--gold2);}
 .rule-box{background:#030a10;border-radius:7px;padding:8px 12px;font-size:.63rem;color:#4a6a5a;line-height:1.9;margin-bottom:14px;}
 .rule-box strong{color:var(--gold);}
 .start-btn{
@@ -1749,6 +1752,7 @@ body::before{
 
 <!-- LOBBY -->
 <div id="lobby">
+<div id="lobbyInner">
   <div class="lobby-title">
     <div class="lobby-tiles">🍺🐻🀇🀙</div>
     <h1 style="letter-spacing:.05em;">手にビじゃん</h1>
@@ -1933,15 +1937,27 @@ body::before{
   <div class="lobby-card" id="lobbyMode">
     <h3>モード選択</h3>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
-      <button id="modeBtn-solo" class="pcnt-btn active" onclick="startTitleBgmOnce();showSolo()" style="padding:10px 4px;text-align:center;">CPU対戦</button>
-      <button id="modeBtn-online" class="pcnt-btn" onclick="showOnline()" style="padding:10px 4px;text-align:center;">ルームマッチ</button>
-      <button id="modeBtn-rank" class="pcnt-btn" onclick="showRank()" style="padding:10px 4px;text-align:center;">ランクマッチ</button>
-      <button id="modeBtn-bomb" class="pcnt-btn" onclick="startTitleBgmOnce();showBomb()" style="padding:10px 4px;text-align:center;border-color:#cc4422;color:#ff8866;background:linear-gradient(135deg,#200808,#100404);font-weight:700;letter-spacing:.08em;">💣 手にボム！</button>
-      <button class="pcnt-btn" disabled style="padding:10px 4px;text-align:center;border-color:#1a2a2a;color:#2a3a3a;background:#030a10;cursor:default;"></button>
-      <button class="pcnt-btn" disabled style="padding:10px 4px;text-align:center;border-color:#1a2a2a;color:#2a3a3a;background:#030a10;cursor:default;"></button>
-      <button class="pcnt-btn" onclick="startTitleBgmOnce();openGacha()" style="padding:10px 4px;text-align:center;border-color:#aa7700;color:#ffd700;background:linear-gradient(135deg,#1a0e00,#0a0500);">✨ ガチャ</button>
-      <button class="pcnt-btn" onclick="startTitleBgmOnce();openShop()" style="padding:10px 4px;text-align:center;border-color:#007799;color:#00ccff;background:linear-gradient(135deg,#001a1a,#000a10);">🏪 ショップ</button>
-      <button class="pcnt-btn" onclick="startTitleBgmOnce();openProfile()" style="padding:10px 4px;text-align:center;border-color:#2a5a3a;color:#c0e0c0;background:#030a10;">👤 プロフィール</button>
+      <button id="modeBtn-solo" class="pcnt-btn active" onclick="startTitleBgmOnce();showSolo()" style="padding:4px;text-align:center;border-color:#2a4a3a;">
+        <img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/tbotan/cpu.png" alt="CPU対戦" style="width:100%;max-width:100px;height:auto;display:block;margin:0 auto;border-radius:6px;">
+      </button>
+      <button id="modeBtn-online" class="pcnt-btn" onclick="showOnline()" style="padding:4px;text-align:center;">
+        <img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/tbotan/rumuma.png" alt="ルームマッチ" style="width:100%;max-width:100px;height:auto;display:block;margin:0 auto;border-radius:6px;">
+      </button>
+      <button id="modeBtn-rank" class="pcnt-btn" onclick="showRank()" style="padding:4px;text-align:center;">
+        <img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/tbotan/rankuma.png" alt="ランクマッチ" style="width:100%;max-width:100px;height:auto;display:block;margin:0 auto;border-radius:6px;">
+      </button>
+      <button id="modeBtn-bomb" class="pcnt-btn" onclick="startTitleBgmOnce();showBomb()" style="padding:4px;text-align:center;border-color:#cc4422;background:linear-gradient(135deg,#200808,#100404);">
+        <img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/tbotan/bomu.png" alt="手にボム！" style="width:100%;max-width:100px;height:auto;display:block;margin:0 auto;border-radius:6px;">
+      </button>
+      <button class="pcnt-btn" onclick="startTitleBgmOnce();openGacha()" style="padding:4px;text-align:center;border-color:#aa7700;background:linear-gradient(135deg,#1a0e00,#0a0500);">
+        <img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/tbotan/gacha.png" alt="ガチャ" style="width:100%;max-width:100px;height:auto;display:block;margin:0 auto;border-radius:6px;">
+      </button>
+      <button class="pcnt-btn" onclick="startTitleBgmOnce();openShop()" style="padding:4px;text-align:center;border-color:#007799;background:linear-gradient(135deg,#001a1a,#000a10);">
+        <img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/tbotan/shop.png" alt="ショップ" style="width:100%;max-width:100px;height:auto;display:block;margin:0 auto;border-radius:6px;">
+      </button>
+      <button class="pcnt-btn" onclick="startTitleBgmOnce();openProfile()" style="padding:4px;text-align:center;border-color:#2a5a3a;background:#030a10;" style="grid-column:2;">
+        <img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/tbotan/purofi.png" alt="プロフィール" style="width:100%;max-width:100px;height:auto;display:block;margin:0 auto;border-radius:6px;">
+      </button>
     </div>
   </div>
 
@@ -2138,9 +2154,8 @@ body::before{
     </div>
   </div>
   </div>
-</div>
-
-<!-- ROOM LOBBY SCREEN -->
+</div><!-- /lobbyInner -->
+</div><!-- /lobby -->
 <div id="roomLobbyScreen">
   <div class="rls-inner">
     <div style="text-align:center;margin-bottom:18px;">
@@ -4816,7 +4831,7 @@ function leaveRoomLobby(){
   NET.conns=[]; NET.conn=null; NET.roomCode=null; NET.isHost=false;
   NET.guestNames=[]; NET.guestAbilities=[]; NET.guestIconIds=[]; NET.guestPeerIds=[]; NET.guestEmotes=[]; NET.guestReady=[]; NET.guestIsCpu=[]; NET._memberDataCache=[]; NET.peerRegistry=[]; NET._lastActionId=0; stopSyncBroadcast();
   setOnlineStatus('');
-  document.getElementById('lobby').style.display='flex';
+  document.getElementById('lobby').style.display='block';
   document.getElementById('roomCodeBox').style.display='none';
   document.getElementById('waitingDots').style.display='';
 }
@@ -5125,7 +5140,7 @@ function onNetData(msg, senderIdx){
       hideRoomLobby();
       if(NET.peer){ try{NET.peer.destroy();}catch(e){} NET.peer=null; }
       NET.conn=null; NET.conns=[]; NET._memberDataCache=[];
-      document.getElementById('lobby').style.display='flex';
+      document.getElementById('lobby').style.display='block';
       setOnlineStatus('ホストにキックされました');
     } else if(msg.type==='gameStart'){
       // 準備ボタンをリセット
@@ -6005,7 +6020,7 @@ function openCpuSelectScreen(slotIdx){
 
 function closeCpuSelectScreen(){
   document.getElementById('cpuSelectScreen').classList.remove('active');
-  document.getElementById('lobby').style.display='flex';
+  document.getElementById('lobby').style.display='block';
   _cpuSelectSlot = -1;
 }
 
@@ -8761,7 +8776,7 @@ async function backToRoom(){
       }catch(e){
         setOnlineStatus('再接続に失敗しました');
         hideRoomLobby();
-        document.getElementById('lobby').style.display='flex';
+        document.getElementById('lobby').style.display='block';
       }
     }, 400);
     showRoomLobby();
@@ -8805,7 +8820,7 @@ function backToLobby(){
   document.querySelectorAll('.light-peek-overlay').forEach(el => el.remove());
   document.getElementById('gameScreen').classList.remove('active');
   hideRoomLobby();
-  document.getElementById('lobby').style.display='flex';
+  document.getElementById('lobby').style.display='block';
   bgmToTitle();
   clearRejoinSession(); // 正常終了・離脱時はセッションを消す
   // ホストが部屋を持っていた場合はサーバーから削除する
