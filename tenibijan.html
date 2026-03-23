@@ -1811,6 +1811,7 @@ body{
     <!-- タブ -->
     <div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid #1a3a2a;padding-bottom:8px;">
       <button onclick="showTitleTab('audio')" id="titleTabAudio" style="background:#081a10;border:1px solid #2a5a3a;border-radius:5px;color:var(--gold);font-size:.65rem;padding:4px 10px;cursor:pointer;">🔊 サウンド</button>
+      <button onclick="showTitleTab('operation')" id="titleTabOperation" style="background:#030a10;border:1px solid #1a3a2a;border-radius:5px;color:#5a7a6a;font-size:.65rem;padding:4px 10px;cursor:pointer;">🎮 操作</button>
       <button onclick="showTitleTab('rules')" id="titleTabRules" style="background:#030a10;border:1px solid #1a3a2a;border-radius:5px;color:#5a7a6a;font-size:.65rem;padding:4px 10px;cursor:pointer;">📖 ルール</button>
       <button onclick="showTitleTab('yaku')" id="titleTabYaku" style="background:#030a10;border:1px solid #1a3a2a;border-radius:5px;color:#5a7a6a;font-size:.65rem;padding:4px 10px;cursor:pointer;">🀄 役一覧</button>
     </div>
@@ -1856,6 +1857,26 @@ body{
             <option value="none">🔇 なし</option>
           </select>
         </div>
+      </div>
+    </div>
+    <!-- 操作タブ -->
+    <div id="titleTabContentOperation" style="display:none;">
+      <div style="font-size:.6rem;color:#5a7a6a;margin-bottom:10px;letter-spacing:.05em;">🀇 捨て方式</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label id="discardModeSelectLabel" style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;border:2px solid var(--gold);background:#0a1a0a;">
+          <input type="radio" name="discardMode" value="select" checked style="margin-top:2px;accent-color:var(--gold);" onchange="setDiscardMode('select')">
+          <div>
+            <div class="discard-mode-title" style="font-size:.7rem;font-weight:700;color:var(--gold);">選択捨て</div>
+            <div style="font-size:.55rem;color:#5a7a6a;margin-top:2px;">1クリックで選択 → もう1クリックで捨て</div>
+          </div>
+        </label>
+        <label id="discardModeOneClickLabel" style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;border:2px solid #1a3a2a;background:#030a10;">
+          <input type="radio" name="discardMode" value="oneclick" style="margin-top:2px;accent-color:var(--gold);" onchange="setDiscardMode('oneclick')">
+          <div>
+            <div class="discard-mode-title" style="font-size:.7rem;font-weight:700;color:#8aaa8a;">１クリック</div>
+            <div style="font-size:.55rem;color:#5a7a6a;margin-top:2px;">クリックした牌をすぐ捨てる</div>
+          </div>
+        </label>
       </div>
     </div>
     <!-- ルールタブ -->
@@ -2813,6 +2834,7 @@ function saveSettings(){
       titleBgm:   _titleBgmKey,
       gameBgm:    _gameBgmKey,
       yakumanVideoVol: _yakumanVideoVol,
+      oneClickDiscard: oneClickDiscard,
       seScale: Object.fromEntries(
         ['draw','discard','ron','tsumo','riichi','pon','kan','kita','yakuman','light','yami','haku','steal','mine','myTurn','countdown','voice']
         .map(k=>[k, SFX.getSeScale(k)])
@@ -2892,6 +2914,11 @@ function loadSettings(){
       if(sel) sel.value = data.gameBgm;
       const selHdr = document.getElementById('gameBgmSelHdr');
       if(selHdr) selHdr.value = data.gameBgm;
+    }
+    // 1クリック捨て設定
+    if(data.oneClickDiscard != null){
+      oneClickDiscard = !!data.oneClickDiscard;
+      _applyDiscardModeUI();
     }
   }catch(e){}
 }
@@ -3645,6 +3672,8 @@ let autoDrawEnabled=false;  // 自動ツモON/OFF
 let autoDiscardEnabled=false; // 自動切りON/OFF
 let autoKitaEnabled=false;    // 自動北抜きON/OFF
 let autoWinEnabled=false;     // 自動上がりON/OFF
+let autoSortEnabled=true;     // 自動理牌ON/OFF
+let oneClickDiscard=false;    // 1クリック捨てON/OFF
 let playerAFK=false;
 let noMeldEnabled=false;          // 離席モード
 let numPlayers=3;
@@ -6149,6 +6178,7 @@ function makePlayer(id,dealer){
 function startRound(){ _wallCanvasInited=false; _doraCanvasInited=false; _wallExpandInited=false; timerStop(); _timerAutoActFired=false; _timerDebt=0;
   // 自動切りは局をまたいでリセット
   autoDiscardEnabled=false; _updateAutoDiscardBtn(); updateAutoMenuLabel();
+  _updateAutoSortBtn(); // 自動理牌ボタン状態を更新
   // ペンモードOFFにリセット（局をまたいでペン状態が残らないよう）
   if(_penModeOn){ _penModeOn=false; window._activePenOC=null; const pb=document.getElementById('penToggleBtn');if(pb)pb.classList.remove('pen-active'); const pt=document.getElementById('penToolbarFloat');if(pt)pt.style.display='none'; const wc=document.getElementById('wallCanvas');if(wc){wc.classList.remove('pen-on');wc.classList.remove('pick-on');} const wo=document.getElementById('wallExpandOverlay');if(wo)wo.classList.remove('show'); }
   // 前局の白変換を元に戻す（players再生成前に処理）
@@ -6429,9 +6459,9 @@ function discardAction(pidx,tidx,isYami=false){ if(pidx===NET.myIdx){ _timerSave
   // 闇指定牌を捨てた場合はyamiTileIdxをリセット、そうでなければソート後に再計算
   if(isYami || tile===yamiTileObj){
     p.yamiTileIdx=-1;
-    p.hand=sortTiles(p.hand);
+    if(pidx!==NET.myIdx||autoSortEnabled) p.hand=sortTiles(p.hand);
   } else {
-    p.hand=sortTiles(p.hand);
+    if(pidx!==NET.myIdx||autoSortEnabled) p.hand=sortTiles(p.hand);
     p.yamiTileIdx = yamiTileObj ? p.hand.findIndex(t=>t===yamiTileObj) : -1;
   }
   updateTenpai(p);
@@ -6516,7 +6546,7 @@ function handleKakan(pidx, handIdx){
       }
     }
   }
-  p.hand=sortTiles(p.hand);updateTenpai(p);
+  if(pidx!==NET.myIdx||autoSortEnabled) p.hand=sortTiles(p.hand);updateTenpai(p);
   G.phase='discard';
   // 嶺上牌を選択状態にする（自分の番のみ）
   if(pidx===NET.myIdx){ const rIdx=p.hand.findIndex(t=>t===rep); selIdx=rIdx>=0?rIdx:p.hand.length-1; }
@@ -6582,7 +6612,7 @@ function handleAnkan(pidx, tileKey){
   // 嶺上牌補充
   const rep=drawRinshanTile(pidx);if(!rep){handleExhausted();return;}
   revealKanDora();
-  p.hand=sortTiles(p.hand);updateTenpai(p);
+  if(pidx!==NET.myIdx||autoSortEnabled) p.hand=sortTiles(p.hand);updateTenpai(p);
   G.phase='discard';
   // 嶺上牌を選択状態にする（自分の番のみ）
   if(pidx===NET.myIdx){ const rIdx=p.hand.findIndex(t=>t===rep); selIdx=rIdx>=0?rIdx:p.hand.length-1; }
@@ -6631,7 +6661,7 @@ function handlePon(pidx,tile,fromPidx){
   let rm=0;p.hand=p.hand.filter(t=>{if(rm<2&&teq(t,tile)){rm++;return false;}return true;});
   p.melds.push({type:'pon',tiles:[tile,tile,tile],from:fromPidx});
   const yamiTileP = (p.yamiTileIdx>=0&&p.yamiTileIdx<p.hand.length)?p.hand[p.yamiTileIdx]:null;
-  p.hand=sortTiles(p.hand);
+  if(pidx!==NET.myIdx||autoSortEnabled) p.hand=sortTiles(p.hand);
   p.yamiTileIdx = yamiTileP ? p.hand.findIndex(t=>t===yamiTileP) : -1;
   updateTenpai(p);
   addLog(`${p.name} がポン！ ${emj(tile)}`,'log-new');
@@ -6827,7 +6857,7 @@ function toggleTitleSettings(){
   if(p) p.style.display=p.style.display==='none'?'block':'none';
 }
 function showTitleTab(tab){
-  ['audio','rules','yaku'].forEach(t=>{
+  ['audio','operation','rules','yaku'].forEach(t=>{
     const c=document.getElementById('titleTabContent'+t.charAt(0).toUpperCase()+t.slice(1));
     const b=document.getElementById('titleTab'+t.charAt(0).toUpperCase()+t.slice(1));
     if(c) c.style.display=t===tab?'block':'none';
@@ -7160,6 +7190,45 @@ function toggleAutoWin(){
   autoWinEnabled=!autoWinEnabled;
   _updateAutoWinBtn();
   updateAutoMenuLabel();
+}
+function _updateAutoSortBtn(){
+  const btn=document.getElementById('autoSortBtn');
+  if(!btn) return;
+  btn.textContent=autoSortEnabled?'🀫 自動理牌 ON':'🀫 自動理牌';
+  btn.style.borderColor=autoSortEnabled?'#44aaff':'#1a3a2a';
+  btn.style.color=autoSortEnabled?'#44aaff':'#3a6a5a';
+  btn.style.boxShadow=autoSortEnabled?'0 0 8px #44aaff44':'';
+}
+function toggleAutoSort(){
+  autoSortEnabled=!autoSortEnabled;
+  _updateAutoSortBtn();
+  updateAutoMenuLabel();
+  if(autoSortEnabled && G && G.players && G.players[NET.myIdx]){
+    const p=G.players[NET.myIdx];
+    p.hand=sortTiles(p.hand);
+    renderAll();
+  }
+}
+function setDiscardMode(mode){
+  oneClickDiscard = (mode === 'oneclick');
+  // タイトル設定パネルのラベル更新
+  const selLabel = document.getElementById('discardModeSelectLabel');
+  const oneLabel = document.getElementById('discardModeOneClickLabel');
+  if(selLabel){ selLabel.style.borderColor=oneClickDiscard?'#1a3a2a':'var(--gold)'; selLabel.style.background=oneClickDiscard?'#030a10':'#0a1a0a'; }
+  if(oneLabel){ oneLabel.style.borderColor=oneClickDiscard?'var(--gold)':'#1a3a2a'; oneLabel.style.background=oneClickDiscard?'#0a1a0a':'#030a10'; }
+  if(selLabel){ const t=selLabel.querySelector('.discard-mode-title'); if(t) t.style.color=oneClickDiscard?'#5a7a6a':'var(--gold)'; }
+  if(oneLabel){ const t=oneLabel.querySelector('.discard-mode-title'); if(t) t.style.color=oneClickDiscard?'var(--gold)':'#8aaa8a'; }
+  // ゲーム内パネルのボタン更新
+  const selBtn = document.getElementById('discardModeSelectBtn');
+  const oneBtn = document.getElementById('discardModeOneClickBtn');
+  if(selBtn){ selBtn.style.borderColor=oneClickDiscard?'#1a3a2a':'var(--gold)'; selBtn.style.background=oneClickDiscard?'#030a10':'#0a1a0a'; selBtn.style.color=oneClickDiscard?'#5a7a6a':'var(--gold)'; selBtn.style.fontWeight=oneClickDiscard?'400':'700'; }
+  if(oneBtn){ oneBtn.style.borderColor=oneClickDiscard?'var(--gold)':'#1a3a2a'; oneBtn.style.background=oneClickDiscard?'#0a1a0a':'#030a10'; oneBtn.style.color=oneClickDiscard?'var(--gold)':'#5a7a6a'; oneBtn.style.fontWeight=oneClickDiscard?'700':'400'; }
+  // ラジオボタン同期
+  document.querySelectorAll('input[name="discardMode"]').forEach(r=>{ r.checked = r.value===mode; });
+  saveSettings();
+}
+function _applyDiscardModeUI(){
+  setDiscardMode(oneClickDiscard ? 'oneclick' : 'select');
 }
 function toggleAutoDraw(){
   autoDrawEnabled=!autoDrawEnabled;
@@ -8016,6 +8085,89 @@ function humanSelect(idx){
   selIdx=idx; renderAll();
 }
 
+// ── ドラッグ捨て・入れ替え ──────────────────────────────────────
+let _dragState = null;
+
+function _attachTileDrag(tileEl, i, canDiscard){
+  tileEl.addEventListener('pointerdown', e=>{
+    if(e.button && e.button !== 0) return;
+    e.stopPropagation();
+    tileEl.setPointerCapture(e.pointerId);
+    const rect = tileEl.getBoundingClientRect();
+    const ghost = tileEl.cloneNode(true);
+    ghost.style.cssText += `;position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;z-index:99999;pointer-events:none;opacity:0.9;transition:none;transform:scale(1.15);box-shadow:0 8px 24px #000a;`;
+    document.body.appendChild(ghost);
+    const handWrap = tileEl.closest('.hand-wrap');
+    const handEls = handWrap ? Array.from(handWrap.querySelectorAll('.tile[data-idx]')) : [];
+    _dragState = { tileEl, idx:i, startX:e.clientX, startY:e.clientY, ghost, rect, handEls, swapped:false };
+    tileEl._dragMoved = false;
+    tileEl.style.opacity = '0.35';
+  },{passive:false});
+
+  tileEl.addEventListener('pointermove', e=>{
+    if(!_dragState || _dragState.tileEl !== tileEl) return;
+    const dx = e.clientX - _dragState.startX;
+    const dy = e.clientY - _dragState.startY;
+    _dragState.ghost.style.left = (_dragState.rect.left + dx) + 'px';
+    _dragState.ghost.style.top  = (_dragState.rect.top  + dy) + 'px';
+    if(!autoSortEnabled && Math.abs(dx) > Math.abs(dy) * 1.2 && Math.abs(dx) > 12){
+      const ghostCx = _dragState.rect.left + _dragState.rect.width/2 + dx;
+      let targetEl = null, targetIdx = -1;
+      for(const el of _dragState.handEls){
+        if(el === tileEl) continue;
+        const r = el.getBoundingClientRect();
+        const cx = r.left + r.width/2;
+        if(Math.abs(ghostCx - cx) < r.width * 0.6){ targetEl = el; targetIdx = parseInt(el.dataset.idx); break; }
+      }
+      _dragState.handEls.forEach(el=>{ if(el!==tileEl) el.style.outline=''; });
+      if(targetEl) targetEl.style.outline = '2px solid #c9a84c';
+      _dragState._swapTarget = targetIdx >= 0 ? targetIdx : -1;
+    } else {
+      _dragState.handEls.forEach(el=>{ if(el!==tileEl) el.style.outline=''; });
+      _dragState._swapTarget = -1;
+    }
+  },{passive:true});
+
+  tileEl.addEventListener('pointerup', e=>{
+    if(!_dragState || _dragState.tileEl !== tileEl) return;
+    const dx = e.clientX - _dragState.startX;
+    const dy = e.clientY - _dragState.startY;
+    const absDx = Math.abs(dx), absDy = Math.abs(dy);
+    // 一定距離以上動いたらドラッグとみなしクリックをブロック
+    if(absDx > 8 || absDy > 8) tileEl._dragMoved = true;
+    const savedIdx = _dragState.idx;
+    const swapTarget = _dragState._swapTarget ?? -1;
+    _dragState.handEls.forEach(el=>{ el.style.outline=''; });
+    _cleanDrag();
+    _dragState = null;
+    if(canDiscard && dy < -40 && absDy > absDx){
+      selIdx = savedIdx;
+      humanDiscard();
+      return;
+    }
+    if(!autoSortEnabled && absDx > 30 && absDx > absDy * 1.2 && swapTarget >= 0){
+      const p = G && G.players && G.players[NET.myIdx];
+      if(p && swapTarget < p.hand.length && savedIdx < p.hand.length){
+        [p.hand[savedIdx], p.hand[swapTarget]] = [p.hand[swapTarget], p.hand[savedIdx]];
+        if(selIdx === savedIdx) selIdx = swapTarget;
+        else if(selIdx === swapTarget) selIdx = savedIdx;
+        renderAll();
+      }
+    }
+  },{passive:true});
+
+  tileEl.addEventListener('pointercancel', ()=>{
+    if(_dragState && _dragState.handEls) _dragState.handEls.forEach(el=>{ el.style.outline=''; });
+    _cleanDrag(); _dragState=null;
+  },{passive:true});
+}
+
+function _cleanDrag(){
+  if(!_dragState) return;
+  if(_dragState.ghost && _dragState.ghost.parentNode) _dragState.ghost.parentNode.removeChild(_dragState.ghost);
+  if(_dragState.tileEl) _dragState.tileEl.style.opacity = '';
+}
+
 function humanDiscard(){
   const myTurn = NET.online ? G.current===NET.myIdx : G.current===0;
   if(!myTurn||G.phase!=='discard')return;
@@ -8131,7 +8283,7 @@ function handleMinkan(pidx,tile,fromPidx){
   addLog(`${p.name} が明槓！ ${emj(tile)}`,'log-dora');
   const rep=drawRinshanTile(pidx);if(!rep){handleExhausted();return;}
   revealKanDora();
-  p.hand=sortTiles(p.hand);updateTenpai(p);
+  if(pidx!==NET.myIdx||autoSortEnabled) p.hand=sortTiles(p.hand);updateTenpai(p);
   G.phase='discard';G.current=pidx;
   if(canWin(p.hand)){
     p.isRinshanKaihou=true;
@@ -10590,10 +10742,21 @@ function renderTable(){
 
         if(canSel||canSelYami||isHakuSelectable){
           tileEl.addEventListener('click',()=>{
-            if(G.yamiSelectMode||(G.hakuSelectPlayers&&G.hakuSelectPlayers.includes(NET.myIdx))) humanSelect(i);
-            else if(selIdx===i) humanDiscard();
-            else humanSelect(i);
+            if(_dragState || tileEl._dragMoved){ tileEl._dragMoved=false; return; } // ドラッグ後のclick誤爆防止
+            if(G.yamiSelectMode||(G.hakuSelectPlayers&&G.hakuSelectPlayers.includes(NET.myIdx))){
+              humanSelect(i);
+            } else if(oneClickDiscard && G.phase==='discard'){
+              // １クリックモード: クリックした牌を即捨て
+              selIdx=i; humanDiscard();
+            } else {
+              // 選択捨てモード: 選択 → 再クリックで捨て
+              if(selIdx===i) humanDiscard();
+              else humanSelect(i);
+            }
           });
+          // ドラッグ（上→捨て、横→入れ替え）
+          const canDragDiscard = G.phase==='discard' && !G.yamiSelectMode && !(G.hakuSelectPlayers&&G.hakuSelectPlayers.includes(NET.myIdx));
+          _attachTileDrag(tileEl, i, canDragDiscard);
         }
         handWrap.appendChild(tileEl);
         // タイマーはdrawn牌の上にabsolute配置（drawn牌の処理後に一度だけ追加）
@@ -13170,6 +13333,19 @@ function plantMineRinshan(ri){
           color:#8a6a3a;font-size:.58rem;padding:4px 8px;cursor:pointer;text-align:left;
         ">← タイトルに戻る</button>
         <div style="border-top:1px solid #1a2a1a;margin:2px 0;"></div>
+        <!-- 捨て方式 -->
+        <div style="font-size:.55rem;color:#4a7a6a;margin-bottom:2px;">🀇 捨て方式</div>
+        <div style="display:flex;gap:5px;">
+          <button id="discardModeSelectBtn" onclick="setDiscardMode('select')" style="
+            flex:1;background:#0a1a0a;border:2px solid var(--gold);border-radius:6px;
+            color:var(--gold);font-size:.58rem;padding:4px 6px;cursor:pointer;font-weight:700;
+          ">選択捨て</button>
+          <button id="discardModeOneClickBtn" onclick="setDiscardMode('oneclick')" style="
+            flex:1;background:#030a10;border:2px solid #1a3a2a;border-radius:6px;
+            color:#5a7a6a;font-size:.58rem;padding:4px 6px;cursor:pointer;
+          ">１クリック</button>
+        </div>
+        <div style="border-top:1px solid #1a2a1a;margin:2px 0;"></div>
         <div style="display:flex;align-items:center;gap:6px;font-size:.55rem;color:#4a7a6a;">
           <span>🎵 SE</span>
           <input id="sliderSEhdr" type="range" min="0" max="0.07" step="0.005" value="0.035" style="flex:1;accent-color:var(--gold);"
@@ -13351,6 +13527,11 @@ function plantMineRinshan(ri){
     color:#7a7a2a;font-size:.6rem;padding:5px 9px;cursor:pointer;
     transition:all .2s;letter-spacing:.04em;white-space:nowrap;text-align:left;
   ">🀄 自動上がり</button>
+  <button id="autoSortBtn" onclick="toggleAutoSort()" style="
+    background:#030a10;border:1px solid #1a3a2a;border-radius:7px;
+    color:#3a6a5a;font-size:.6rem;padding:5px 9px;cursor:pointer;
+    transition:all .2s;letter-spacing:.04em;white-space:nowrap;text-align:left;
+  ">🀫 自動理牌 ON</button>
 </div>
 </body>
 </html>
