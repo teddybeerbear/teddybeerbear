@@ -271,8 +271,8 @@ body::before{
 /* ===== LOBBY ===== */
 #lobby{
   position:relative;z-index:10;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  height:100%;gap:20px;padding:20px;overflow-y:auto;
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  height:100%;gap:20px;padding:150px 20px;overflow-y:auto;
   max-width:1000px;width:100%;margin:0 auto;
 }
 #lobbyCards{
@@ -2003,6 +2003,14 @@ body::before{
         <div><div style="font-size:.55rem;color:#7a5a4a;">最高ステージ</div><div id="bombBestStageEl" style="font-size:1.2rem;font-weight:700;color:#ff8866;"></div></div>
         <div><div style="font-size:.55rem;color:#7a5a4a;">最高持ち点</div><div id="bombBestScoreEl" style="font-size:1.0rem;font-weight:700;color:var(--gold2);"></div></div>
       </div>
+    </div>
+    <!-- ランキングパネル -->
+    <div id="bombRankingPanel" style="margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div style="font-size:.6rem;color:#7a5a4a;letter-spacing:.1em;">🏅 ハイスコアランキング</div>
+        <button onclick="loadBombRanking()" style="font-size:.5rem;padding:2px 8px;background:#0d0505;border:1px solid #3a1a0a;border-radius:4px;color:#7a5a4a;cursor:pointer;">更新</button>
+      </div>
+      <div id="bombRankingList" style="background:#080303;border:1px solid #2a1008;border-radius:6px;padding:6px 8px;font-size:.58rem;color:#5a4a4a;min-height:32px;">読み込み中…</div>
     </div>
     <button class="start-btn" style="background:linear-gradient(135deg,#4a1008,#2a0804);border-color:#cc4422;color:#ff8866;" onclick="startBombGame()">手にボム！ 開始 →</button>
   </div>
@@ -3840,6 +3848,31 @@ function showBomb(){
   cancelRankQueue();
   _setModeActive('modeBtn-bomb');
   _updateBombBestDisplay();
+  loadBombRanking();
+}
+
+function loadBombRanking(){
+  const el=document.getElementById('bombRankingList');
+  if(!el) return;
+  el.textContent='読み込み中…';
+  fetch('/api/bomb/ranking')
+    .then(r=>r.json())
+    .then(d=>{
+      if(!d.ok||!d.ranking.length){ el.textContent='まだ記録がありません'; return; }
+      const myName = PROFILE.name||'';
+      el.innerHTML = d.ranking.map((row,i)=>{
+        const medal = ['🥇','🥈','🥉'][i] || `<span style="color:#3a2a2a;">${i+1}</span>`;
+        const isMe = row.name === myName;
+        const nameStyle = isMe ? 'color:#ff8866;font-weight:700;' : 'color:#7a6a6a;';
+        return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #1a0a08;">
+          <span style="width:22px;text-align:center;font-size:.7rem;">${medal}</span>
+          <span style="${nameStyle}flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${row.name}</span>
+          <span style="color:#ff8866;font-weight:700;white-space:nowrap;">St.${row.stage}</span>
+          <span style="color:var(--gold);font-size:.52rem;white-space:nowrap;">${Number(row.score).toLocaleString()}点</span>
+        </div>`;
+      }).join('');
+    })
+    .catch(()=>{ el.textContent='取得に失敗しました'; });
 }
 function _updateBombBestDisplay(){
   const bestStage = PROFILE.bombBestStage||0;
@@ -7516,7 +7549,7 @@ function handleWin(widx,winTile,isTsumo,losidx){
   addLog(`${w.name} の${isTsumo?'ツモ':'ロン'}上がり！ ${score}点`,'log-win');
   saveScores();
   if(checkTobi()) return; // 飛び発生 → 即終了（winModalは出さない）
-  const _yakuVideoUrls=getYakumanVideoUrls(yakus);
+  const _yakuVideoUrls=numPlayers===1?[]:getYakumanVideoUrls(yakus);
   const _wmd={winnerId:w.id,hand:displayHand,winTile,isTsumo,losidx,yakus,score,han,yakuVideo:_yakuVideoUrls.length?_yakuVideoUrls:null};
   renderAll();
   broadcastState({winModal:_wmd});
@@ -8326,11 +8359,13 @@ function _soloShowFinalResult(cleared){
   const bombEarned = (stage >= 5 && stage % 5 === 0) ? stage : 0;
   const rewardEl=document.getElementById('resultCoinReward');
   if(rewardEl) rewardEl.innerHTML=`🎯 スコア：ステージ ${stage} 到達 / ${score.toLocaleString()} 点${bombEarned===0?' <span style="font-size:.6rem;color:#5a5a5a;">（ステージ5の倍数で報酬）</span>':''}`;
-  fetch('/api/reward',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({rank:1, numPlayers:1, bombStage:stage, bombScore:score})})
+  fetch('/api/bomb/result',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({stage, score})})
   .then(r=>r.json()).then(d=>{
     if(d.ok){
       PROFILE.coins=d.coins??PROFILE.coins;
+      if(d.bombBestStage != null) PROFILE.bombBestStage = d.bombBestStage;
+      if(d.bombBestScore != null) PROFILE.bombBestScore = d.bombBestScore;
       const earned=d.earned??bombEarned;
       if(rewardEl && earned>0){
         rewardEl.innerHTML=
@@ -8338,8 +8373,13 @@ function _soloShowFinalResult(cleared){
           `<br><span style="font-size:.65rem;color:#5a7a6a;">💣 ステージ${stage}到達報酬：+${earned}枚</span>`;
       }
     } else {
-      // APIが bombStage 未対応の場合はクライアント側でフォールバック付与
+      // オフライン・エラー時はクライアント側でフォールバック
       PROFILE.coins=(PROFILE.coins||0)+bombEarned;
+      if(stage > (PROFILE.bombBestStage||0)){
+        PROFILE.bombBestStage = stage; PROFILE.bombBestScore = score;
+      } else if(stage === (PROFILE.bombBestStage||0) && score > (PROFILE.bombBestScore??-Infinity)){
+        PROFILE.bombBestScore = score;
+      }
       if(rewardEl && bombEarned>0){
         rewardEl.innerHTML=
           `🪙 +${bombEarned} 手にビコイン獲得！（合計 ${PROFILE.coins.toLocaleString()} 枚）`+
@@ -8350,6 +8390,11 @@ function _soloShowFinalResult(cleared){
   }).catch(()=>{
     // オフライン時もクライアント側でフォールバック付与
     PROFILE.coins=(PROFILE.coins||0)+bombEarned;
+    if(stage > (PROFILE.bombBestStage||0)){
+      PROFILE.bombBestStage = stage; PROFILE.bombBestScore = score;
+    } else if(stage === (PROFILE.bombBestStage||0) && score > (PROFILE.bombBestScore??-Infinity)){
+      PROFILE.bombBestScore = score;
+    }
     if(rewardEl && bombEarned>0){
       rewardEl.innerHTML=
         `🪙 +${bombEarned} 手にビコイン獲得！（合計 ${PROFILE.coins.toLocaleString()} 枚）`+
@@ -8357,7 +8402,7 @@ function _soloShowFinalResult(cleared){
     }
     saveProfileSilent();
   });
-  // 自己ベスト更新
+  // 自己ベスト更新（オンライン時はサーバーレスポンスで上書きされる）
   if(stage > (PROFILE.bombBestStage||0)){
     PROFILE.bombBestStage = stage;
     PROFILE.bombBestScore = score;
@@ -8775,6 +8820,9 @@ function backToLobby(){
   // ランクマッチから戻った場合はランクロビーに戻り、レートを再取得して反映する
   if(wasRankMatch){
     showRank();
+  } else if(document.getElementById('modeBtn-bomb')?.classList.contains('active')){
+    // BOMBモードから戻った場合はbombロビーに戻る（ベスト・ランキングを再描画）
+    showBomb();
   } else {
     // BOMBモードで能力OFFにした場合、ロビーのUI設定に戻す
     const abilityOnBtn = document.getElementById('modeAbilityOn');
@@ -11061,6 +11109,8 @@ function loadProfile(){
         winsVsTenbi2p:         data.winsVsTenbi2p         ?? PROFILE.winsVsTenbi2p ?? 0,
         tbbCoins:              data.tbbCoins              ?? PROFILE.tbbCoins ?? 0,
         tbbSubClaimable:       data.tbbSubClaimable       ?? false,
+        bombBestStage:         data.bombBestStage         ?? PROFILE.bombBestStage ?? 0,
+        bombBestScore:         data.bombBestScore         ?? PROFILE.bombBestScore ?? 0,
       });
       const {coins:_coins, abilities:_ab, ability:_abl, tbbCoins:_tbb, ...profileToCache} = PROFILE; // coins/abilities/ability/tbbCoins はlocalStorageに保存しない
       try{ localStorage.setItem('mjProfile',JSON.stringify(profileToCache)); }catch(e){}
