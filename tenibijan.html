@@ -3859,8 +3859,9 @@ function startBombGame(){
   NET.isHost=true;
   numPlayers=1;
   G_ABILITY_MODE=false;
-  const wa=document.getElementById('wallArea');
-  if(wa) wa.style.marginTop='-400px';
+  G_TIME_MODE=false; // 手にボム！は制限時間なし固定
+  const wb=document.getElementById('wallExpandBtn');
+  if(wb){ wb.style.opacity='0'; wb.style.pointerEvents='none'; }
   initGame();
 }
 
@@ -8727,6 +8728,9 @@ function backToLobby(){
   // 💣 BOMBモードの山牌オフセットをリセット
   const _wa=document.getElementById('wallArea');
   if(_wa) _wa.style.marginTop='';
+  // 🔎山ボタンを復元
+  const _wb=document.getElementById('wallExpandBtn');
+  if(_wb){ _wb.style.opacity=''; _wb.style.pointerEvents=''; }
   // 💣 BOMBモード(numPlayers===1)で終了した場合、numPlayersをデフォルト(3)に戻す
   // これをしないと他のモードで山牌の描画スケールが1.5倍のままになる
   if(numPlayers===1) numPlayers=3;
@@ -9666,6 +9670,19 @@ const _doraImgCache={};
   // pick-on クラス更新
   wc.classList.toggle('pen-on', _penModeOn);
   wc.classList.toggle('pick-on', (canPick||plantMode||lightPickMode)&&!_penModeOn);
+
+  // 💣 BOMBモード: wallArea の marginTop を canvas高さから動的算出してズレを防ぐ
+  if(wc.id==='wallCanvas'){
+    const wa=document.getElementById('wallArea');
+    if(wa){
+      if(typeof numPlayers!=='undefined'&&numPlayers===1){
+        // table-center は justify-content:center なので ch/2 + 一定オフセットで中央より上に引き上げる
+        wa.style.marginTop=`-${Math.round(ch/2+200)}px`;
+      } else {
+        wa.style.marginTop='';
+      }
+    }
+  }
 }
 
 function _roundRect(ctx,x,y,w,h,r,fill,stroke){
