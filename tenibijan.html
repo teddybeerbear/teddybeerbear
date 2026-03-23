@@ -2387,7 +2387,7 @@ body{
     <div id="discardZoomOverlay" style="
       display:none;position:fixed;inset:0;z-index:200;
       background:rgba(0,0,0,.88);
-      display:none;flex-direction:column;
+      flex-direction:column;
     ">
       <!-- ヘッダー -->
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-bottom:1px solid #1a3a2a;flex-shrink:0;">
@@ -3985,6 +3985,10 @@ function startBombGame(){
   G_TIME_MODE=false; // 手にボム！は制限時間なし固定
   const wb=document.getElementById('wallExpandBtn');
   if(wb){ wb.style.opacity='0'; wb.style.pointerEvents='none'; }
+  const adb=document.getElementById('autoDrawBtn');
+  if(adb){ adb.style.display='none'; }
+  const dzb=document.getElementById('discardZoomBtn');
+  if(dzb){ dzb.style.display='none'; }
   initGame();
 }
 
@@ -6241,6 +6245,9 @@ function makePlayer(id,dealer){
 }
 
 function startRound(){ _doraCanvasInited=false; _wallExpandInited=false; timerStop(); _timerAutoActFired=false; _timerDebt=0;
+  // オーバーレイを確実にリセット
+  const _dzo=document.getElementById('discardZoomOverlay'); if(_dzo) _dzo.style.display='none';
+  const _weo=document.getElementById('wallExpandOverlay');  if(_weo) _weo.classList.remove('show');
   // 自動切りは局をまたいでリセット
   autoDiscardEnabled=false; _updateAutoDiscardBtn(); updateAutoMenuLabel();
   _updateAutoSortBtn(); // 自動理牌ボタン状態を更新
@@ -8395,8 +8402,13 @@ function _attachTileDrag(tileEl, i, canDiscard){
     for(const t of e.changedTouches){
       if(t.identifier === _touchId){
         _touchId = null;
+        const wasMoved = tileEl._dragMoved;
         _endDrag(t.clientX, t.clientY);
-        // タップ（小移動）はclickに委ねる
+        // タップ（移動なし）: preventDefault により click が発火しないので直接呼ぶ
+        if(!wasMoved){
+          tileEl._dragMoved = false; // click ハンドラがブロックしないようリセット
+          tileEl.click();
+        }
         return;
       }
     }
@@ -9175,6 +9187,8 @@ async function backToRoom(){
   }
   const wallOv=document.getElementById('wallExpandOverlay');
   if(wallOv) wallOv.classList.remove('show');
+  const discardOv=document.getElementById('discardZoomOverlay');
+  if(discardOv) discardOv.style.display='none';
 
   document.getElementById('resultOverlay').classList.remove('show');
   document.getElementById('winOverlay').classList.remove('show');
@@ -9260,6 +9274,11 @@ function backToLobby(){
   // 🔎山ボタンを復元
   const _wb=document.getElementById('wallExpandBtn');
   if(_wb){ _wb.style.opacity=''; _wb.style.pointerEvents=''; }
+  // 引くボタン・🔎捨ボタンを復元
+  const _adb=document.getElementById('autoDrawBtn');
+  if(_adb){ _adb.style.display=''; }
+  const _dzb=document.getElementById('discardZoomBtn');
+  if(_dzb){ _dzb.style.display=''; }
   // 💣 BOMBモード(numPlayers===1)で終了した場合、numPlayersをデフォルト(3)に戻す
   // これをしないと他のモードで山牌の描画スケールが1.5倍のままになる
   if(numPlayers===1) numPlayers=3;
