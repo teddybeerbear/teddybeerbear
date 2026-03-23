@@ -113,6 +113,17 @@ async function initDB() {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS bomb_results_google_id_idx ON bomb_results(google_id)
     `);
+    // ランキング用インデックス（ステージ降順→スコア降順）
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS bomb_results_ranking_idx ON bomb_results(stage DESC, score DESC)
+    `);
+    // user_profiles にボムベスト記録カラムを追加
+    await pool.query(`
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS bomb_best_stage INTEGER NOT NULL DEFAULT 0
+    `);
+    await pool.query(`
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS bomb_best_score INTEGER NOT NULL DEFAULT 0
+    `);
     console.log("✓ DBテーブル準備完了");
   } catch (err) {
     console.error("✗ DBテーブル作成失敗:", err.message);
@@ -212,6 +223,8 @@ app.get("/api/profile", requireAuth, async (req, res) => {
         serverTime: new Date().toISOString(),
         ownedMats: [],
         winsVsTenbi2p: 0,
+        bombBestStage: 0,
+        bombBestScore: 0,
       });
     }
     await pool.query(
@@ -254,6 +267,8 @@ app.get("/api/profile", requireAuth, async (req, res) => {
       serverTime:           now.toISOString(),
       ownedMats:            JSON.parse(row.owned_mats || '[]'),
       winsVsTenbi2p:        row.wins_vs_tenbi_2p ?? 0,
+      bombBestStage:        row.bomb_best_stage ?? 0,
+      bombBestScore:        row.bomb_best_score ?? 0,
     });
   } catch (err) {
     console.error("プロフィール取得エラー:", err.message);
@@ -447,6 +462,87 @@ app.post("/api/reward", requireAuth, async (req, res) => {
     res.json({ ok: true, earned, coins: r.rows[0]?.coins ?? 0 });
   } catch (err) {
     console.error("報酬付与エラー:", err.message);
+    res.status(500).json({ error: "DB エラー" });
+  }
+});
+
+// POST /api/bomb/result — 手にボム！結果を保存しベスト更新・コイン付与
+app.post("/api/bomb/result", requireAuth, async (req, res) => {
+  const { stage, score } = req.body;
+  if (!Number.isInteger(stage) || stage < 1 || stage > 999)
+    return res.status(400).json({ error: "stage が不正です" });
+  if (!Number.isInteger(score) || score < -999999 || score > 9999999)
+    return res.status(400).json({ error: "score が不正です" });
+
+  const uid = req.user.id;
+  const name = req.user.name || "プレイヤー";
+
+  // コイン報酬計算（ステージ5の倍数のみ）
+  const earned = (stage >= 5 && stage % 5 === 0) ? stage : 0;
+
+  try {
+    // user_profiles が存在しない場合は INSERT（初回プレイ時）
+    await pool.query(
+      `INSERT INTO user_profiles (google_id, google_name, name, email)
+       VALUES ($1, $2, $2, '')
+       ON CONFLICT (google_id) DO NOTHING`,
+      [uid, name]
+    );
+
+    // bomb_results に記録
+    await pool.query(
+      `INSERT INTO bomb_results (google_id, stage, score, earned) VALUES ($1, $2, $3, $4)`,
+      [uid, stage, score, earned]
+    );
+
+    // ベスト更新 & コイン付与
+    const r = await pool.query(
+      `UPDATE user_profiles
+         SET bomb_best_stage = GREATEST(bomb_best_stage, $2),
+             bomb_best_score = CASE
+               WHEN $2 > bomb_best_stage THEN $3
+               WHEN $2 = bomb_best_stage AND $3 > bomb_best_score THEN $3
+               ELSE bomb_best_score
+             END,
+             coins = coins + $4,
+             updated_at = NOW()
+       WHERE google_id = $1
+       RETURNING coins, bomb_best_stage, bomb_best_score`,
+      [uid, stage, score, earned]
+    );
+    const row = r.rows[0];
+    console.log(`手にボム！結果: google=${uid} stage=${stage} score=${score} earned=${earned} bestStage=${row?.bomb_best_stage}`);
+    res.json({
+      ok: true,
+      earned,
+      coins:         row?.coins ?? 0,
+      bombBestStage: row?.bomb_best_stage ?? stage,
+      bombBestScore: row?.bomb_best_score ?? score,
+    });
+  } catch (err) {
+    console.error("手にボム！結果保存エラー:", err.message);
+    res.status(500).json({ error: "DB エラー" });
+  }
+});
+
+// GET /api/bomb/ranking — 上位20件のランキングを返す（認証不要・公開）
+app.get("/api/bomb/ranking", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        u.name,
+        u.icon_id,
+        u.bomb_best_stage  AS stage,
+        u.bomb_best_score  AS score,
+        u.updated_at
+      FROM user_profiles u
+      WHERE u.bomb_best_stage > 0
+      ORDER BY u.bomb_best_stage DESC, u.bomb_best_score DESC
+      LIMIT 20
+    `);
+    res.json({ ok: true, ranking: result.rows });
+  } catch (err) {
+    console.error("手にボム！ランキング取得エラー:", err.message);
     res.status(500).json({ error: "DB エラー" });
   }
 });

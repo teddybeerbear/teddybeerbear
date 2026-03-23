@@ -272,7 +272,7 @@ body::before{
 #lobby{
   position:relative;z-index:10;
   display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
-  height:100%;gap:20px;padding:150px 20px;overflow-y:auto;
+  height:100%;gap:20px;padding:50px 20px;overflow-y:auto;
   max-width:1000px;width:100%;margin:0 auto;
 }
 #lobbyCards{
@@ -3856,11 +3856,12 @@ function loadBombRanking(){
   if(!el) return;
   el.textContent='読み込み中…';
   fetch('/api/bomb/ranking')
-    .then(r=>r.json())
+    .then(r=>{ if(!r.ok) throw new Error('status:'+r.status); return r.json(); })
     .then(d=>{
-      if(!d.ok||!d.ranking.length){ el.textContent='まだ記録がありません'; return; }
+      const rows = Array.isArray(d.ranking) ? d.ranking : [];
+      if(!rows.length){ el.textContent='まだ記録がありません'; return; }
       const myName = PROFILE.name||'';
-      el.innerHTML = d.ranking.map((row,i)=>{
+      el.innerHTML = rows.map((row,i)=>{
         const medal = ['🥇','🥈','🥉'][i] || `<span style="color:#3a2a2a;">${i+1}</span>`;
         const isMe = row.name === myName;
         const nameStyle = isMe ? 'color:#ff8866;font-weight:700;' : 'color:#7a6a6a;';
@@ -3872,7 +3873,7 @@ function loadBombRanking(){
         </div>`;
       }).join('');
     })
-    .catch(()=>{ el.textContent='取得に失敗しました'; });
+    .catch(e=>{ el.textContent='取得に失敗しました（'+e.message+')'; });
 }
 function _updateBombBestDisplay(){
   const bestStage = PROFILE.bombBestStage||0;
