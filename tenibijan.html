@@ -11128,9 +11128,9 @@ function renderTable(){
     const _seatRotMap=[0,-180,0,-90,90]; // si=0:bottom,1:right,2:top,3:left の seat-inner 回転
     // seat-inner rotate: top=180, right=-90, left=90 → leftPanelは逆に
     if(si===1) leftPanel.style.transform='rotate(90deg)';
-    else if(si===2){ leftPanel.style.transform='rotate(180deg)'; leftPanel.style.position='relative'; leftPanel.style.top='50px'; }
+    else if(si===2){ leftPanel.style.transform='rotate(180deg)'; leftPanel.style.position='relative'; leftPanel.style.top='50px'; const _isPortrait2=window.innerWidth<window.innerHeight&&window.innerWidth<768; if(!_isPortrait2) leftPanel.style.left='-100px'; }
     else if(si===3) leftPanel.style.transform='rotate(-90deg)';
-    else if(si===0){ leftPanel.style.position='relative'; leftPanel.style.top='48px'; }
+    else if(si===0){ leftPanel.style.position='relative'; leftPanel.style.top='48px'; const _isPortrait=window.innerWidth<window.innerHeight&&window.innerWidth<768; if(!_isPortrait) leftPanel.style.left='-100px'; }
     handOuter.appendChild(leftPanel);
 
     // ── 中央: 手牌 ──
