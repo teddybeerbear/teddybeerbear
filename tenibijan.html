@@ -77,7 +77,7 @@ function scaleTable(){
       '.seat-bottom .player-icon-panel { transform: scale(2) translateY(-20px) !important; transform-origin: center bottom !important; position: relative !important; left: 40px !important; }'+
       '.seat-top .player-icon-panel { transform: rotate(180deg) scale(2) !important; transform-origin: center top !important; position: relative !important; top: '+Math.round((100 + 100 - 80)*v)+'px !important; }'+
       '.seat-right .player-icon-panel { transform: translateX(50px) translateY(-100px) rotate(90deg) scale(2) !important; transform-origin: left center !important; }'+
-      '.seat-left .player-icon-panel { transform: translateX(-50px) translateY(-100px) rotate(-90deg) scale(2) !important; transform-origin: right center !important; }'+
+      '.seat-left .player-icon-panel { transform: translateX(-100px) translateY(-100px) rotate(-90deg) scale(2) !important; transform-origin: right center !important; }'+
       '.bottom-score-panel { position: absolute !important; left: 850px !important; top: 36px !important; margin-left: 0 !important; transform-origin: left top !important; }'+
       /* 縦画面: 能力ボタン(右下)を5倍スケール・手牌より下に配置 */
       '#tableInfoBox { transform: scale(2) !important; transform-origin: top left !important; }'+
@@ -6298,7 +6298,8 @@ function makePlayer(id,dealer){
   // アイコンIDはゲーム開始後に myName 受信時に上書きされるため、ここでは暫定値のみ
   const pIconId = (id === NET.myIdx) ? (PROFILE.iconId || '') : (CPU_PROFILE[pAbility]?.icon || 'C01');
 
-  const pEquippedTitle = (id === NET.myIdx) ? (PROFILE.equippedTitle || '') : (G && G.players && G.players[id] && G.players[id].equippedTitle) || '';
+  const _cpuDefaultTitles = {'light':'一暗刻'};
+  const pEquippedTitle = (id === NET.myIdx) ? (PROFILE.equippedTitle || '') : (G && G.players && G.players[id] && G.players[id].equippedTitle) || (_cpuDefaultTitles[pAbility] || '');
   return{id,name:pname,iconId:pIconId,equippedTitle:pEquippedTitle,
     peerId:'', // 接続PeerID（オンライン時に設定）
     isCpu: false, // 切断してCPU代打中
@@ -11119,10 +11120,13 @@ function renderTable(){
     const _pTitle = p.equippedTitle || '';
     if(_pTitle){
       const _tData = _yakumanTitleData(_pTitle);
+      const _titleWrap = document.createElement('div');
+      _titleWrap.style.cssText='height:0;overflow:visible;display:flex;align-items:flex-start;justify-content:center;';
       const titleEl = document.createElement('div');
-      titleEl.style.cssText='display:flex;align-items:center;justify-content:center;margin-top:2px;position:relative;top:-27px;';
+      titleEl.style.cssText='display:flex;align-items:center;justify-content:center;margin-top:4px;position:relative;top:-27px;';
       titleEl.innerHTML = _titleIconHtml(_tData, 84);
-      leftPanel.appendChild(titleEl);
+      _titleWrap.appendChild(titleEl);
+      leftPanel.appendChild(_titleWrap);
     }
     // seat-inner が回転されている場合、leftPanelを逆回転で正立
     const _seatRotMap=[0,-180,0,-90,90]; // si=0:bottom,1:right,2:top,3:left の seat-inner 回転
@@ -11130,7 +11134,7 @@ function renderTable(){
     if(si===1) leftPanel.style.transform='rotate(90deg)';
     else if(si===2){ leftPanel.style.transform='rotate(180deg)'; leftPanel.style.position='relative'; leftPanel.style.top='50px'; const _isPortrait2=window.innerWidth<window.innerHeight&&window.innerWidth<768; if(!_isPortrait2) leftPanel.style.left='-100px'; }
     else if(si===3) leftPanel.style.transform='rotate(-90deg)';
-    else if(si===0){ leftPanel.style.position='relative'; leftPanel.style.top='48px'; const _isPortrait=window.innerWidth<window.innerHeight&&window.innerWidth<768; if(!_isPortrait) leftPanel.style.left='-100px'; }
+    else if(si===0){ leftPanel.style.position='relative'; leftPanel.style.top='-32px'; const _isPortrait=window.innerWidth<window.innerHeight&&window.innerWidth<768; if(!_isPortrait) leftPanel.style.left='-100px'; }
     handOuter.appendChild(leftPanel);
 
     // ── 中央: 手牌 ──
