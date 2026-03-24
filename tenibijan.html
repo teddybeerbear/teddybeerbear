@@ -4114,7 +4114,10 @@ function startBombGame(){
   autoDrawEnabled=false; _updateAutoDrawBtn(); // 手にボム：自動引き強制OFF
   const dzb=document.getElementById('discardZoomBtn');
   if(dzb){ dzb.style.display='none'; }
+  // 安全自動の設定をローカルストレージから復元
+  try{ _bombAutoPickOn = localStorage.getItem('bombAutoPickOn') === '1'; }catch(e){ _bombAutoPickOn = false; }
   initGame();
+  _updateBombAutoPickBtn();
 }
 
 // ── ランクマッチ（3人固定・時間制限あり） ──────────────────────
@@ -7615,8 +7618,13 @@ function _bombQueryToggleSlot(si){
   if(!G||!G.deckSlots) return;
   if(G.deckSlots[si]===null) return; // 引き済みは不可
   if(!G._soloQuery) G._soloQuery = new Set();
-  if(G._soloQuery.has(si)) G._soloQuery.delete(si);
-  else G._soloQuery.add(si);
+  if(G._soloQuery.has(si)){
+    G._soloQuery.delete(si);
+  } else {
+    G._soloQuery.add(si);
+    // 🚩が立っている場合は上書き（削除）
+    if(G._soloFlags) G._soloFlags.delete(si);
+  }
   renderWall();
 }
 
@@ -7624,9 +7632,35 @@ function _bombFlagToggleSlot(si){
   if(!G||!G.deckSlots) return;
   if(G.deckSlots[si]===null) return; // 引き済みは旗立て不可
   if(!G._soloFlags) G._soloFlags = new Set();
-  if(G._soloFlags.has(si)) G._soloFlags.delete(si);
-  else G._soloFlags.add(si);
+  if(G._soloFlags.has(si)){
+    G._soloFlags.delete(si);
+  } else {
+    G._soloFlags.add(si);
+    // ？が立っている場合は上書き（削除）
+    if(G._soloQuery) G._soloQuery.delete(si);
+  }
   renderWall();
+}
+
+// 💣 手にボム: 右クリックで🚩→？→なし とサイクル切替
+function _bombRightClickSlot(si){
+  if(!G||!G.deckSlots) return;
+  if(G.deckSlots[si]===null) return; // 引き済みは不可
+  if(!G._soloFlags) G._soloFlags = new Set();
+  if(!G._soloQuery) G._soloQuery = new Set();
+  const hasFlag  = G._soloFlags.has(si);
+  const hasQuery = G._soloQuery.has(si);
+  if(!hasFlag && !hasQuery){
+    // なし → 🚩
+    G._soloFlags.add(si);
+  } else if(hasFlag){
+    // 🚩 → ？
+    G._soloFlags.delete(si);
+    G._soloQuery.add(si);
+  } else {
+    // ？ → なし
+    G._soloQuery.delete(si);
+  }
 }
 
 function _bombGetSafeSlots(){
@@ -7643,7 +7677,7 @@ function _bombGetSafeSlots(){
     );
 }
 
-let _bombAutoPickOn = false; // トグル状態
+let _bombAutoPickOn = false; // トグル状態（localStorage 'bombAutoPickOn' に永続化）
 
 function _updateBombAutoPickBtn(){
   const btn = document.getElementById('bombAutoPickBtn');
@@ -7675,6 +7709,7 @@ function _updateBombAutoPickBtn(){
 function toggleBombAutoPick(){
   if(numPlayers!==1||!G||!G._soloStage) return;
   _bombAutoPickOn = !_bombAutoPickOn;
+  try{ localStorage.setItem('bombAutoPickOn', _bombAutoPickOn ? '1' : '0'); }catch(e){}
   _updateBombAutoPickBtn();
   // ONにした瞬間かつdraw_wait中なら即実行
   if(_bombAutoPickOn && G.phase==='draw_wait' && G.current===NET.myIdx){
@@ -7744,7 +7779,7 @@ function humanPickWall(slotIdx){
     updateTenpai(p);
     SFX.mineExplode();
     if(numPlayers===1){
-      _bombAutoPickOn = false; // 安全自動引きをOFFにしてタイマー干渉を防ぐ
+      _bombAutoPickOn = false; // 安全自動引きをOFFにしてタイマー干渉を防ぐ（localStorage保存値は維持）
       _updateBombAutoPickBtn();
       addLog(`💥 爆弾を踏んだ！ゲームオーバー（ステージ${G._soloStage||1}まで到達）`,'log-win');
       renderAll();broadcastState();
@@ -8054,6 +8089,10 @@ function handleWin(widx,winTile,isTsumo,losidx){
       if(!G._sessionYakuman.includes(y.name)) G._sessionYakuman.push(y.name);
       unlockYakumanTitle(y.name);
     });
+  }
+  // 持ち点称号チェック（自分の上がりのみ）
+  if(w.id === (G.players[NET.myIdx]||{}).id){
+    _checkScoreTitles(w.score);
   }
   saveScores();
   if(checkTobi()) return; // 飛び発生 → 即終了（winModalは出さない）
@@ -9356,9 +9395,32 @@ function _setResultBtn(){
     </div>
     <button class="btn btn-primary" onclick="startTenbiBattle()" style="background:linear-gradient(135deg,#4a0a7a,#2a0050);border-color:#9a40e8;">🀄 手にビと対決する！</button>
     <button class="btn btn-danger" onclick="declineTenbiBattle()" style="font-size:.65rem;padding:7px 14px;margin-top:4px;">逃げる…</button>`;
+  } else if(numPlayers===1 && G && G._soloStage) {
+    // 💣 手にボムモード: もう一度ボタン（安全自動などの設定を引き継ぐ）
+    el.innerHTML=`<button class="btn btn-primary" onclick="_bombRestartKeepSettings()" style="background:linear-gradient(135deg,#4a1008,#2a0804);border-color:#cc4422;color:#ff8866;">💣 もう一度（ステージ1から）</button>
+      <button class="btn btn-danger" onclick="backToLobby()" style="font-size:.65rem;padding:7px 14px;margin-top:4px;">ロビーへ戻る</button>`;
   } else {
     el.innerHTML=`<button class="btn btn-primary" onclick="backToLobby()">ロビーへ戻る</button>`;
   }
+}
+
+// 💣 手にボムモード: 安全自動などの設定を保持したままステージ1からリスタート
+function _bombRestartKeepSettings(){
+  document.getElementById('resultOverlay').classList.remove('show');
+  if(WIN_READY && WIN_READY.timer){ clearInterval(WIN_READY.timer); WIN_READY.timer=null; }
+  NET.myIdx=0; NET.online=false; NET.isHost=true; numPlayers=1;
+  G_ABILITY_MODE=false; G_TIME_MODE=false;
+  const wb=document.getElementById('wallExpandBtn');
+  if(wb){ wb.style.opacity='0'; wb.style.pointerEvents='none'; }
+  const adb=document.getElementById('autoDrawBtn');
+  if(adb){ adb.style.display='none'; }
+  autoDrawEnabled=false; _updateAutoDrawBtn();
+  const dzb=document.getElementById('discardZoomBtn');
+  if(dzb){ dzb.style.display='none'; }
+  // 安全自動の設定をローカルストレージから復元（爆弾ヒット前の状態を引き継ぐ）
+  try{ _bombAutoPickOn = localStorage.getItem('bombAutoPickOn') === '1'; }catch(e){ _bombAutoPickOn = false; }
+  initGame();
+  _updateBombAutoPickBtn();
 }
 
 function startTenbiBattle(){
@@ -9491,6 +9553,7 @@ function backToLobby(){
   _bombFlagMode = false;
   _bombQueryMode = false;
   _bombAutoPickOn = false;
+
   // 💣 BOMBモードの山牌オフセットをリセット
   const _wa=document.getElementById('wallArea');
   if(_wa) _wa.style.marginTop='';
@@ -10221,6 +10284,16 @@ function _initWallExpandEvents(ec){
   ec.addEventListener('touchmove',  epMove, {passive:false});
   ec.addEventListener('touchend',   epUp,   {passive:false});
   ec.addEventListener('click',      epClick);
+  ec.addEventListener('contextmenu',(e)=>{
+    if(!(numPlayers===1 && G && G._soloStage)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const p=getPos(e);
+    const si=_wallSlotAt(p.x,p.y);
+    if(si<0) return;
+    _bombRightClickSlot(si);
+    renderWallExpand();
+  });
 }
 
 function togglePenMode(){
@@ -10588,6 +10661,15 @@ function _initWallCanvasEvents(wc){
   wc.addEventListener('touchmove',  penMove, {passive:false});
   wc.addEventListener('touchend',   (e)=>{ penUp(e); if(!_penModeOn){ _lastTouchHandled=true; wallClick(e); } }, {passive:false});
   wc.addEventListener('click',      (e)=>{ if(_lastTouchHandled){ _lastTouchHandled=false; return; } wallClick(e); });
+  wc.addEventListener('contextmenu',(e)=>{
+    if(!(numPlayers===1 && G && G._soloStage)) return;
+    e.preventDefault();
+    const p=getPos(e);
+    const si=_wallSlotAt(p.x,p.y);
+    if(si<0) return;
+    _bombRightClickSlot(si);
+    renderWall();
+  });
 }
 
 function _saveWallPenDrawingsFromOC(oc, changedSlots){
@@ -13066,8 +13148,34 @@ const YAKUMAN_TITLES = {
   '一暗刻単騎':{ title:'孤高の単騎王', emoji:'👑', color:'#ff44aa', img:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/syougou/wanankoutanki.png' },
 };
 
+// 動物称号: 持ち点がぴったり一致したとき解禁
+const ANIMAL_SCORE_TITLES = {
+  '111': { title:'猿の申し子',   score:111, emoji:'🐒', color:'#cc8844', img:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/syougou/saru.png?raw=true' },
+  '222': { title:'蛇の使い手',   score:222, emoji:'🐍', color:'#44aa44', img:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/syougou/hebi.png?raw=true' },
+  '333': { title:'象の王者',     score:333, emoji:'🐘', color:'#8888cc', img:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/syougou/zou.png?raw=true' },
+  '444': { title:'牛の覇者',     score:444, emoji:'🐄', color:'#886644', img:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/syougou/usi.png?raw=true' },
+  '555': { title:'馬の疾走者',   score:555, emoji:'🐴', color:'#cc6622', img:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/syougou/uma.png?raw=true' },
+  '666': { title:'鼠の策士',     score:666, emoji:'🐭', color:'#aa4488', img:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/syougou/nezumi.png?raw=true' },
+  '777': { title:'狐の七化け',   score:777, emoji:'🦊', color:'#ff8833', img:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/syougou/kitune.png?raw=true' },
+  '888': { title:'犬の番人',     score:888, emoji:'🐶', color:'#cc9944', img:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/syougou/inu.png?raw=true' },
+  '999': { title:'猫の九命',     score:999, emoji:'🐱', color:'#aa66cc', img:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/syougou/neko.png?raw=true' },
+};
+
+// 持ち点が動物称号のスコアと一致したら解禁
+function _checkScoreTitles(playerScore){
+  const key = String(playerScore);
+  const t = ANIMAL_SCORE_TITLES[key];
+  if(!t) return;
+  if(!PROFILE.yakumanTitles) PROFILE.yakumanTitles = [];
+  if(!PROFILE.yakumanTitles.includes(key)){
+    PROFILE.yakumanTitles.push(key);
+    saveProfileSilent();
+    _showTitleUnlockToast(t);
+  }
+}
+
 function _yakumanTitleData(name){
-  return YAKUMAN_TITLES[name] || { title: name+'達成者', emoji:'🏆', color:'#c9a84c' };
+  return YAKUMAN_TITLES[name] || ANIMAL_SCORE_TITLES[name] || { title: name+'達成者', emoji:'🏆', color:'#c9a84c' };
 }
 
 // 称号アイコンHTML: imgがあれば画像、なければ絵文字
@@ -13120,6 +13228,37 @@ function _renderTitleBookList(){
       </div>`;
     } else {
       return `<div title="${name}（未解禁）" style="
+        display:flex;align-items:center;justify-content:center;
+        padding:6px;
+        background:#020709;
+        border:2.5px solid #1a2a20;
+        border-radius:10px;opacity:0.45;font-size:2.5rem;color:#2a4a3a;
+      ">?</div>`;
+    }
+  }).join('');
+
+  // 動物カテゴリー
+  html += `<div style="
+    grid-column:1/-1;
+    font-size:.65rem;font-weight:700;color:#88ccaa;letter-spacing:.1em;
+    border-bottom:1px solid #1a3a2a;padding-bottom:6px;margin-top:10px;margin-bottom:2px;
+  ">🐾 動物</div>`;
+
+  html += Object.entries(ANIMAL_SCORE_TITLES).map(([key, t]) => {
+    const isUnlocked = unlocked.includes(key);
+    const isEq = equipped === key;
+    if(isUnlocked){
+      return `<div onclick="equipTitle('${key}')" title="${t.title}（${t.score}点）" style="
+        display:flex;align-items:center;justify-content:center;
+        padding:6px;
+        background:${isEq ? 'linear-gradient(135deg,#1a0e00,#251500)' : '#030a10'};
+        border:2.5px solid ${isEq ? t.color : '#1a3a2a'};
+        border-radius:10px;cursor:pointer;transition:all .2s;
+      ">
+        ${_titleIconHtml(t, 96)}
+      </div>`;
+    } else {
+      return `<div title="${t.score}点で解禁（${t.title}）" style="
         display:flex;align-items:center;justify-content:center;
         padding:6px;
         background:#020709;
