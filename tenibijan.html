@@ -53,6 +53,7 @@ function scaleTable(){
   // 縦画面: 左右プレイヤーを垂直中央から上下にオフセット配置、上下プレイヤーも調整
   let ps=document.getElementById('_portraitSeatStyle');
   if(isPortrait){
+    const ls=document.getElementById('_landscapeBtnStyle'); if(ls) ls.textContent='';
     const v=tableH/_TABLE_H;
     if(!ps){ps=document.createElement('style');ps.id='_portraitSeatStyle';document.head.appendChild(ps);}
     // 修正: 左右プレイヤーを垂直中央から上下にオフセット
@@ -73,10 +74,10 @@ function scaleTable(){
       /* 字風点数パネルを手牌に被らないよう右端に絶対配置 */
       '.player-score-panel { transform: scale(2.3) !important; transform-origin: left center !important; }'+
       /* 縦画面: アイコン+名前を2倍（席ごとに回転維持）*/
-      '.seat-bottom .player-icon-panel { transform: scale(2) !important; transform-origin: center bottom !important; position: relative !important; bottom: 30px !important; }'+
+      '.seat-bottom .player-icon-panel { transform: scale(2) translateY(-20px) !important; transform-origin: center bottom !important; position: relative !important; left: 40px !important; }'+
       '.seat-top .player-icon-panel { transform: rotate(180deg) scale(2) !important; transform-origin: center top !important; position: relative !important; top: '+Math.round((100 + 100 - 80)*v)+'px !important; }'+
       '.seat-right .player-icon-panel { transform: translateX(50px) translateY(-100px) rotate(90deg) scale(2) !important; transform-origin: left center !important; }'+
-      '.seat-left .player-icon-panel { transform: translateX(-10px) translateY(-100px) rotate(-90deg) scale(2) !important; transform-origin: right center !important; }'+
+      '.seat-left .player-icon-panel { transform: translateX(-50px) translateY(-100px) rotate(-90deg) scale(2) !important; transform-origin: right center !important; }'+
       '.bottom-score-panel { position: absolute !important; left: 850px !important; top: 36px !important; margin-left: 0 !important; transform-origin: left top !important; }'+
       /* 縦画面: 能力ボタン(右下)を5倍スケール・手牌より下に配置 */
       '#tableInfoBox { transform: scale(2) !important; transform-origin: top left !important; }'+
@@ -94,6 +95,13 @@ function scaleTable(){
       '.seat-top .hand-outer-afk-label,.seat-left .hand-outer-afk-label,.seat-right .hand-outer-afk-label { font-size: 4.6875rem !important; top: -110px !important; }';
   } else {
     if(ps) ps.textContent='';
+    // 横画面: 能力ボタン(右下)と左下ボタンを2倍スケール
+    let ls=document.getElementById('_landscapeBtnStyle');
+    if(!ls){ls=document.createElement('style');ls.id='_landscapeBtnStyle';document.head.appendChild(ls);}
+    ls.textContent=
+      '#tableCornerLeft { transform: scale(2) !important; transform-origin: bottom left !important; }'+
+      '#tableCornerRight { transform: scale(2) !important; transform-origin: bottom right !important; }'+
+      '#wallArea { position: relative !important; z-index: 31 !important; }';
   }
 
   if(typeof G!=='undefined'&&G&&G.players) requestAnimationFrame(()=>{
@@ -396,9 +404,14 @@ body{
   position:absolute;
 }
 /* bottom: 卓内端から牌1個(48px)内側 */
+@keyframes _toastIn {
+  from { opacity:0; transform:translateX(-50%) translateY(20px); }
+  to   { opacity:1; transform:translateX(-50%) translateY(0); }
+}
 .seat-bottom .player-icon-panel{
   position:relative;
-  bottom:30px;
+  left:40px;
+  transform:translateY(-40px);
 }
 .seat-bottom .seat-inner{
   left:391px;
@@ -1773,6 +1786,22 @@ body{
 
     </div><!-- /2列グリッド -->
 
+    <!-- 称号 -->
+    <div style="margin-top:14px;">
+      <h3 style="margin-bottom:8px;">🏅 称号</h3>
+      <div id="equippedTitleDisplay" onclick="openTitleBook()" style="
+        display:flex;align-items:center;gap:10px;
+        background:#040c12;border:2px solid #2a5a3a;border-radius:10px;
+        padding:8px 12px;cursor:pointer;transition:border-color .15s;
+      " onmouseover="this.style.borderColor='#3a7a5a'" onmouseout="this.style.borderColor='#2a5a3a'">
+        <span id="equippedTitleEmoji" style="font-size:1.4rem;">🏆</span>
+        <div>
+          <div id="equippedTitleName" style="font-size:.72rem;font-weight:700;color:var(--gold);">なし</div>
+          <div style="font-size:.48rem;color:#3a5a4a;margin-top:1px;">📖 称号図鑑を開く</div>
+        </div>
+      </div>
+    </div>
+
     <!-- タイトル背景 -->
     <div style="margin-top:14px;">
       <h3 style="margin-bottom:8px;">🖼️ タイトル背景</h3>
@@ -1799,6 +1828,7 @@ body{
       <div class="lpc-info">
         <div class="lpc-name" id="lpcName">プレイヤー</div>
         <div class="lpc-ability" id="lpcAbility">⚡ 能力なし</div>
+        <div id="lpcTitle" style="font-size:.5rem;color:#c9a84c;margin-top:1px;display:none;"></div>
         <div class="lpc-coins" id="lpcCoins"><img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/coin/tenibi.png" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:2px;">---</div>
         <div class="lpc-coins" id="lpcTbbCoins"><img src="https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/coin/tbb.png" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:2px;">---</div>
       </div>
@@ -3944,10 +3974,10 @@ function loadBombRanking(){
   const el=document.getElementById('bombRankingList');
   if(!el) return;
   el.textContent='読み込み中…';
-  fetch('/api/bomb/ranking')
+  fetch('/api/bomb/ranking?limit=10')
     .then(r=>{ if(!r.ok) throw new Error('status:'+r.status); return r.json(); })
     .then(d=>{
-      const rows = Array.isArray(d.ranking) ? d.ranking : [];
+      const rows = Array.isArray(d.ranking) ? d.ranking.slice(0,10) : [];
       if(!rows.length){ el.textContent='まだ記録がありません'; return; }
       const myName = PROFILE.name||'';
       el.innerHTML = rows.map((row,i)=>{
@@ -5754,7 +5784,7 @@ function remoteWallPick(pidx,slotIdx){
   const tile=G.deckSlots[slotIdx];
   if(!tile){ handleExhausted(); return; } // スロットが空→流局
   G.deckSlots[slotIdx]=null;
-  const di=G.deck.findIndex(d=>d.suit===tile.suit&&d.num===tile.num);
+  const di=G.deck.findIndex(d=>d._pkey ? d._pkey===tile._pkey : (d.suit===tile.suit&&d.num===tile.num));
   if(di>=0)G.deck.splice(di,1);
   const p=G.players[pidx];
   p.hand.push(tile);p.drawnTile=tile;
@@ -5915,7 +5945,7 @@ function startOnlineGame(){
   G={players:[],deck:[],deckSlots:[],doraInds:[],uraInds:[],doraPile:[],rinshan:[],rinshanIdx:6,kanDoraCount:0,lightMode:false,lightUserIdx:null,lightRevealedSlots:{},lightRevealedHand:{},stealMode:false,mineSlots:[],mineRinshanIdxs:[],mineOwners:{},mineRinshanOwners:{},mineCount:0,penDrawings:{},yamiChallenge:null,
      dealer:numPlayers===1?0:Math.floor(Math.random()*numPlayers),current:0,roundNum:1,roundWind:'東',honba:0,riichiPot:0,
      pendingRiichi:null,riichiValidIdx:null,
-     phase:'idle',firstRound:true,log:[],savedScores:null,_dealerWon:false};
+     phase:'idle',firstRound:true,log:[],savedScores:null,_dealerWon:false,_sessionYakuman:[]};
   startRound();
   // 自分（ホスト = playerIdx 0）の peerId をセット
   if(G.players[NET.myIdx]) G.players[NET.myIdx].peerId = NET.peer?.id || '';
@@ -7012,6 +7042,9 @@ document.addEventListener('click', function(e){
   // エモート図鑑外クリックで閉じる
   const eco=document.getElementById('emoteCollectionOverlay');
   if(eco&&eco.style.display==='flex'&&e.target===eco) closeEmoteCollection();
+  // 称号図鑑外クリックで閉じる
+  const tbo=document.getElementById('titleBookOverlay');
+  if(tbo&&tbo.style.display==='flex'&&e.target===tbo) closeTitleBook();
   // 自動メニューパネル外クリックで閉じる
   const amp = document.getElementById('autoMenuPanel');
   const amtb = document.getElementById('autoMenuToggle');
@@ -7550,12 +7583,12 @@ function humanPickWall(slotIdx){
     return;
   }
   const myIdx=NET.myIdx;
+  const p=G.players[myIdx];
   const tile=G.deckSlots[slotIdx];
   if(!tile)return;
   G.deckSlots[slotIdx]=null;
-  const di=G.deck.findIndex(d=>d.suit===tile.suit&&d.num===tile.num);
+  const di=G.deck.findIndex(d=>d._pkey ? d._pkey===tile._pkey : (d.suit===tile.suit&&d.num===tile.num));
   if(di>=0)G.deck.splice(di,1);
-  const p=G.players[myIdx];
   p.hand.push(tile);p.drawnTile=tile;
 
   // 💣 Mine check
@@ -7872,6 +7905,14 @@ function handleWin(widx,winTile,isTsumo,losidx){
   G.riichiPot=0;
   G._dealerWon=w.isDealer;
   addLog(`${w.name} の${isTsumo?'ツモ':'ロン'}上がり！ ${score}点`,'log-win');
+  // 役満上がり → 称号解禁
+  if(isYakumanPlus && w.id === (G.players[NET.myIdx]||{}).id){
+    if(!G._sessionYakuman) G._sessionYakuman=[];
+    yakus.filter(y=>y.han>=13).forEach(y=>{
+      if(!G._sessionYakuman.includes(y.name)) G._sessionYakuman.push(y.name);
+      unlockYakumanTitle(y.name);
+    });
+  }
   saveScores();
   if(checkTobi()) return; // 飛び発生 → 即終了（winModalは出さない）
   const _yakuVideoUrls=numPlayers===1?[]:getYakumanVideoUrls(yakus);
@@ -8321,21 +8362,40 @@ function _attachTileDrag(tileEl, i, canDiscard){
     _dragState.ghost.style.left = (_dragState.rect.left + dx) + 'px';
     _dragState.ghost.style.top  = (_dragState.rect.top  + dy) + 'px';
     if(!autoSortEnabled && Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(dx) > 10){
-      let targetEl = null, targetIdx = -1, minDist = Infinity;
-      for(const el of _dragState.handEls){
-        if(el === tileEl) continue;
-        const r = el.getBoundingClientRect();
-        const cx = r.left + r.width/2;
-        const dist = Math.abs(clientX - cx);
-        if(dist < r.width * 0.85 && dist < minDist){ minDist = dist; targetEl = el; targetIdx = parseInt(el.dataset.idx); }
-      }
+      const insertIdx = _calcInsertIdx(clientX, _dragState.handEls, tileEl);
       _dragState.handEls.forEach(el=>{ if(el!==tileEl) el.style.outline=''; });
-      if(targetEl) targetEl.style.outline = '2px solid #c9a84c';
-      _dragState._swapTarget = targetIdx >= 0 ? targetIdx : -1;
+      if(insertIdx >= 0){
+        const others = _dragState.handEls.filter(el=>el!==tileEl);
+        const lastIdx = others.length > 0 ? parseInt(others[others.length-1].dataset.idx) : -1;
+        // 末尾追加の場合は最後の牌をハイライト
+        const lookupIdx = (insertIdx > lastIdx && lastIdx >= 0) ? lastIdx : insertIdx;
+        const targetEl = _dragState.handEls.find(el=>el!==tileEl && parseInt(el.dataset.idx)===lookupIdx);
+        if(targetEl) targetEl.style.outline = '2px solid #c9a84c';
+      }
+      _dragState._insertTarget = insertIdx;
     } else {
       _dragState.handEls.forEach(el=>{ if(el!==tileEl) el.style.outline=''; });
-      _dragState._swapTarget = -1;
+      _dragState._insertTarget = -1;
     }
+  }
+
+  // 指位置から挿入先インデックスを算出（挿入後のその位置に入る）
+  function _calcInsertIdx(clientX, handEls, draggedEl){
+    const others = handEls.filter(el=>el!==draggedEl);
+    if(others.length === 0) return -1;
+    const first = others[0];
+    const firstR = first.getBoundingClientRect();
+    // 一番左の牌の左半分より左 → 先頭に挿入
+    if(clientX < firstR.left + firstR.width * 0.5) return parseInt(first.dataset.idx);
+    for(let j=1; j<others.length; j++){
+      const r = others[j].getBoundingClientRect();
+      if(clientX < r.left + r.width * 0.5) return parseInt(others[j].dataset.idx);
+    }
+    // 一番右の牌の右半分より右 → 末尾に追加（hand.length を末尾追加の特別値として使う）
+    const last = others[others.length-1];
+    const lastR = last.getBoundingClientRect();
+    if(clientX >= lastR.left + lastR.width * 0.5) return parseInt(last.dataset.idx) + 1;
+    return parseInt(last.dataset.idx);
   }
 
   // 共通: ドラッグ終了処理
@@ -8345,7 +8405,7 @@ function _attachTileDrag(tileEl, i, canDiscard){
     const dy = clientY - _dragState.startY;
     const absDx = Math.abs(dx), absDy = Math.abs(dy);
     const savedIdx = _dragState.idx;
-    let swapTarget = _dragState._swapTarget ?? -1;
+    let insertTarget = _dragState._insertTarget ?? -1;
     const savedHandEls = _dragState.handEls;
     _dragState.handEls.forEach(el=>{ el.style.outline=''; });
     _cleanDrag();
@@ -8356,21 +8416,20 @@ function _attachTileDrag(tileEl, i, canDiscard){
       humanDiscard();
       return;
     }
-    // 横スワイプ → 入れ替え
+    // 横スワイプ → 挿入移動
     if(!autoSortEnabled && absDx > 20 && absDx > absDy * 1.5){
-      if(swapTarget < 0){
-        for(const el of (savedHandEls||[])){
-          if(el === tileEl) continue;
-          const r = el.getBoundingClientRect();
-          const cx = r.left + r.width/2;
-          if(Math.abs(clientX - cx) < r.width * 0.85){ swapTarget = parseInt(el.dataset.idx); break; }
-        }
+      if(insertTarget < 0){
+        insertTarget = _calcInsertIdx(clientX, savedHandEls, tileEl);
       }
       const p = G && G.players && G.players[NET.myIdx];
-      if(p && swapTarget >= 0 && swapTarget < p.hand.length && savedIdx < p.hand.length){
-        [p.hand[savedIdx], p.hand[swapTarget]] = [p.hand[swapTarget], p.hand[savedIdx]];
-        if(selIdx === savedIdx) selIdx = swapTarget;
-        else if(selIdx === swapTarget) selIdx = savedIdx;
+      if(p && insertTarget >= 0 && savedIdx < p.hand.length && insertTarget <= p.hand.length && insertTarget !== savedIdx){
+        // splice で取り出して挿入
+        const tile = p.hand.splice(savedIdx, 1)[0];
+        let insertPos = insertTarget;
+        if(savedIdx < insertTarget) insertPos--; // 取り出し後ずれ補正
+        if(insertPos > p.hand.length) insertPos = p.hand.length; // 末尾クランプ
+        p.hand.splice(insertPos, 0, tile);
+        selIdx = insertPos;
         SFX.draw();
         renderAll();
       }
@@ -8915,7 +8974,7 @@ function showFinalResult(){
   const myRank=sorted.findIndex(p=>p===myPlayer)+1; // 1始まり
   const rewardEl=document.getElementById('resultCoinReward');
   fetch('/api/reward',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({rank:myRank,numPlayers})})
+    body:JSON.stringify({rank:myRank,numPlayers,uid:PROFILE.uid})})
   .then(r=>r.json()).then(d=>{
     if(d.ok){
       PROFILE.coins=d.coins??PROFILE.coins;
@@ -8924,8 +8983,10 @@ function showFinalResult(){
         if(d.earned>0) rewardEl.innerHTML=`<img src="https://github.com/teddybeerbear/teddybeerbear/blob/main/coin/tenibi.png?raw=true" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin:0 1px;"> +${d.earned} 手にビコイン獲得！（合計 ${PROFILE.coins} 枚）<br><span style="font-size:.65rem;color:#5a7a6a;">${rankLabel}報酬：+${d.earned}枚</span>`;
         else rewardEl.innerHTML=`<img src="https://github.com/teddybeerbear/teddybeerbear/blob/main/coin/tenibi.png?raw=true" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin:0 1px;"> +0 手にビコイン<br><span style="font-size:.65rem;color:#5a7a6a;">参加報酬：+0枚</span>`;
       }
+    } else {
+      if(rewardEl) rewardEl.innerHTML=`<span style="color:#aa4444;font-size:.7rem;">コイン付与エラー: ${d.error||'不明'}</span>`;
     }
-  }).catch(()=>{});
+  }).catch(e=>{ if(rewardEl) rewardEl.innerHTML=`<span style="color:#aa4444;font-size:.7rem;">通信エラー: ${e.message}</span>`; });
   saveProfileSilent();
 
   // ソロ対戦: 解放チェーン進捗を更新（能力ありルールのみカウント）
@@ -9064,7 +9125,7 @@ function showFinalResultData(sorted){
   const myRankG = myRankIdx + 1; // 1始まり
   const rewardEl = document.getElementById('resultCoinReward');
   fetch('/api/reward',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({rank:myRankG,numPlayers})})
+    body:JSON.stringify({rank:myRankG,numPlayers,uid:PROFILE.uid})})
   .then(r=>r.json()).then(d=>{
     if(d.ok){
       PROFILE.coins=d.coins??PROFILE.coins;
@@ -9074,7 +9135,7 @@ function showFinalResultData(sorted){
         else rewardEl.innerHTML=`<img src="https://github.com/teddybeerbear/teddybeerbear/blob/main/coin/tenibi.png?raw=true" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin:0 1px;"> +0 手にビコイン<br><span style="font-size:.65rem;color:#5a7a6a;">参加報酬：+0枚</span>`;
       }
     }
-  }).catch(()=>{});
+  }).catch(e=>{ if(rewardEl) rewardEl.innerHTML=`<span style="color:#aa4444;font-size:.7rem;">通信エラー: ${e.message}</span>`; });
   saveProfileSilent();
 
   // ランクマッチ: レート変動をサーバーから取得（ホストのPOSTが完了するまで少し待つ）
@@ -9087,6 +9148,7 @@ function showFinalResultData(sorted){
   document.getElementById('resultOverlay').classList.add('show');
   _setResultBtn();
 }
+
 
 async function _fetchRankResultForGuestWithRetry(attempt){
   if(attempt > 6) return;
@@ -9156,7 +9218,7 @@ function startTenbiBattle(){
      penDrawings:{},yamiChallenge:null,
      dealer:Math.floor(Math.random()*2),current:0,roundNum:1,roundWind:'東',honba:0,riichiPot:0,
      pendingRiichi:null,riichiValidIdx:null,
-     phase:'idle',firstRound:true,log:[],savedScores:null,_dealerWon:false};
+     phase:'idle',firstRound:true,log:[],savedScores:null,_dealerWon:false,_sessionYakuman:[]};
   document.getElementById('gameScreen').classList.add('active');
   scaleTable();
   startRound();
@@ -11745,6 +11807,7 @@ function _applyProfile(){
     el.classList.toggle('selected', el.dataset.ability===(PROFILE.ability||''));
   });
   updateProfileBadge();
+  if(typeof _updateEquippedTitleUI==='function') _updateEquippedTitleUI();
 }
 
 function loadProfile(){
@@ -11784,6 +11847,8 @@ function loadProfile(){
         bombBestStage:         data.bombBestStage         ?? PROFILE.bombBestStage ?? 0,
         bombBestScore:         data.bombBestScore         ?? PROFILE.bombBestScore ?? 0,
         titleBgId:             data.titleBgId             ?? PROFILE.titleBgId    ?? '',
+        yakumanTitles:         data.yakumanTitles         ?? PROFILE.yakumanTitles ?? [],
+        equippedTitle:         data.equippedTitle         ?? PROFILE.equippedTitle ?? '',
       });
       const {coins:_coins, abilities:_ab, ability:_abl, tbbCoins:_tbb, ...profileToCache} = PROFILE; // coins/abilities/ability/tbbCoins はlocalStorageに保存しない
       try{ localStorage.setItem('mjProfile',JSON.stringify(profileToCache)); }catch(e){}
@@ -12810,6 +12875,161 @@ function closeEmoteCollection(){
   const ov=document.getElementById('emoteCollectionOverlay');
   if(ov) ov.style.display='none';
 }
+
+// ============================================================
+// TITLE BOOK（称号図鑑）
+// ============================================================
+const YAKUMAN_TITLES = {
+  '字一色':    { title:'字牌の覇者',   emoji:'🀇', color:'#ff9944' },
+  '清老頭':    { title:'老頭牌の王',   emoji:'🃏', color:'#ffcc44' },
+  '緑一色':    { title:'翠の使い手',   emoji:'🀅', color:'#44cc88' },
+  '国士無双':  { title:'国士の剣士',   emoji:'⚔️', color:'#cc44ff' },
+  '一槓子':    { title:'カンの鬼',     emoji:'🀄', color:'#ff6644' },
+  '一暗刻':    { title:'暗刻マスター', emoji:'🔮', color:'#4488ff' },
+  '地和':      { title:'地和の申し子', emoji:'🌏', color:'#44ddff' },
+  '人和':      { title:'人和の達人',   emoji:'🌸', color:'#ff88cc' },
+  '天和':      { title:'天和の神',     emoji:'⭐', color:'#ffdd00' },
+  '一暗刻単騎':{ title:'孤高の単騎王', emoji:'👑', color:'#ff44aa' },
+};
+
+function _yakumanTitleData(name){
+  return YAKUMAN_TITLES[name] || { title: name+'達成者', emoji:'🏆', color:'#c9a84c' };
+}
+
+function openTitleBook(){
+  const ov = document.getElementById('titleBookOverlay');
+  if(!ov) return;
+  _renderTitleBookList();
+  ov.style.display = 'flex';
+}
+
+function closeTitleBook(){
+  const ov = document.getElementById('titleBookOverlay');
+  if(ov) ov.style.display = 'none';
+}
+
+function _renderTitleBookList(){
+  const el = document.getElementById('titleBookList');
+  if(!el) return;
+  const unlocked = PROFILE.yakumanTitles || [];
+  const equipped = PROFILE.equippedTitle || '';
+
+  if(unlocked.length === 0){
+    el.innerHTML = '<div style="text-align:center;padding:24px;font-size:.65rem;color:#3a5a4a;">役満を上がると称号が解禁されます</div>';
+    return;
+  }
+
+  // 「なし」オプション＋解禁済み称号
+  const noneEquipped = equipped === '';
+  let html = `<div onclick="equipTitle('')" style="
+    display:flex;align-items:center;gap:12px;
+    background:${noneEquipped ? 'linear-gradient(135deg,#0a1e0a,#0d2a10)' : '#030a10'};
+    border:1.5px solid ${noneEquipped ? '#3ada8a' : '#1a3a2a'};
+    border-radius:10px;padding:12px 14px;cursor:pointer;transition:all .2s;
+  ">
+    <span style="font-size:1.6rem;">🚫</span>
+    <div style="flex:1;">
+      <div style="font-size:.72rem;font-weight:700;color:#5a8a7a;">称号なし</div>
+      <div style="font-size:.5rem;color:#3a5a4a;margin-top:2px;">称号を外す</div>
+    </div>
+    ${noneEquipped ? '<div style="font-size:.6rem;color:#3ada8a;font-weight:700;">✓ 装備中</div>' : ''}
+  </div>`;
+
+  html += unlocked.map(name => {
+    const t = _yakumanTitleData(name);
+    const isEq = equipped === name;
+    return `<div onclick="equipTitle('${name}')" style="
+      display:flex;align-items:center;gap:12px;
+      background:${isEq ? 'linear-gradient(135deg,#1a0e00,#251500)' : '#030a10'};
+      border:1.5px solid ${isEq ? t.color : '#1a3a2a'};
+      border-radius:10px;padding:12px 14px;cursor:pointer;transition:all .2s;
+    ">
+      <span style="font-size:1.6rem;">${t.emoji}</span>
+      <div style="flex:1;">
+        <div style="font-size:.72rem;font-weight:700;color:${t.color};">${t.title}</div>
+        <div style="font-size:.5rem;color:#3a5a4a;margin-top:2px;">${name}</div>
+      </div>
+      ${isEq ? `<div style="font-size:.6rem;color:${t.color};font-weight:700;">✓ 装備中</div>` : ''}
+    </div>`;
+  }).join('');
+
+  el.innerHTML = html;
+}
+
+function equipTitle(name){
+  PROFILE.equippedTitle = name;
+  _renderTitleBookList();
+  _updateEquippedTitleUI();
+  saveProfileSilent();
+}
+
+function _updateEquippedTitleUI(){
+  const name = PROFILE.equippedTitle || '';
+  // プロフィール画面
+  const emojiEl = document.getElementById('equippedTitleEmoji');
+  const nameEl = document.getElementById('equippedTitleName');
+  if(emojiEl && nameEl){
+    if(name){
+      const t = _yakumanTitleData(name);
+      emojiEl.textContent = t.emoji;
+      nameEl.textContent = t.title;
+      nameEl.style.color = t.color;
+    } else {
+      emojiEl.textContent = '🏆';
+      nameEl.textContent = 'なし';
+      nameEl.style.color = 'var(--gold)';
+    }
+  }
+  // ロビープレイヤーカード
+  const lpcTitle = document.getElementById('lpcTitle');
+  if(lpcTitle){
+    if(name){
+      const t = _yakumanTitleData(name);
+      lpcTitle.textContent = t.emoji + ' ' + t.title;
+      lpcTitle.style.color = t.color;
+      lpcTitle.style.display = '';
+    } else {
+      lpcTitle.style.display = 'none';
+    }
+  }
+}
+
+// 役満解禁：ゲーム中に呼ぶ（handleWinから）
+function unlockYakumanTitle(yakuName){
+  if(!PROFILE.yakumanTitles) PROFILE.yakumanTitles = [];
+  if(!PROFILE.yakumanTitles.includes(yakuName)){
+    PROFILE.yakumanTitles.push(yakuName);
+    saveProfileSilent();
+    // 解禁トースト通知
+    const t = _yakumanTitleData(yakuName);
+    _showTitleUnlockToast(t);
+  }
+}
+
+function _showTitleUnlockToast(t){
+  let toast = document.getElementById('_titleUnlockToast');
+  if(!toast){
+    toast = document.createElement('div');
+    toast.id = '_titleUnlockToast';
+    toast.style.cssText = 'position:fixed;bottom:120px;left:50%;transform:translateX(-50%);z-index:99999;pointer-events:none;';
+    document.body.appendChild(toast);
+  }
+  toast.innerHTML = `<div style="
+    background:linear-gradient(135deg,#1a0e00,#251500);
+    border:1.5px solid #c9a84c;border-radius:10px;
+    padding:10px 18px;text-align:center;
+    box-shadow:0 4px 20px #000c;
+    animation:_toastIn .3s ease;
+  ">
+    <div style="font-size:.55rem;color:#c9a84c;letter-spacing:.1em;margin-bottom:3px;">🏅 称号解禁！</div>
+    <div style="font-size:1.2rem;">${t.emoji}</div>
+    <div style="font-size:.72rem;font-weight:700;color:${t.color};">${t.title}</div>
+  </div>`;
+  toast.style.opacity = '1';
+  clearTimeout(toast._hideTimer);
+  toast._hideTimer = setTimeout(()=>{ toast.style.opacity='0'; }, 3000);
+}
+
 
 function _renderEmoteCollectionList(){
   const el=document.getElementById('emoteCollectionList');
@@ -13852,6 +14072,31 @@ function plantMineRinshan(ri){
       ">✕ 閉じる</button>
     </div>
     <div id="emoteCollectionList" style="display:flex;flex-direction:column;gap:12px;"></div>
+  </div>
+</div>
+
+<!-- 称号図鑑オーバーレイ -->
+<div id="titleBookOverlay" style="
+  display:none;position:fixed;inset:0;z-index:99998;
+  background:#000000cc;backdrop-filter:blur(4px);
+  align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 12px;
+">
+  <div style="
+    background:linear-gradient(135deg,#060e18,#091422);
+    border:1px solid #1a3a2a;border-radius:14px;
+    padding:18px;width:100%;max-width:600px;position:relative;
+  ">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div>
+        <div style="font-size:.9rem;font-weight:700;color:var(--gold);letter-spacing:.1em;">🏅 称号図鑑</div>
+        <div style="font-size:.52rem;color:#4a7a6a;margin-top:2px;">役満を上がると称号が解禁・タップで装備</div>
+      </div>
+      <button onclick="closeTitleBook()" style="
+        background:#030a10;border:1px solid #2a3a4a;border-radius:7px;
+        color:#5a7a8a;font-size:.7rem;padding:5px 10px;cursor:pointer;
+      ">✕ 閉じる</button>
+    </div>
+    <div id="titleBookList" style="display:flex;flex-direction:column;gap:10px;"></div>
   </div>
 </div>
 
