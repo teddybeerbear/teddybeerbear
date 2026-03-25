@@ -10986,7 +10986,7 @@ function _initDoraCanvasEvents(dc){
     };
   };
   const getDI=(x,y)=>{
-    const row=Math.round(y/(DC_H+DC_GAP));
+    const row=Math.floor(y/(DC_H+DC_GAP));
     const col=Math.floor(x/(DC_W+DC_GAP));
     if(row===0) return (col>=0&&col<7)?col:-1;
     if(row===1&&col>=3&&col<=6) return col-3+7; // ドラ表示牌 di=7..10
@@ -11036,29 +11036,19 @@ function _initDoraCanvasEvents(dc){
     renderDoraCanvas();
   };
 
-  dc.addEventListener('dblclick', e=>e.preventDefault());
-  dc.addEventListener('mousedown',  down);
-  dc.addEventListener('mousemove',  move);
-  dc.addEventListener('mouseup',    up);
-  dc.addEventListener('mouseleave', (e)=>{ if(_doraPenActive) up(e); });
-  dc.addEventListener('touchstart', down, {passive:false});
-  dc.addEventListener('touchmove',  move, {passive:false});
-  dc.addEventListener('touchend',   up,   {passive:false});
+  let _doraLastTouchHandled = false;
 
-  // クリック（ペンOFF時: 地雷設置 or 光能力）
-  dc.addEventListener('click',(e)=>{
+  const doraClick=(e)=>{
     if(_penModeOn) return;
     const p=getPos(e);
     const di=getDI(p.x,p.y);
     if(di<0) return;
-    // 光: 山を表にする（嶺上牌 di=0-6、ドラ表示牌 di=7-10）
     if(G.lightMode==='pick'){
       const isAlreadyRevealed=!!(G.lightRevealedSlots?.['dc_'+di]);
       if(isAlreadyRevealed) return;
       if(di<7){
         const usedR=G.rinshanIdx;
         if(di<usedR) return;
-        // 1回目選択、2回目決定
         if(_lightPending&&_lightPending.type==='dora'&&_lightPending.di===di){ lightRevealDoraCanvas(di); _lightPending=null; }
         else { _lightPending={type:'dora',di}; renderDoraCanvas(); renderActions(); }
       } else if(di>=7&&di<=10){
@@ -11069,12 +11059,21 @@ function _initDoraCanvasEvents(dc){
       }
       return;
     }
-    // 地雷設置（嶺上牌のみ）
     if(di>=7) return;
     const usedR=G.rinshanIdx;
     if(di<usedR) return;
     if(G.minePlantPlayers&&G.minePlantPlayers.includes(NET.myIdx)) plantMineRinshan(di);
-  });
+  };
+
+  dc.addEventListener('dblclick', e=>e.preventDefault());
+  dc.addEventListener('mousedown',  down);
+  dc.addEventListener('mousemove',  move);
+  dc.addEventListener('mouseup',    up);
+  dc.addEventListener('mouseleave', (e)=>{ if(_doraPenActive) up(e); });
+  dc.addEventListener('touchstart', down, {passive:false});
+  dc.addEventListener('touchmove',  move, {passive:false});
+  dc.addEventListener('touchend',   (e)=>{ up(e); if(!_penModeOn){ _doraLastTouchHandled=true; doraClick(e); } }, {passive:false});
+  dc.addEventListener('click',      (e)=>{ if(_doraLastTouchHandled){ _doraLastTouchHandled=false; return; } doraClick(e); });
 }
 
 function _saveDoraFromOC(oc, changedSet){
