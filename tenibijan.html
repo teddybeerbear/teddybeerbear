@@ -592,6 +592,8 @@ body{
 }
 .discard-grid .tile{border-radius:3px;width:36px;height:48px;font-size:1.45rem;}
 .discard-grid .tile.last-discard{border-color:#ff6644;}
+.discard-grid .tile.last-discard-animate{animation:lastDiscardAppear .08s ease-out .6s both;}
+@keyframes lastDiscardAppear{from{opacity:0;}to{opacity:1;}}
 
 /* ===== ACTION AREA ===== */
 .action-area{
@@ -2635,9 +2637,11 @@ const SFX = (() => {
     // ── 牌を捨てる: sute1〜5 ランダム ───────────────────
     discard() {
       const n = Math.ceil(Math.random() * 5);
-      const a = new Audio(`https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/SE/sute${n}.mp3`);
-      a.volume = seVol * seScale.discard;
-      a.play().catch(()=>{});
+      setTimeout(()=>{
+        const a = new Audio(`https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/SE/sute${n}.mp3`);
+        a.volume = seVol * seScale.discard;
+        a.play().catch(()=>{});
+      }, 600);
     },
 
     // ── リーチ: ビシッ（上昇スイープ） ───────────────────
@@ -3737,6 +3741,16 @@ let autoKitaEnabled=false;    // 自動北抜きON/OFF
 let autoWinEnabled=false;     // 自動上がりON/OFF
 let autoSortEnabled=false;    // 自動理牌ON/OFF
 let oneClickDiscard=true;     // 1クリック捨てON/OFF
+let _discardAnimPidx = null;  // 捨てアニメ: 次のrenderTableで再生するプレイヤーidx
+const _HAND_ANIM_SRC = 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/tete.webm';
+let _handAnimBlobUrl = null;  // プリロード済みBlobURL
+// ゲーム開始前にバックグラウンドでプリロード
+(function _preloadHandAnim(){
+  fetch(_HAND_ANIM_SRC)
+    .then(r=>r.blob())
+    .then(b=>{ _handAnimBlobUrl = URL.createObjectURL(b); })
+    .catch(()=>{});
+})();
 let playerAFK=false;
 let noMeldEnabled=false;          // 離席モード
 let numPlayers=3;
@@ -6701,6 +6715,7 @@ function discardAction(pidx,tidx,isYami=false){ if(pidx===NET.myIdx){ _timerSave
   // 闇捨て: タイルに印をつける＋abilityUsedをセット
   if(isYami){ tile._yami=true; p.abilityUsed=true; }
   p.discards.push(tile);
+  _discardAnimPidx = pidx; // 捨てアニメ: 次のrenderTableで再生
   // 闇指定牌を捨てた場合はyamiTileIdxをリセット、そうでなければソート後に再計算
   if(isYami || tile===yamiTileObj){
     p.yamiTileIdx=-1;
@@ -11619,15 +11634,16 @@ function renderTable(){
     const dg=document.createElement('div');dg.className='discard-grid';
     dg.innerHTML=p.discards.map((t,di)=>{
       const isLast=di===p.discards.length-1;
+      const isLastAnim=isLast && _discardAnimPidx===pidx; // HTML生成時点でアニメクラスを決定
       const isRiichiTile=p.riichi&&di===p.riichiDiscardIdx;
       const isYamiDiscard=!!t._yami;
       // 闇捨て: 他プレイヤーには🌑、自分には本物を薄暗く
       if(isYamiDiscard && pidx!==NET.myIdx){
         const isYamiTarget=G.lightMode==='yami';
-        return`<div class="tile back yami-hidden${isLast?' last-discard':''}${isRiichiTile?' riichi-discard':''}${isYamiTarget?' steal-target':''}" ${isYamiTarget?`onclick="lightDispelDiscardYami(${pidx},${di})"`:''}>🌑</div>`;
+        return`<div class="tile back yami-hidden${isLast?' last-discard':''}${isLastAnim?' last-discard-animate':''}${isRiichiTile?' riichi-discard':''}${isYamiTarget?' steal-target':''}" ${isYamiTarget?`onclick="lightDispelDiscardYami(${pidx},${di})"`:''}>🌑</div>`;
       }
       if(isYamiDiscard && pidx===NET.myIdx){
-        return`<div class="tile ${tc(t)}${isLast?' last-discard':''}${isRiichiTile?' riichi-discard':''}" style="opacity:.55;border-color:#553377;"><span style="font-size:.5em;position:absolute;top:1px;left:1px;">🌑</span>${emj(t)}</div>`;
+        return`<div class="tile ${tc(t)}${isLast?' last-discard':''}${isLastAnim?' last-discard-animate':''}${isRiichiTile?' riichi-discard':''}" style="opacity:.55;border-color:#553377;"><span style="font-size:.5em;position:absolute;top:1px;left:1px;">🌑</span>${emj(t)}</div>`;
       }
       const isStealTarget = G.stealMode && pidx!==NET.myIdx && !t._yami;
       const isHakuDiscard = G.hakuSelectPlayers&&G.hakuSelectPlayers.includes(NET.myIdx) && !t._isHaku && !t._yami;
@@ -11635,7 +11651,7 @@ function renderTable(){
       const discardClick = isStealTarget?`onclick="humanSteal(${pidx},${di})"`:isHakuDiscard?`onclick="humanHakuSelectDiscard(${pidx},${di})"`:'' ;
       const discardBorder = isHakuDiscard?'border-color:#aaaaff;cursor:pointer;box-shadow:0 0 6px #aaaaff66;':'';
       const crackOv = t._cracked ? _crackOverlayHtml() : '';
-      return`<div class="tile ${tc(t)}${isLast?' last-discard':''}${isRiichiTile?' riichi-discard':''}${isStealTarget?' steal-target':''}${isDoraDiscard?' tile-dora-glow':''}" data-suit="${t.suit}" data-num="${t.num}" ${discardClick} style="position:relative;overflow:hidden;${discardBorder}">${emj(t)}${crackOv}</div>`;
+      return`<div class="tile ${tc(t)}${isLast?' last-discard':''}${isLastAnim?' last-discard-animate':''}${isRiichiTile?' riichi-discard':''}${isStealTarget?' steal-target':''}${isDoraDiscard?' tile-dora-glow':''}" data-suit="${t.suit}" data-num="${t.num}" ${discardClick} style="position:relative;overflow:hidden;${discardBorder}">${emj(t)}${crackOv}</div>`;
     }).join('');
     dw.appendChild(dg);
     // ドラ山は doraPileFixed に固定表示（seat-innerには追加しない）
@@ -11727,7 +11743,84 @@ function renderTable(){
   }
 
   // rAFでDOMが確定した後に捨て牌の座標を計算・手牌中央補正
-  requestAnimationFrame(()=>{_positionDiscards(table);_centerHandSeats(table);});
+  // last-discard-animate はHTML生成時点で埋め込み済み（_discardAnimPidx参照）
+  const _animSeatMap = seatMap.slice();
+  const _animPidxSnap = _discardAnimPidx; // rAF発火前にクリアするためスナップショット
+  _discardAnimPidx = null; // 即座にリセット（2回目のrenderTableに引き継がせない）
+  requestAnimationFrame(()=>{
+    _positionDiscards(table);
+    _centerHandSeats(table);
+    // 捨てアニメ手の動き: HTML生成時点でクラス付与済み、ここでは手アニメのみ再生
+    if(_animPidxSnap !== null){
+      const _si = _animSeatMap.indexOf(_animPidxSnap);
+      if(_si >= 0){ _playDiscardHandAnim(_si); }
+    }
+  });
+}
+
+// ── 捨て牌手アニメーション ──────────────────────────────────
+function _playDiscardHandAnim(si){
+  const wrapper = document.getElementById('tableWrapper');
+  if(!wrapper) return;
+  // si=0:bottom, 1:right, 2:top, 3:left
+  const discardAbs = document.querySelector(`.discard-abs[data-discard-side="${si}"]`);
+  if(!discardAbs) return;
+  const lastTile = discardAbs.querySelector('.last-discard');
+  if(!lastTile) return;
+
+  const wRect = wrapper.getBoundingClientRect();
+  if(!wRect.width) return;
+  const scale = wRect.width / 1400;
+
+  const tRect = lastTile.getBoundingClientRect();
+  const tileCX = tRect.left + tRect.width / 2;
+  const tileCY = tRect.top  + tRect.height / 2;
+
+  // tableWrapper内のスケール前座標に変換
+  const localX = (tileCX - wRect.left) / scale;
+  const localY = (tileCY - wRect.top)  / scale;
+
+  // 動画サイズ（スケール前px）
+  const VW = 1000, VH = 1000;
+
+  // 席ごとに回転（手の向きを合わせる）
+  const rotDeg = [0, -90, 180, 90][si] || 0;
+
+  // 席ごとに外側へ300pxオフセット (si=0:下,1:右,2:上,3:左)
+  const _OUT = 160;
+  const offX = [0, _OUT, 0, -_OUT][si] || 0;
+  const offY = [_OUT, 0, -_OUT, 0][si] || 0;
+
+  // 既存の捨てアニメを除去
+  wrapper.querySelectorAll('.discard-hand-vid').forEach(v=>v.remove());
+
+  const animUrl = _handAnimBlobUrl || _HAND_ANIM_SRC;
+  const vid = document.createElement('video');
+  vid.className = 'discard-hand-vid';
+  vid.src = animUrl;
+  vid.autoplay = true;
+  vid.playsInline = true;
+  vid.muted = true;
+  vid.style.cssText = [
+    'position:absolute',
+    `left:${localX - VW/2 + offX}px`,
+    `top:${localY - VH/2 + offY}px`,
+    `width:${VW}px`,
+    `height:${VH}px`,
+    'pointer-events:none',
+    'z-index:500',
+    'object-fit:contain',
+    'background:transparent',
+    `transform:rotate(${rotDeg}deg)`,
+  ].join(';');
+
+  const cleanup = ()=>{ try{ vid.remove(); }catch(e){} };
+  vid.onended = cleanup;
+  vid.onerror = cleanup;
+  setTimeout(cleanup, 5000); // フォールバック
+
+  wrapper.appendChild(vid);
+  vid.play().catch(cleanup);
 }
 
 function _positionDiscards(table){
