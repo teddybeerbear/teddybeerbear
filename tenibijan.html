@@ -7988,6 +7988,15 @@ function handleExhausted(){
     const _exScore = (G.players&&G.players[0]) ? G.players[0].score : 0;
     addLog(`✅ ステージ${_exStage} クリア！次のステージへ…`,'log-win');
     G.phase='end'; G._soloStage=_exStage+1; G.honba=(G.honba||0)+1;
+    // ステージ10到達称号チェック
+    if(_exStage>=10){
+      if(!PROFILE.yakumanTitles) PROFILE.yakumanTitles=[];
+      if(!PROFILE.yakumanTitles.includes('bakuhatu')){
+        PROFILE.yakumanTitles.push('bakuhatu');
+        saveProfileSilent();
+        _showTitleUnlockToast(SPECIAL_TITLES['bakuhatu']);
+      }
+    }
     _bombSendResult(_exStage, _exScore); // クリア結果をDB送信
     saveScores(); renderAll(); broadcastState();
     setTimeout(()=>startRound(), 2000);
@@ -8523,6 +8532,31 @@ function humanSelect(idx){
 // ── ドラッグ捨て・入れ替え ──────────────────────────────────────
 let _dragState = null;
 
+// ── 割れ演出 ──────────────────────────────────────────────────
+const _WARE_IMG_URL = 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/ware/ware.png';
+const _WARE_SFX_URL = 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/ware/warese.mp3';
+let _wareAudio = null;
+function _triggerCrackEffect(tileIdx){
+  const p = G && G.players && G.players[NET.myIdx];
+  if(!p) return;
+  // タイルオブジェクト自体に永続フラグを付与（捨て後も維持）
+  if(tileIdx >= 0 && tileIdx < p.hand.length) p.hand[tileIdx]._cracked = true;
+  // 効果音（20%音量）
+  if(!_wareAudio){ _wareAudio = new Audio(_WARE_SFX_URL); }
+  try{ _wareAudio.currentTime=0; _wareAudio.volume=0.2; _wareAudio.play().catch(()=>{}); }catch(e){}
+  // 割れ称号解禁
+  if(!PROFILE.yakumanTitles) PROFILE.yakumanTitles = [];
+  if(!PROFILE.yakumanTitles.includes('crack')){
+    PROFILE.yakumanTitles.push('crack');
+    saveProfileSilent();
+    _showTitleUnlockToast(SPECIAL_TITLES['crack']);
+  }
+  renderAll();
+}
+function _crackOverlayHtml(){
+  return `<img src="${_WARE_IMG_URL}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;mix-blend-mode:multiply;pointer-events:none;z-index:10;" alt="">`;
+}
+
 function _attachTileDrag(tileEl, i, canDiscard){
   tileEl.addEventListener('dragstart', e=>e.preventDefault());
 
@@ -8635,6 +8669,7 @@ function _attachTileDrag(tileEl, i, canDiscard){
           selIdx = savedSwapTarget;
           SFX.draw();
           renderAll();
+          if(Math.random() < 0.001) _triggerCrackEffect(savedSwapTarget);
         } else {
           // カーソルが牌に重なっていなかった → 挿入移動（フォールバック）
           if(insertTarget < 0){
@@ -8649,6 +8684,7 @@ function _attachTileDrag(tileEl, i, canDiscard){
             selIdx = insertPos;
             SFX.draw();
             renderAll();
+            if(Math.random() < 0.001) _triggerCrackEffect(insertPos);
           }
         }
       }
@@ -8901,6 +8937,15 @@ function humanKita(){
   if(ki<0)return;
   const kt=p.hand.splice(ki,1)[0];p.kitaTiles.push(kt);p.kitaCount++;
   addLog(`北を抜いた！（ドラ+1）`,'log-dora');
+  // 1局4回北抜き称号チェック
+  if(p.kitaCount>=4){
+    if(!PROFILE.yakumanTitles) PROFILE.yakumanTitles=[];
+    if(!PROFILE.yakumanTitles.includes('kita4')){
+      PROFILE.yakumanTitles.push('kita4');
+      saveProfileSilent();
+      _showTitleUnlockToast(SPECIAL_TITLES['kita4']);
+    }
+  }
   // 北抜き槍槓チェック: 他プレイヤーが北でロンできるか
   const kitaTile=kt;
   for(let i=0;i<numPlayers;i++){
@@ -9094,6 +9139,15 @@ function nextRound(){
     const _clearScore = (G.players&&G.players[0]) ? G.players[0].score : 0;
     G._soloStage=_clearStage+1; G.honba=(G.honba||0)+1;
     addLog(`🎉 ステージ${_clearStage} クリア！次は爆弾${Math.min(9+G._soloStage,20)}個`,'log-win');
+    // ステージ10到達称号チェック
+    if(_clearStage>=10){
+      if(!PROFILE.yakumanTitles) PROFILE.yakumanTitles=[];
+      if(!PROFILE.yakumanTitles.includes('bakuhatu')){
+        PROFILE.yakumanTitles.push('bakuhatu');
+        saveProfileSilent();
+        _showTitleUnlockToast(SPECIAL_TITLES['bakuhatu']);
+      }
+    }
     _bombSendResult(_clearStage, _clearScore); // クリア結果をDB送信
     startRound();
     return;
@@ -11427,6 +11481,8 @@ function renderTable(){
         tileEl.innerHTML=(isYamiOpenHide?'🌑':'')+(isDimmed?'':emj(t));
         if(!isDimmed&&!isYamiOpenHide) tileEl.innerHTML=emj(t);
         if(isYamiOpenHide) tileEl.innerHTML=`<span style="font-size:.55em;opacity:.5;">${emj(t)}</span>`;
+        // 割れ牌オーバーレイ
+        if(t._cracked){ tileEl.style.overflow='hidden'; tileEl.insertAdjacentHTML('beforeend', _crackOverlayHtml()); }
 
         if(canSel||canSelYami||isHakuSelectable){
           tileEl.addEventListener('click',()=>{
@@ -11556,7 +11612,8 @@ function renderTable(){
       const isDoraDiscard = getDoras().some(d=>teq(d,t));
       const discardClick = isStealTarget?`onclick="humanSteal(${pidx},${di})"`:isHakuDiscard?`onclick="humanHakuSelectDiscard(${pidx},${di})"`:'' ;
       const discardBorder = isHakuDiscard?'border-color:#aaaaff;cursor:pointer;box-shadow:0 0 6px #aaaaff66;':'';
-      return`<div class="tile ${tc(t)}${isLast?' last-discard':''}${isRiichiTile?' riichi-discard':''}${isStealTarget?' steal-target':''}${isDoraDiscard?' tile-dora-glow':''}" data-suit="${t.suit}" data-num="${t.num}" ${discardClick} style="position:relative;${discardBorder}">${emj(t)}</div>`;
+      const crackOv = t._cracked ? _crackOverlayHtml() : '';
+      return`<div class="tile ${tc(t)}${isLast?' last-discard':''}${isRiichiTile?' riichi-discard':''}${isStealTarget?' steal-target':''}${isDoraDiscard?' tile-dora-glow':''}" data-suit="${t.suit}" data-num="${t.num}" ${discardClick} style="position:relative;overflow:hidden;${discardBorder}">${emj(t)}${crackOv}</div>`;
     }).join('');
     dw.appendChild(dg);
     // ドラ山は doraPileFixed に固定表示（seat-innerには追加しない）
@@ -13193,6 +13250,13 @@ function closeEmoteCollection(){
 // ============================================================
 // TITLE BOOK（称号図鑑）
 // ============================================================
+// 特殊称号: 特定イベントで解禁
+const SPECIAL_TITLES = {
+  'crack': { title:'破壊神', emoji:'💥', color:'#ff4444', img:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/syougou/hakaisin.png', hint:'牌を割ると解禁' },
+  'kita4': { title:'北の申し子', emoji:'🀃', color:'#44aaff', img:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/syougou/kita4.png', hint:'1局に北を4回抜くと解禁' },
+  'bakuhatu': { title:'大爆発王', emoji:'💣', color:'#ff8800', img:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/syougou/bakuhatu.png', hint:'手にボムでステージ10に到達すると解禁' },
+};
+
 const YAKUMAN_TITLES = {
   '字一色':    { title:'字牌の覇者',   emoji:'🀇', color:'#ff9944', img:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/syougou/tuiso.png' },
   '清老頭':    { title:'老頭牌の王',   emoji:'🃏', color:'#ffcc44', img:'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/syougou/tinroutou.png' },
@@ -13233,7 +13297,7 @@ function _checkScoreTitles(playerScore){
 }
 
 function _yakumanTitleData(name){
-  return YAKUMAN_TITLES[name] || ANIMAL_SCORE_TITLES[name] || { title: name+'達成者', emoji:'🏆', color:'#c9a84c' };
+  return YAKUMAN_TITLES[name] || ANIMAL_SCORE_TITLES[name] || SPECIAL_TITLES[name] || { title: name+'達成者', emoji:'🏆', color:'#c9a84c' };
 }
 
 // 称号アイコンHTML: imgがあれば画像、なければ絵文字
@@ -13329,6 +13393,37 @@ function _renderTitleBookList(){
         background:#020709;
         border:2.5px solid #1a2a20;
         border-radius:10px;opacity:0.45;font-size:1.2rem;color:#2a4a3a;
+      ">?</div>`;
+    }
+  }).join('');
+
+  // 特殊カテゴリー
+  html += `<div style="
+    grid-column:1/-1;
+    font-size:.65rem;font-weight:700;color:#ff8866;letter-spacing:.1em;
+    border-bottom:1px solid #3a1a1a;padding-bottom:6px;margin-top:10px;margin-bottom:2px;
+  ">💥 特殊</div>`;
+
+  html += Object.entries(SPECIAL_TITLES).map(([key, t]) => {
+    const isUnlocked = unlocked.includes(key);
+    const isEq = equipped === key;
+    if(isUnlocked){
+      return `<div onclick="equipTitle('${key}')" title="${t.title}" style="
+        display:flex;align-items:center;justify-content:center;
+        padding:0;width:100%;aspect-ratio:400/120;overflow:hidden;
+        background:${isEq ? 'linear-gradient(135deg,#1a0000,#250000)' : '#030a10'};
+        border:2.5px solid ${isEq ? t.color : '#3a1a1a'};
+        border-radius:10px;cursor:pointer;transition:all .2s;
+      ">
+        ${_titleIconHtml(t, '100%')}
+      </div>`;
+    } else {
+      return `<div title="${t.hint||'条件を満たすと解禁'}（${t.title}）" style="
+        display:flex;align-items:center;justify-content:center;
+        padding:0;width:100%;aspect-ratio:400/120;
+        background:#020709;
+        border:2.5px solid #2a1a1a;
+        border-radius:10px;opacity:0.45;font-size:1.2rem;color:#4a2a2a;
       ">?</div>`;
     }
   }).join('');
