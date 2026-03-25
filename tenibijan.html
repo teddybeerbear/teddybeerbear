@@ -8548,20 +8548,40 @@ function _attachTileDrag(tileEl, i, canDiscard){
     _dragState.ghost.style.left = (_dragState.rect.left + dx) + 'px';
     _dragState.ghost.style.top  = (_dragState.rect.top  + dy) + 'px';
     if(!autoSortEnabled && Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(dx) > 10){
-      const insertIdx = _calcInsertIdx(clientX, _dragState.handEls, tileEl);
       _dragState.handEls.forEach(el=>{ if(el!==tileEl) el.style.outline=''; });
-      if(insertIdx >= 0){
-        const others = _dragState.handEls.filter(el=>el!==tileEl);
-        const lastIdx = others.length > 0 ? parseInt(others[others.length-1].dataset.idx) : -1;
-        // 末尾追加の場合は最後の牌をハイライト
-        const lookupIdx = (insertIdx > lastIdx && lastIdx >= 0) ? lastIdx : insertIdx;
-        const targetEl = _dragState.handEls.find(el=>el!==tileEl && parseInt(el.dataset.idx)===lookupIdx);
-        if(targetEl) targetEl.style.outline = '2px solid #c9a84c';
+      // カーソル位置に重なっている牌を探してスワップ対象にする
+      let swapTarget = -1;
+      for(const el of _dragState.handEls){
+        if(el === tileEl) continue;
+        const r = el.getBoundingClientRect();
+        if(clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom){
+          swapTarget = parseInt(el.dataset.idx);
+          el.style.outline = '2px solid #c9a84c';
+          break;
+        }
       }
-      _dragState._insertTarget = insertIdx;
+      if(swapTarget >= 0){
+        // 牌に重なっている → スワップ対象を記録
+        _dragState._swapTarget = swapTarget;
+        _dragState._insertTarget = -1;
+      } else {
+        // 牌に重なっていない → 挿入位置ハイライト（フォールバック）
+        _dragState._swapTarget = -1;
+        const insertIdx = _calcInsertIdx(clientX, _dragState.handEls, tileEl);
+        if(insertIdx >= 0){
+          const others = _dragState.handEls.filter(el=>el!==tileEl);
+          const lastIdx = others.length > 0 ? parseInt(others[others.length-1].dataset.idx) : -1;
+          // 末尾追加の場合は最後の牌をハイライト
+          const lookupIdx = (insertIdx > lastIdx && lastIdx >= 0) ? lastIdx : insertIdx;
+          const targetEl = _dragState.handEls.find(el=>el!==tileEl && parseInt(el.dataset.idx)===lookupIdx);
+          if(targetEl) targetEl.style.outline = '2px solid #c9a84c';
+        }
+        _dragState._insertTarget = insertIdx;
+      }
     } else {
       _dragState.handEls.forEach(el=>{ if(el!==tileEl) el.style.outline=''; });
       _dragState._insertTarget = -1;
+      _dragState._swapTarget = -1;
     }
   }
 
@@ -8592,32 +8612,45 @@ function _attachTileDrag(tileEl, i, canDiscard){
     const absDx = Math.abs(dx), absDy = Math.abs(dy);
     const savedIdx = _dragState.idx;
     let insertTarget = _dragState._insertTarget ?? -1;
+    const savedSwapTarget = _dragState._swapTarget ?? -1;
     const savedHandEls = _dragState.handEls;
     _dragState.handEls.forEach(el=>{ el.style.outline=''; });
     _cleanDrag();
     _dragState = null;
     // 上スワイプ → 捨て
-    if(canDiscard && dy < -40 && absDy > absDx){
+    if(canDiscard && dy < -20 && absDy > absDx){
       selIdx = savedIdx;
       humanDiscard();
       return;
     }
-    // 横スワイプ → 挿入移動
+    // 横スワイプ → スワップまたは挿入移動
     if(!autoSortEnabled && absDx > 20 && absDx > absDy * 1.5){
-      if(insertTarget < 0){
-        insertTarget = _calcInsertIdx(clientX, savedHandEls, tileEl);
-      }
       const p = G && G.players && G.players[NET.myIdx];
-      if(p && insertTarget >= 0 && savedIdx < p.hand.length && insertTarget <= p.hand.length && insertTarget !== savedIdx){
-        // splice で取り出して挿入
-        const tile = p.hand.splice(savedIdx, 1)[0];
-        let insertPos = insertTarget;
-        if(savedIdx < insertTarget) insertPos--; // 取り出し後ずれ補正
-        if(insertPos > p.hand.length) insertPos = p.hand.length; // 末尾クランプ
-        p.hand.splice(insertPos, 0, tile);
-        selIdx = insertPos;
-        SFX.draw();
-        renderAll();
+      if(p){
+        if(savedSwapTarget >= 0 && savedSwapTarget < p.hand.length && savedIdx < p.hand.length && savedSwapTarget !== savedIdx){
+          // カーソルが牌に重なっていた → 直接スワップ
+          const tmp = p.hand[savedIdx];
+          p.hand[savedIdx] = p.hand[savedSwapTarget];
+          p.hand[savedSwapTarget] = tmp;
+          selIdx = savedSwapTarget;
+          SFX.draw();
+          renderAll();
+        } else {
+          // カーソルが牌に重なっていなかった → 挿入移動（フォールバック）
+          if(insertTarget < 0){
+            insertTarget = _calcInsertIdx(clientX, savedHandEls, tileEl);
+          }
+          if(insertTarget >= 0 && savedIdx < p.hand.length && insertTarget <= p.hand.length && insertTarget !== savedIdx){
+            const tile = p.hand.splice(savedIdx, 1)[0];
+            let insertPos = insertTarget;
+            if(savedIdx < insertTarget) insertPos--;
+            if(insertPos > p.hand.length) insertPos = p.hand.length;
+            p.hand.splice(insertPos, 0, tile);
+            selIdx = insertPos;
+            SFX.draw();
+            renderAll();
+          }
+        }
       }
     }
   }
@@ -8886,6 +8919,14 @@ function humanKita(){
     }
   }
   const rep=drawRinshanTile(myIdx);if(!rep){handleExhausted();return;}
+  // 💣 嶺上地雷チェック（北抜き後）
+  if(G._mineHit){
+    G._mineHit=null;
+    p.discards.push(rep);updateTenpai(p);
+    G.phase='discard';renderAll();broadcastState();
+    scheduleForPlayer(myIdx,900,()=>{if(!checkPon(myIdx,rep))nextTurn((myIdx+1)%numPlayers);broadcastState();});
+    return;
+  }
   // 北抜きはカンドラを開かない
   updateTenpai(p);
   // 引いた嶺上牌を選択状態にする（手牌の末尾に追加されているので最後のインデックス）
