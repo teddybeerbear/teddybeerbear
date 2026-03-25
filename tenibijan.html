@@ -127,6 +127,28 @@ window.addEventListener('beforeunload', ()=>{
   }
 });
 </script>
+<script>
+// ── 画面暗転防止 (Wake Lock API) ──────────────────────────────
+let _wakeLock = null;
+async function _acquireWakeLock(){
+  if(!('wakeLock' in navigator)) return;
+  try{
+    if(_wakeLock && !_wakeLock.released) return;
+    _wakeLock = await navigator.wakeLock.request('screen');
+    _wakeLock.addEventListener('release', ()=>{ _wakeLock = null; });
+  }catch(e){}
+}
+function _releaseWakeLock(){
+  if(_wakeLock && !_wakeLock.released){ try{ _wakeLock.release(); }catch(e){} }
+  _wakeLock = null;
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible'){
+    const gs = document.getElementById('gameScreen');
+    if(gs && gs.classList.contains('active')) _acquireWakeLock();
+  }
+});
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -3148,7 +3170,7 @@ async function attemptRejoin(){
           bgmToGame();
           hideRoomLobby();
           document.getElementById('lobby').style.display='none';
-          document.getElementById('gameScreen').classList.add('active');
+          document.getElementById('gameScreen').classList.add('active'); _acquireWakeLock();
           scaleTable();
           setOnlineStatus('');
           addLog('✅ 対局に復帰しました','log-new');
@@ -5427,7 +5449,7 @@ function onNetData(msg, senderIdx){
       bgmToGame();
       hideRoomLobby();
       document.getElementById('lobby').style.display='none';
-      document.getElementById('gameScreen').classList.add('active');
+      document.getElementById('gameScreen').classList.add('active'); _acquireWakeLock();
       scaleTable();
       // ゲーム開始時点で復帰セッションを保存
       setTimeout(saveRejoinSession, 600);
@@ -6036,7 +6058,7 @@ function startOnlineGame(){
   }
   hideRoomLobby();
   document.getElementById('lobby').style.display='none';
-  document.getElementById('gameScreen').classList.add('active');
+  document.getElementById('gameScreen').classList.add('active'); _acquireWakeLock();
   scaleTable();
   updateEmoteAreaVisibility();
   G={players:[],deck:[],deckSlots:[],doraInds:[],uraInds:[],doraPile:[],rinshan:[],rinshanIdx:6,kanDoraCount:0,lightMode:false,lightUserIdx:null,lightRevealedSlots:{},lightRevealedHand:{},stealMode:false,mineSlots:[],mineRinshanIdxs:[],mineOwners:{},mineRinshanOwners:{},mineCount:0,penDrawings:{},yamiChallenge:null,
@@ -6282,7 +6304,7 @@ function closeCpuSelectScreen(){
 function initGame(){
   bgmToGame(); NET.online=false;
   document.getElementById('lobby').style.display='none';
-  document.getElementById('gameScreen').classList.add('active');
+  document.getElementById('gameScreen').classList.add('active'); _acquireWakeLock();
   scaleTable();
   G={players:[],deck:[],deckSlots:[],doraInds:[],uraInds:[],doraPile:[],rinshan:[],rinshanIdx:6,kanDoraCount:0,lightMode:false,lightUserIdx:null,lightRevealedSlots:{},lightRevealedHand:{},stealMode:false,mineSlots:[],mineRinshanIdxs:[],mineOwners:{},mineRinshanOwners:{},mineCount:0,penDrawings:{},yamiChallenge:null,
      dealer:Math.floor(Math.random()*numPlayers),current:0,roundNum:1,roundWind:'東',honba:numPlayers===1?1:0,riichiPot:0,
@@ -9533,7 +9555,7 @@ function startTenbiBattle(){
      dealer:Math.floor(Math.random()*2),current:0,roundNum:1,roundWind:'東',honba:0,riichiPot:0,
      pendingRiichi:null,riichiValidIdx:null,
      phase:'idle',firstRound:true,log:[],savedScores:null,_dealerWon:false,_sessionYakuman:[]};
-  document.getElementById('gameScreen').classList.add('active');
+  document.getElementById('gameScreen').classList.add('active'); _acquireWakeLock();
   scaleTable();
   startRound();
 }
@@ -9571,7 +9593,7 @@ async function backToRoom(){
   document.getElementById('winOverlay').classList.remove('show');
   document.getElementById('titleConfirmOverlay').classList.remove('show');
   document.querySelectorAll('.light-peek-overlay').forEach(el=>el.remove());
-  document.getElementById('gameScreen').classList.remove('active');
+  document.getElementById('gameScreen').classList.remove('active'); _releaseWakeLock();
   document.getElementById('lobby').style.display='none';
 
   bgmToTitle();
@@ -9690,7 +9712,7 @@ function backToLobby(){
   hideReconnectOverlay(); // ★ reconnectOverlay を閉じる（z-index:300 で lobby を覆う問題の修正）
   // 動的に生成されたオーバーレイも除去（light-peek-overlay など）
   document.querySelectorAll('.light-peek-overlay').forEach(el => el.remove());
-  document.getElementById('gameScreen').classList.remove('active');
+  document.getElementById('gameScreen').classList.remove('active'); _releaseWakeLock();
   hideRoomLobby();
   document.getElementById('lobby').style.display='block';
   bgmToTitle();
@@ -13346,14 +13368,15 @@ function _renderTitleBookList(){
     const isUnlocked = unlocked.includes(name);
     const isEq = equipped === name;
     if(isUnlocked){
-      return `<div onclick="equipTitle('${name}')" title="${t.title}（${name}）" style="
+      return `<div onclick="equipTitle('${name}')" title="${isEq ? 'タップで外す' : t.title+'（'+name+'）'}" style="
         display:flex;align-items:center;justify-content:center;
-        padding:0;width:100%;aspect-ratio:400/120;overflow:hidden;
+        padding:0;width:100%;aspect-ratio:400/120;overflow:hidden;position:relative;
         background:${isEq ? 'linear-gradient(135deg,#1a0e00,#251500)' : '#030a10'};
         border:2.5px solid ${isEq ? t.color : '#1a3a2a'};
         border-radius:10px;cursor:pointer;transition:all .2s;
       ">
         ${_titleIconHtml(t, '100%')}
+        ${isEq ? `<div style="position:absolute;top:3px;right:5px;font-size:.45rem;color:${t.color};background:#00000099;padding:1px 4px;border-radius:3px;pointer-events:none;">✓ 装備中（タップで外す）</div>` : ''}
       </div>`;
     } else {
       return `<div title="${name}（未解禁）" style="
@@ -13377,14 +13400,15 @@ function _renderTitleBookList(){
     const isUnlocked = unlocked.includes(key);
     const isEq = equipped === key;
     if(isUnlocked){
-      return `<div onclick="equipTitle('${key}')" title="${t.title}（${t.score}点）" style="
+      return `<div onclick="equipTitle('${key}')" title="${isEq ? 'タップで外す' : t.title+'（'+t.score+'点）'}" style="
         display:flex;align-items:center;justify-content:center;
-        padding:0;width:100%;aspect-ratio:400/120;overflow:hidden;
+        padding:0;width:100%;aspect-ratio:400/120;overflow:hidden;position:relative;
         background:${isEq ? 'linear-gradient(135deg,#1a0e00,#251500)' : '#030a10'};
         border:2.5px solid ${isEq ? t.color : '#1a3a2a'};
         border-radius:10px;cursor:pointer;transition:all .2s;
       ">
         ${_titleIconHtml(t, '100%')}
+        ${isEq ? `<div style="position:absolute;top:3px;right:5px;font-size:.45rem;color:${t.color};background:#00000099;padding:1px 4px;border-radius:3px;pointer-events:none;">✓ 装備中（タップで外す）</div>` : ''}
       </div>`;
     } else {
       return `<div title="${t.score}点で解禁（${t.title}）" style="
@@ -13408,14 +13432,15 @@ function _renderTitleBookList(){
     const isUnlocked = unlocked.includes(key);
     const isEq = equipped === key;
     if(isUnlocked){
-      return `<div onclick="equipTitle('${key}')" title="${t.title}" style="
+      return `<div onclick="equipTitle('${key}')" title="${isEq ? 'タップで外す' : t.title}" style="
         display:flex;align-items:center;justify-content:center;
-        padding:0;width:100%;aspect-ratio:400/120;overflow:hidden;
+        padding:0;width:100%;aspect-ratio:400/120;overflow:hidden;position:relative;
         background:${isEq ? 'linear-gradient(135deg,#1a0000,#250000)' : '#030a10'};
         border:2.5px solid ${isEq ? t.color : '#3a1a1a'};
         border-radius:10px;cursor:pointer;transition:all .2s;
       ">
         ${_titleIconHtml(t, '100%')}
+        ${isEq ? `<div style="position:absolute;top:3px;right:5px;font-size:.45rem;color:${t.color};background:#00000099;padding:1px 4px;border-radius:3px;pointer-events:none;">✓ 装備中（タップで外す）</div>` : ''}
       </div>`;
     } else {
       return `<div title="${t.hint||'条件を満たすと解禁'}（${t.title}）" style="
@@ -13432,10 +13457,15 @@ function _renderTitleBookList(){
 }
 
 function equipTitle(name){
-  PROFILE.equippedTitle = name;
+  // 装備中の称号を再度押したら外す
+  if(PROFILE.equippedTitle === name){
+    PROFILE.equippedTitle = '';
+  } else {
+    PROFILE.equippedTitle = name;
+  }
   _updateEquippedTitleUI();
   saveProfileSilent();
-  closeTitleBook();
+  _renderTitleBookList(); // 図鑑を再描画して装備状態を反映
 }
 
 function _updateEquippedTitleUI(){
