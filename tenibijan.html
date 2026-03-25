@@ -3742,6 +3742,9 @@ let autoWinEnabled=false;     // 自動上がりON/OFF
 let autoSortEnabled=false;    // 自動理牌ON/OFF
 let oneClickDiscard=true;     // 1クリック捨てON/OFF
 let _discardAnimPidx = null;  // 捨てアニメ: 次のrenderTableで再生するプレイヤーidx
+let _broadcastDiscardAnimPidx = null; // ゲスト向けbroadcast用（renderTableでクリアされる前に保持）
+let _discardAnimLocked = false;   // 捨てアニメ再生中フラグ（妨害防止）
+let _discardAnimLockTimer = null; // ロック解除タイマー
 const _HAND_ANIM_SRC = 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/tete.webm';
 let _handAnimBlobUrl = null;  // プリロード済みBlobURL
 // ゲーム開始前にバックグラウンドでプリロード
@@ -5848,6 +5851,11 @@ function applyHostState(msg){
       // 自動発火
       _triggerAutoAction(NET.myIdx, 350);
     }
+    // ゲスト: 捨てアニメをホストから受け取って再生
+    if(s.discardAnimPidx != null){
+      _discardAnimPidx = s.discardAnimPidx;
+      _startDiscardAnimLock();
+    }
     renderAll();
     if(s.winModal){
       showWinModalData(s.winModal);
@@ -5880,6 +5888,7 @@ function _buildStateSnapshot(extra={}){
     players:G.players,numPlayers,pendingAction,
     guestPeerIds:NET.guestPeerIds,
     tobiMode:G_TOBI_MODE,
+    discardAnimPidx:_broadcastDiscardAnimPidx,
     _lastActionId:NET._lastActionId,
     ...extra
   };
@@ -5888,6 +5897,7 @@ function _buildStateSnapshot(extra={}){
 function broadcastState(extra={}){
   if(!NET.online||!amIHost()||NET.conns.length===0)return;
   netSend({type:'state',state:_buildStateSnapshot(extra)});
+  _broadcastDiscardAnimPidx = null; // 送信後クリア（次のbroadcastに引き継がせない）
 }
 
 // ゲスト側: state を受信するたびに復帰セッションを更新しておく
@@ -6702,6 +6712,27 @@ function revealKanDora(){
   }
 }
 
+// ── 捨てアニメ妨害防止ロック ──────────────────────────────────
+// アニメ全体(delay0.6s + duration0.08s = 680ms)が終わるまで
+// ヒューマン操作・CPU自動行動を遮断する。
+function _startDiscardAnimLock(){
+  _discardAnimLocked = true;
+  if(_discardAnimLockTimer) clearTimeout(_discardAnimLockTimer);
+  // 透明オーバーレイでタップ/クリックを全遮断（winOverlay z-index:200 より下に置く）
+  let ov = document.getElementById('_discardAnimOverlay');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = '_discardAnimOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:150;pointer-events:all;background:transparent;';
+    document.body.appendChild(ov);
+  }
+  _discardAnimLockTimer = setTimeout(()=>{
+    _discardAnimLocked = false;
+    const el = document.getElementById('_discardAnimOverlay');
+    if(el) el.remove();
+    _discardAnimLockTimer = null;
+  }, 700);
+}
 function discardAction(pidx,tidx,isYami=false){ if(pidx===NET.myIdx){ _timerSaveBonus(); timerStop(); selIdx=-1; }
   if(pidx===NET.myIdx||!NET.online) SFX.discard();
   // CPU闇能力: _cpuNextYamiフラグがあれば闇捨て
@@ -6716,6 +6747,8 @@ function discardAction(pidx,tidx,isYami=false){ if(pidx===NET.myIdx){ _timerSave
   if(isYami){ tile._yami=true; p.abilityUsed=true; }
   p.discards.push(tile);
   _discardAnimPidx = pidx; // 捨てアニメ: 次のrenderTableで再生
+  _broadcastDiscardAnimPidx = pidx; // ゲスト向けstate送信用（renderTableでクリアされる前に保持）
+  _startDiscardAnimLock(); // 捨てアニメ妨害防止ロック開始
   // 闇指定牌を捨てた場合はyamiTileIdxをリセット、そうでなければソート後に再計算
   if(isYami || tile===yamiTileObj){
     p.yamiTileIdx=-1;
@@ -6949,18 +6982,18 @@ function handlePon(pidx,tile,fromPidx){
 }
 
 function nextTurn(pidx){
-  G.current=pidx;G.phase='draw';renderAll();
+  G.current=pidx;G.phase='draw';
   // Online: ホスト（amIHost()）だけがCPU/ドロー進行。ゲストはstate pushを待つ
-  if(NET.online&&!amIHost()){broadcastState();return;}
+  if(NET.online&&!amIHost()){renderAll();broadcastState();return;}
   if(NET.online&&amIHost()){
     if(isOnlineGuestIdx(pidx)){
       if(G.deck.length===0){handleExhausted();return;} // デッキ空→流局
-      broadcastState();return; // 接続中ゲストの番 → state push して待つ
+      renderAll();broadcastState();return; // 接続中ゲストの番 → state push して待つ
     }
-    if(pidx!==NET.myIdx){scheduleCpuAction(700);return;} // CPU（isCpu or 接続なし）の番
+    if(pidx!==NET.myIdx){renderAll();scheduleCpuAction(700);return;} // CPU（isCpu or 接続なし）の番
     // 自分(ホスト)の番はそのまま下へ
   }
-  if(!NET.online&&pidx!==0){scheduleCpuAction(700);return;}
+  if(!NET.online&&pidx!==0){renderAll();scheduleCpuAction(700);return;}
 
   // Human draw — show wall for selection
   const myIdx=NET.myIdx;
@@ -7262,6 +7295,8 @@ function toggleNoMeld(){
 function _triggerAutoAction(myIdx, delay=200){
   setTimeout(()=>{
     if(G.current!==myIdx || G.phase!=='discard') return;
+    // 捨てアニメ再生中は終了まで待機してリトライ
+    if(_discardAnimLocked){ setTimeout(()=>_triggerAutoAction(myIdx,0), 100); return; }
     const p=G.players[myIdx];
     if(!p) return;
     // 自動上がり
@@ -7380,6 +7415,8 @@ function timerOnMyTurn(){
 
 function autoPickWall(){
   if(G.phase!=='draw_wait'||G.current!==NET.myIdx)return;
+  // 捨てアニメ再生中は終了まで待機してリトライ
+  if(_discardAnimLocked){ setTimeout(autoPickWall, 100); return; }
   if(G.lightMode)return; // 光モード中はツモ不可
   let available=G.deckSlots.map((t,i)=>t?i:-1).filter(i=>i>=0);
   if(available.length===0)return;
@@ -8196,7 +8233,9 @@ function handleRon(widx,tile,fromidx){
 // 旧ホストが登録した stale な setTimeout が新ホストで発火しても弾かれる。
 function scheduleCpuAction(delay){
   const gen = _cpuActionGen;
-  setTimeout(()=>{ if(_cpuActionGen===gen) cpuAction(); }, delay);
+  // 捨てアニメ再生中はアニメ終了後(750ms)まで待機
+  const effectiveDelay = _discardAnimLocked ? Math.max(delay, 750) : delay;
+  setTimeout(()=>{ if(_cpuActionGen===gen) cpuAction(); }, effectiveDelay);
 }
 
 // CPU の捨て・引き継ぎ等の deferred 処理を安全にスケジュールする。
