@@ -6740,6 +6740,59 @@ function _startDiscardAnimLock(pidx){
     ov = document.createElement('div');
     ov.id = '_discardAnimOverlay';
     ov.style.cssText = 'position:fixed;inset:0;z-index:150;pointer-events:all;background:transparent;';
+    // オーバーレイ上のpointerdown/touchstartを手牌タイルに転送してドラッグ開始を許可
+    function _ovStartDragAt(clientX, clientY, pointerId, touchId){
+      if(_dragState) return;
+      // 一時的に overlay を透過してヒットテスト
+      ov.style.pointerEvents = 'none';
+      const el = document.elementFromPoint(clientX, clientY);
+      ov.style.pointerEvents = 'all';
+      if(!el) return;
+      const tileEl = el.closest('.seat-bottom .tile[data-idx]');
+      if(!tileEl) return;
+      const idx = parseInt(tileEl.dataset.idx);
+      if(isNaN(idx)) return;
+      const rect = tileEl.getBoundingClientRect();
+      const ghost = tileEl.cloneNode(true);
+      ghost.style.cssText += `;position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;z-index:99999;pointer-events:none;opacity:0.9;transition:none;transform:scale(1.15);box-shadow:0 8px 24px #000a;`;
+      document.body.appendChild(ghost);
+      const handWrap = tileEl.closest('.hand-wrap');
+      const handEls = handWrap ? Array.from(handWrap.querySelectorAll('.tile[data-idx]')) : [];
+      // canDiscard は硬直中なので false（移動のみ）
+      _dragState = {
+        tileEl, idx, startX:clientX, startY:clientY, ghost, rect, handEls,
+        _swapTarget:-1, _insertTarget:-1,
+        canDiscard: false,
+        calcInsertIdx: function(cx, hels, dragEl){
+          const others = hels.filter(e=>e!==dragEl);
+          if(!others.length) return -1;
+          const first = others[0], firstR = first.getBoundingClientRect();
+          if(cx < firstR.left + firstR.width*0.5) return parseInt(first.dataset.idx);
+          for(let j=1;j<others.length;j++){
+            const r=others[j].getBoundingClientRect();
+            if(cx < r.left+r.width*0.5) return parseInt(others[j].dataset.idx);
+          }
+          const last=others[others.length-1], lastR=last.getBoundingClientRect();
+          if(cx >= lastR.left+lastR.width*0.5) return parseInt(last.dataset.idx)+1;
+          return parseInt(last.dataset.idx);
+        }
+      };
+      if(pointerId !== undefined) _dragState.pointerId = pointerId;
+      if(touchId !== undefined) _dragState.touchId = touchId;
+      tileEl._dragMoved = false;
+      tileEl.style.opacity = '0.35';
+    }
+    ov.addEventListener('pointerdown', e=>{
+      if(e.pointerType==='touch') return;
+      e.preventDefault();
+      _ovStartDragAt(e.clientX, e.clientY, e.pointerId, undefined);
+    }, {passive:false});
+    ov.addEventListener('touchstart', e=>{
+      if(!e.changedTouches.length) return;
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      _ovStartDragAt(t.clientX, t.clientY, undefined, t.identifier);
+    }, {passive:false});
     document.body.appendChild(ov);
   }
   _discardAnimLockTimer = setTimeout(()=>{
@@ -8653,203 +8706,65 @@ function _crackOverlayHtml(){
 function _attachTileDrag(tileEl, i, canDiscard){
   tileEl.addEventListener('dragstart', e=>e.preventDefault());
 
-  // 共通: ドラッグ開始処理
-  function _startDrag(clientX, clientY){
-    const rect = tileEl.getBoundingClientRect();
-    const ghost = tileEl.cloneNode(true);
-    ghost.style.cssText += `;position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;z-index:99999;pointer-events:none;opacity:0.9;transition:none;transform:scale(1.15);box-shadow:0 8px 24px #000a;`;
-    document.body.appendChild(ghost);
-    const handWrap = tileEl.closest('.hand-wrap');
-    const handEls = handWrap ? Array.from(handWrap.querySelectorAll('.tile[data-idx]')) : [];
-    _dragState = { tileEl, idx:i, startX:clientX, startY:clientY, ghost, rect, handEls, _swapTarget:-1 };
-    tileEl._dragMoved = false;
-    tileEl.style.opacity = '0.35';
-  }
-
-  // 共通: ドラッグ移動処理
-  function _moveDrag(clientX, clientY){
-    if(!_dragState || _dragState.tileEl !== tileEl) return;
-    const dx = clientX - _dragState.startX;
-    const dy = clientY - _dragState.startY;
-    if(Math.abs(dx) > 8 || Math.abs(dy) > 8) tileEl._dragMoved = true;
-    _dragState.ghost.style.left = (_dragState.rect.left + dx) + 'px';
-    _dragState.ghost.style.top  = (_dragState.rect.top  + dy) + 'px';
-    if(!autoSortEnabled && Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(dx) > 10){
-      _dragState.handEls.forEach(el=>{ if(el!==tileEl) el.style.outline=''; });
-      // カーソル位置に重なっている牌を探してスワップ対象にする
-      let swapTarget = -1;
-      for(const el of _dragState.handEls){
-        if(el === tileEl) continue;
-        const r = el.getBoundingClientRect();
-        if(clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom){
-          swapTarget = parseInt(el.dataset.idx);
-          el.style.outline = '2px solid #c9a84c';
-          break;
-        }
-      }
-      if(swapTarget >= 0){
-        // 牌に重なっている → スワップ対象を記録
-        _dragState._swapTarget = swapTarget;
-        _dragState._insertTarget = -1;
-      } else {
-        // 牌に重なっていない → 挿入位置ハイライト（フォールバック）
-        _dragState._swapTarget = -1;
-        const insertIdx = _calcInsertIdx(clientX, _dragState.handEls, tileEl);
-        if(insertIdx >= 0){
-          const others = _dragState.handEls.filter(el=>el!==tileEl);
-          const lastIdx = others.length > 0 ? parseInt(others[others.length-1].dataset.idx) : -1;
-          // 末尾追加の場合は最後の牌をハイライト
-          const lookupIdx = (insertIdx > lastIdx && lastIdx >= 0) ? lastIdx : insertIdx;
-          const targetEl = _dragState.handEls.find(el=>el!==tileEl && parseInt(el.dataset.idx)===lookupIdx);
-          if(targetEl) targetEl.style.outline = '2px solid #c9a84c';
-        }
-        _dragState._insertTarget = insertIdx;
-      }
-    } else {
-      _dragState.handEls.forEach(el=>{ if(el!==tileEl) el.style.outline=''; });
-      _dragState._insertTarget = -1;
-      _dragState._swapTarget = -1;
-    }
-  }
-
-  // 指位置から挿入先インデックスを算出（挿入後のその位置に入る）
+  // 指位置から挿入先インデックスを算出
   function _calcInsertIdx(clientX, handEls, draggedEl){
     const others = handEls.filter(el=>el!==draggedEl);
     if(others.length === 0) return -1;
     const first = others[0];
     const firstR = first.getBoundingClientRect();
-    // 一番左の牌の左半分より左 → 先頭に挿入
     if(clientX < firstR.left + firstR.width * 0.5) return parseInt(first.dataset.idx);
     for(let j=1; j<others.length; j++){
       const r = others[j].getBoundingClientRect();
       if(clientX < r.left + r.width * 0.5) return parseInt(others[j].dataset.idx);
     }
-    // 一番右の牌の右半分より右 → 末尾に追加（hand.length を末尾追加の特別値として使う）
     const last = others[others.length-1];
     const lastR = last.getBoundingClientRect();
     if(clientX >= lastR.left + lastR.width * 0.5) return parseInt(last.dataset.idx) + 1;
     return parseInt(last.dataset.idx);
   }
 
-  // 共通: ドラッグ終了処理
-  function _endDrag(clientX, clientY){
-    if(!_dragState || _dragState.tileEl !== tileEl) return;
-    const dx = clientX - _dragState.startX;
-    const dy = clientY - _dragState.startY;
-    const absDx = Math.abs(dx), absDy = Math.abs(dy);
-    const savedIdx = _dragState.idx;
-    let insertTarget = _dragState._insertTarget ?? -1;
-    const savedSwapTarget = _dragState._swapTarget ?? -1;
-    const savedHandEls = _dragState.handEls;
-    _dragState.handEls.forEach(el=>{ el.style.outline=''; });
-    _cleanDrag();
-    _dragState = null;
-    // 上スワイプ → 捨て
-    if(canDiscard && dy < -20 && absDy > absDx){
-      selIdx = savedIdx;
-      humanDiscard();
-      return;
-    }
-    // 横スワイプ → スワップまたは挿入移動
-    if(!autoSortEnabled && absDx > 20 && absDx > absDy * 1.5){
-      const p = G && G.players && G.players[NET.myIdx];
-      if(p){
-        if(savedSwapTarget >= 0 && savedSwapTarget < p.hand.length && savedIdx < p.hand.length && savedSwapTarget !== savedIdx){
-          // カーソルが牌に重なっていた → 直接スワップ
-          const tmp = p.hand[savedIdx];
-          p.hand[savedIdx] = p.hand[savedSwapTarget];
-          p.hand[savedSwapTarget] = tmp;
-          selIdx = savedSwapTarget;
-          SFX.draw();
-          renderAll();
-          if(Math.random() < 0.001) _triggerCrackEffect(savedSwapTarget);
-        } else {
-          // カーソルが牌に重なっていなかった → 挿入移動（フォールバック）
-          if(insertTarget < 0){
-            insertTarget = _calcInsertIdx(clientX, savedHandEls, tileEl);
-          }
-          if(insertTarget >= 0 && savedIdx < p.hand.length && insertTarget <= p.hand.length && insertTarget !== savedIdx){
-            const tile = p.hand.splice(savedIdx, 1)[0];
-            let insertPos = insertTarget;
-            if(savedIdx < insertTarget) insertPos--;
-            if(insertPos > p.hand.length) insertPos = p.hand.length;
-            p.hand.splice(insertPos, 0, tile);
-            selIdx = insertPos;
-            SFX.draw();
-            renderAll();
-            if(Math.random() < 0.001) _triggerCrackEffect(insertPos);
-          }
-        }
-      }
-    }
-  }
-
   // ── Touch Events（スマホ）──
-  let _touchId = null;
   tileEl.addEventListener('touchstart', e=>{
-    if(_touchId !== null) return;
+    if(_dragState) return; // 既にドラッグ中なら無視
     const t = e.changedTouches[0];
-    _touchId = t.identifier;
-    _startDrag(t.clientX, t.clientY);
-    e.preventDefault(); // スクロール・長押しメニューを防ぐ
-  },{passive:false});
-
-  tileEl.addEventListener('touchmove', e=>{
-    if(_touchId === null) return;
-    for(const t of e.changedTouches){
-      if(t.identifier === _touchId){
-        _moveDrag(t.clientX, t.clientY);
-        e.preventDefault();
-        return;
-      }
-    }
-  },{passive:false});
-
-  tileEl.addEventListener('touchend', e=>{
-    if(_touchId === null) return;
-    for(const t of e.changedTouches){
-      if(t.identifier === _touchId){
-        _touchId = null;
-        const wasMoved = tileEl._dragMoved;
-        _endDrag(t.clientX, t.clientY);
-        // タップ（移動なし）: preventDefault により click が発火しないので直接呼ぶ
-        if(!wasMoved){
-          tileEl._dragMoved = false; // click ハンドラがブロックしないようリセット
-          tileEl.click();
-        }
-        return;
-      }
-    }
-  },{passive:false});
-
-  tileEl.addEventListener('touchcancel', e=>{
-    _touchId = null;
-    if(_dragState && _dragState.tileEl===tileEl){ _dragState.handEls?.forEach(el=>el.style.outline=''); _cleanDrag(); _dragState=null; }
+    const rect = tileEl.getBoundingClientRect();
+    const ghost = tileEl.cloneNode(true);
+    ghost.style.cssText += `;position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;z-index:99999;pointer-events:none;opacity:0.9;transition:none;transform:scale(1.15);box-shadow:0 8px 24px #000a;`;
+    document.body.appendChild(ghost);
+    const handWrap = tileEl.closest('.hand-wrap');
+    const handEls = handWrap ? Array.from(handWrap.querySelectorAll('.tile[data-idx]')) : [];
+    _dragState = {
+      tileEl, idx:i, startX:t.clientX, startY:t.clientY, ghost, rect, handEls,
+      _swapTarget:-1, _insertTarget:-1,
+      touchId: t.identifier, canDiscard,
+      calcInsertIdx: _calcInsertIdx
+    };
+    tileEl._dragMoved = false;
+    tileEl.style.opacity = '0.35';
+    e.preventDefault();
   },{passive:false});
 
   // ── Pointer Events（PCマウス・スタイラス）──
   tileEl.addEventListener('pointerdown', e=>{
-    if(e.pointerType === 'touch') return; // タッチはTouch Eventsで処理
+    if(e.pointerType === 'touch') return;
     if(e.button && e.button !== 0) return;
+    if(_dragState) return; // 既にドラッグ中なら無視
     tileEl.setPointerCapture(e.pointerId);
-    _startDrag(e.clientX, e.clientY);
+    const rect = tileEl.getBoundingClientRect();
+    const ghost = tileEl.cloneNode(true);
+    ghost.style.cssText += `;position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;z-index:99999;pointer-events:none;opacity:0.9;transition:none;transform:scale(1.15);box-shadow:0 8px 24px #000a;`;
+    document.body.appendChild(ghost);
+    const handWrap = tileEl.closest('.hand-wrap');
+    const handEls = handWrap ? Array.from(handWrap.querySelectorAll('.tile[data-idx]')) : [];
+    _dragState = {
+      tileEl, idx:i, startX:e.clientX, startY:e.clientY, ghost, rect, handEls,
+      _swapTarget:-1, _insertTarget:-1,
+      pointerId: e.pointerId, canDiscard,
+      calcInsertIdx: _calcInsertIdx
+    };
+    tileEl._dragMoved = false;
+    tileEl.style.opacity = '0.35';
   },{passive:false});
-
-  tileEl.addEventListener('pointermove', e=>{
-    if(e.pointerType === 'touch') return;
-    _moveDrag(e.clientX, e.clientY);
-  },{passive:true});
-
-  tileEl.addEventListener('pointerup', e=>{
-    if(e.pointerType === 'touch') return;
-    if(!_dragState || _dragState.tileEl !== tileEl) return;
-    _endDrag(e.clientX, e.clientY);
-  },{passive:true});
-
-  tileEl.addEventListener('pointercancel', e=>{
-    if(e.pointerType === 'touch') return;
-    if(_dragState && _dragState.tileEl===tileEl){ _dragState.handEls?.forEach(el=>el.style.outline=''); _cleanDrag(); _dragState=null; }
-  },{passive:true});
 }
 
 function _cleanDrag(){
@@ -8858,15 +8773,180 @@ function _cleanDrag(){
   if(_dragState.tileEl) _dragState.tileEl.style.opacity = '';
 }
 
-// ドキュメントレベルでゴースト残像をクリーンアップ（PC用フォールバック）
+// renderAll() でDOM再生成された後、_dragState を新しい要素に付け直す
+function _restoreDragAfterRender(){
+  if(!_dragState) return;
+  const handWrap = document.querySelector('.seat-bottom .hand-wrap');
+  if(!handWrap){ _cleanDrag(); _dragState=null; return; }
+  const newHandEls = Array.from(handWrap.querySelectorAll('.tile[data-idx]'));
+  const newTileEl = newHandEls.find(el => parseInt(el.dataset.idx) === _dragState.idx);
+  if(!newTileEl){
+    _cleanDrag(); _dragState=null; return;
+  }
+  if(_dragState.tileEl && _dragState.tileEl !== newTileEl) _dragState.tileEl.style.opacity='';
+  _dragState.tileEl = newTileEl;
+  _dragState.handEls = newHandEls;
+  newTileEl.style.opacity = '0.35';
+}
+
+// ── ドキュメントレベルの move/up/cancel（再描画後も動作するよう集中管理）──
+
+function _docMoveDrag(clientX, clientY){
+  if(!_dragState) return;
+  const tileEl = _dragState.tileEl;
+  const dx = clientX - _dragState.startX;
+  const dy = clientY - _dragState.startY;
+  if(Math.abs(dx) > 8 || Math.abs(dy) > 8) tileEl._dragMoved = true;
+  _dragState.ghost.style.left = (_dragState.rect.left + dx) + 'px';
+  _dragState.ghost.style.top  = (_dragState.rect.top  + dy) + 'px';
+  if(!autoSortEnabled && Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(dx) > 10){
+    _dragState.handEls.forEach(el=>{ if(el!==tileEl) el.style.outline=''; });
+    let swapTarget = -1;
+    for(const el of _dragState.handEls){
+      if(el === tileEl) continue;
+      const r = el.getBoundingClientRect();
+      if(clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom){
+        swapTarget = parseInt(el.dataset.idx);
+        el.style.outline = '2px solid #c9a84c';
+        break;
+      }
+    }
+    if(swapTarget >= 0){
+      _dragState._swapTarget = swapTarget;
+      _dragState._insertTarget = -1;
+    } else {
+      _dragState._swapTarget = -1;
+      const insertIdx = _dragState.calcInsertIdx(clientX, _dragState.handEls, tileEl);
+      if(insertIdx >= 0){
+        const others = _dragState.handEls.filter(el=>el!==tileEl);
+        const lastIdx = others.length > 0 ? parseInt(others[others.length-1].dataset.idx) : -1;
+        const lookupIdx = (insertIdx > lastIdx && lastIdx >= 0) ? lastIdx : insertIdx;
+        const targetEl = _dragState.handEls.find(el=>el!==tileEl && parseInt(el.dataset.idx)===lookupIdx);
+        if(targetEl) targetEl.style.outline = '2px solid #c9a84c';
+      }
+      _dragState._insertTarget = insertIdx;
+    }
+  } else {
+    _dragState.handEls.forEach(el=>{ if(el!==tileEl) el.style.outline=''; });
+    _dragState._insertTarget = -1;
+    _dragState._swapTarget = -1;
+  }
+}
+
+function _docEndDrag(clientX, clientY){
+  if(!_dragState) return;
+  const tileEl = _dragState.tileEl;
+  const canDiscard = _dragState.canDiscard;
+  const dx = clientX - _dragState.startX;
+  const dy = clientY - _dragState.startY;
+  const absDx = Math.abs(dx), absDy = Math.abs(dy);
+  const savedIdx = _dragState.idx;
+  let insertTarget = _dragState._insertTarget ?? -1;
+  const savedSwapTarget = _dragState._swapTarget ?? -1;
+  const savedHandEls = _dragState.handEls;
+  const savedCalcInsertIdx = _dragState.calcInsertIdx;
+  _dragState.handEls.forEach(el=>{ el.style.outline=''; });
+  _cleanDrag();
+  _dragState = null;
+  // 上スワイプ → 捨て
+  if(canDiscard && dy < -20 && absDy > absDx){
+    selIdx = savedIdx;
+    humanDiscard();
+    return;
+  }
+  // 横スワイプ → スワップまたは挿入移動
+  if(!autoSortEnabled && absDx > 20 && absDx > absDy * 1.5){
+    const p = G && G.players && G.players[NET.myIdx];
+    if(p){
+      if(savedSwapTarget >= 0 && savedSwapTarget < p.hand.length && savedIdx < p.hand.length && savedSwapTarget !== savedIdx){
+        const tmp = p.hand[savedIdx];
+        p.hand[savedIdx] = p.hand[savedSwapTarget];
+        p.hand[savedSwapTarget] = tmp;
+        selIdx = savedSwapTarget;
+        SFX.draw();
+        renderAll();
+        if(Math.random() < 0.001) _triggerCrackEffect(savedSwapTarget);
+      } else {
+        if(insertTarget < 0){
+          insertTarget = savedCalcInsertIdx(clientX, savedHandEls, tileEl);
+        }
+        if(insertTarget >= 0 && savedIdx < p.hand.length && insertTarget <= p.hand.length && insertTarget !== savedIdx){
+          const tile = p.hand.splice(savedIdx, 1)[0];
+          let insertPos = insertTarget;
+          if(savedIdx < insertTarget) insertPos--;
+          if(insertPos > p.hand.length) insertPos = p.hand.length;
+          p.hand.splice(insertPos, 0, tile);
+          selIdx = insertPos;
+          SFX.draw();
+          renderAll();
+          if(Math.random() < 0.001) _triggerCrackEffect(insertPos);
+        }
+      }
+    }
+  }
+}
+
+// pointermove（PC）
+document.addEventListener('pointermove', e=>{
+  if(!_dragState || e.pointerType === 'touch') return;
+  if(_dragState.pointerId !== undefined && e.pointerId !== _dragState.pointerId) return;
+  _docMoveDrag(e.clientX, e.clientY);
+},{passive:true});
+
+// touchmove（スマホ）
+document.addEventListener('touchmove', e=>{
+  if(!_dragState || _dragState.touchId === undefined) return;
+  for(const t of e.changedTouches){
+    if(t.identifier === _dragState.touchId){
+      _docMoveDrag(t.clientX, t.clientY);
+      e.preventDefault();
+      return;
+    }
+  }
+},{passive:false});
+
+// touchend（スマホ）
+document.addEventListener('touchend', e=>{
+  if(!_dragState || _dragState.touchId === undefined) return;
+  for(const t of e.changedTouches){
+    if(t.identifier === _dragState.touchId){
+      _dragState.touchId = undefined;
+      const wasMoved = _dragState.tileEl && _dragState.tileEl._dragMoved;
+      const savedTileEl = _dragState.tileEl;
+      _docEndDrag(t.clientX, t.clientY);
+      // タップ（移動なし）: preventDefault により click が発火しないので直接呼ぶ
+      if(!wasMoved && savedTileEl){
+        if(savedTileEl._dragMoved !== undefined) savedTileEl._dragMoved = false;
+        savedTileEl.click();
+      }
+      return;
+    }
+  }
+},{passive:true});
+
+// touchcancel（スマホ）
+document.addEventListener('touchcancel', e=>{
+  if(!_dragState || _dragState.touchId === undefined) return;
+  for(const t of e.changedTouches){
+    if(t.identifier === _dragState.touchId){
+      _dragState.handEls?.forEach(el=>el.style.outline='');
+      _cleanDrag(); _dragState=null;
+      return;
+    }
+  }
+},{passive:true});
+
+// pointerup（PC）
 document.addEventListener('pointerup', e=>{
   if(!_dragState || e.pointerType === 'touch') return;
-  if(_dragState.tileEl && e.target === _dragState.tileEl) return;
-  if(_dragState.handEls) _dragState.handEls.forEach(el=>{ el.style.outline=''; });
-  _cleanDrag(); _dragState=null;
+  if(_dragState.pointerId !== undefined && e.pointerId !== _dragState.pointerId) return;
+  _docEndDrag(e.clientX, e.clientY);
 },{passive:true});
+
+// pointercancel（PC）
 document.addEventListener('pointercancel', e=>{
   if(!_dragState || e.pointerType === 'touch') return;
+  if(_dragState.pointerId !== undefined && e.pointerId !== _dragState.pointerId) return;
   if(_dragState.handEls) _dragState.handEls.forEach(el=>{ el.style.outline=''; });
   _cleanDrag(); _dragState=null;
 },{passive:true});
@@ -9996,6 +10076,8 @@ function renderAll(){
   renderWallExpand();
   // 選択中牌の同種ハイライト更新
   updateSelHighlight();
+  // ドラッグ中なら新しいDOMに参照を付け直す
+  if(typeof _restoreDragAfterRender === 'function') _restoreDragAfterRender();
 }
 
 // ── 同種牌ハイライト ─────────────────────────────────────────
@@ -11593,7 +11675,7 @@ function renderTable(){
           });
         }
         // ドラッグ: 自動理牌OFFなら相手ターン中も横入れ替え可能、捨ては自分のターンのみ
-        if(!autoSortEnabled || G.phase==='discard'){
+        {
           const canDragDiscard = G.phase==='discard' && !G.yamiSelectMode && !(G.hakuSelectPlayers&&G.hakuSelectPlayers.includes(NET.myIdx));
           _attachTileDrag(tileEl, i, canDragDiscard);
         }
