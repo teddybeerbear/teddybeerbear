@@ -6122,14 +6122,26 @@ const CPU_UNLOCK_CHAIN = [
 function _winsKey(against){ return 'wins_'+against; }
 
 function loadCpuUnlocks(){
+  // PROFILE.cpuUnlocks（DBから取得）とlocalStorageをマージして返す
   try{
     const s = localStorage.getItem('cpuUnlocks');
-    if(s) return JSON.parse(s);
+    const local = s ? JSON.parse(s) : { unlocked:[] };
+    const profileUnlocked = (typeof PROFILE !== 'undefined' && Array.isArray(PROFILE.cpuUnlocks))
+      ? PROFILE.cpuUnlocks : [];
+    // wins進捗はlocalStorageを引き続き使用、unlocked はDB+localStorageのunion
+    const merged = Object.assign({}, local);
+    merged.unlocked = Array.from(new Set([...(local.unlocked||[]), ...profileUnlocked]));
+    return merged;
   }catch(e){}
   return { unlocked:[] };
 }
 function saveCpuUnlocks(data){
   try{ localStorage.setItem('cpuUnlocks', JSON.stringify(data)); }catch(e){}
+  // PROFILE にも反映してDBに保存
+  if(typeof PROFILE !== 'undefined'){
+    PROFILE.cpuUnlocks = Array.from(new Set([...(PROFILE.cpuUnlocks||[]), ...(data.unlocked||[])]));
+    if(typeof saveProfileSilent === 'function') saveProfileSilent();
+  }
 }
 function isCpuUnlocked(key){
   if(CPU_ALWAYS_UNLOCKED.has(key)) return true;
@@ -11949,6 +11961,13 @@ function renderActions(){
   const area=document.getElementById('actionArea');
   if(!G.players||!G.players[NET.myIdx]){area.innerHTML='';return;}
   const p=G.players[NET.myIdx];
+  // 白セレクトモード中にロン/ポン待ちフェーズになった場合は自動キャンセル
+  if(G.hakuSelectPlayers&&G.hakuSelectPlayers.includes(NET.myIdx)){
+    const ph=G.phase;
+    if(ph==='pending_ron'||ph==='pending_pon'||ph==='pending_yami_challenge'){
+      G.hakuSelectPlayers=G.hakuSelectPlayers.filter(i=>i!==NET.myIdx);
+    }
+  }
   let html='';
 
   if(G.phase==='discard'&&G.current===NET.myIdx){
@@ -11982,7 +12001,8 @@ function renderActions(){
       html+=`<button class="btn btn-danger" onclick="humanCancelRiichi()">キャンセル</button>`;
     }else{
       const pinzuNoTsumo=G_ABILITY_MODE&&PROFILE.ability==="pinzu"&&p.isDealer;
-      if(!G.yamiSelectMode){
+      const _hakuSelecting = G_ABILITY_MODE&&PROFILE.ability==='haku'&&G.hakuSelectPlayers&&G.hakuSelectPlayers.includes(NET.myIdx);
+      if(!G.yamiSelectMode&&!_hakuSelecting){
         // 北抜きは常に一番左
         if(hasKita)html+=`<button class="btn btn-kita" onclick="humanKita()">北抜き [北]</button>`;
 if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanTsumo()">ツモ上がり！</button>`;
@@ -11993,7 +12013,7 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
         }
       }
       // 白・闇: セレクトモード中のヒント+キャンセルのみ（ボタン本体はcornerBtns）
-      if(G_ABILITY_MODE&&PROFILE.ability==='haku'&&G.hakuSelectPlayers&&G.hakuSelectPlayers.includes(NET.myIdx)){
+      if(_hakuSelecting){
         html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変える手牌をクリック！</span>`;
         html+=`<button class="btn btn-danger" onclick="G.hakuSelectPlayers=(G.hakuSelectPlayers||[]).filter(i=>i!==NET.myIdx);renderAll();">キャンセル</button>`;
       }
@@ -12076,6 +12096,10 @@ if(canWinNow&&!pinzuNoTsumo)html+=`<button class="btn btn-tsumo" onclick="humanT
     } else if(G.lightMode==='yami'){
       html+=`<span class="action-hint" style="color:#cc99ff;">☀️ 解除する闇牌をクリック！</span>`;
       html+=`<button class="btn btn-danger" onclick="G.lightMode=false;renderAll();">キャンセル</button>`;
+    } else if(G_ABILITY_MODE&&PROFILE.ability==='haku'&&G.hakuSelectPlayers&&G.hakuSelectPlayers.includes(NET.myIdx)){
+      // 白: ツモ待ち中にセレクトモード
+      html+=`<span class="action-hint" style="color:#e8e8ff;">🀆 白に変える手牌をクリック！</span>`;
+      html+=`<button class="btn btn-danger" onclick="G.hakuSelectPlayers=(G.hakuSelectPlayers||[]).filter(i=>i!==NET.myIdx);renderAll();">キャンセル</button>`;
     } else {
       // スチール使用中のキャンセルのみ表示（ボタン自体はcornerBtns）
       if(G.stealMode){
@@ -12141,7 +12165,7 @@ function _doSteal(myIdx,fromPidx,discardIdx){
 // ============================================================
 // PROFILE  (localStorage)
 // ============================================================
-let PROFILE = {name:'プレイヤー', ability:'', abilities:[], totalPulls:0, coins:0, tbbCoins:0, matId:'', ownedMats:[], winsVsTenbi2p:0, titleBgId:'', iconId:'C00', gachaIcons:[]};
+let PROFILE = {name:'プレイヤー', ability:'', abilities:[], totalPulls:0, coins:0, tbbCoins:0, matId:'', ownedMats:[], winsVsTenbi2p:0, titleBgId:'', iconId:'C00', gachaIcons:[], yakumanTitles:[], equippedTitle:'', cpuUnlocks:[], bombBestStage:0, bombBestScore:0, bombBestScoreOnly:null, bombBestScoreOnlyStage:null};
 
 // ── タイトル背景リスト ──────────────────────────────
 const TITLE_BG_LIST = [
@@ -12354,11 +12378,33 @@ function loadProfile(){
         bombBestStage:         data.bombBestStage         ?? PROFILE.bombBestStage ?? 0,
         bombBestScore:         data.bombBestScore         ?? PROFILE.bombBestScore ?? 0,
         titleBgId:             data.titleBgId             ?? PROFILE.titleBgId    ?? '',
-        yakumanTitles:         data.yakumanTitles         ?? PROFILE.yakumanTitles ?? [],
-        equippedTitle:         data.equippedTitle         ?? PROFILE.equippedTitle ?? '',
+        // DB優先 + ローカルとのunion（称号・CPU解放は追記のみ）
+        yakumanTitles: Array.from(new Set([
+          ...(Array.isArray(data.yakumanTitles)  ? data.yakumanTitles  : []),
+          ...(Array.isArray(PROFILE.yakumanTitles) ? PROFILE.yakumanTitles : []),
+        ])),
+        equippedTitle: data.equippedTitle ?? PROFILE.equippedTitle ?? '',
+        cpuUnlocks: Array.from(new Set([
+          ...(Array.isArray(data.cpuUnlocks)      ? data.cpuUnlocks      : []),
+          ...(Array.isArray(PROFILE.cpuUnlocks)   ? PROFILE.cpuUnlocks   : []),
+        ])),
       });
       const {coins:_coins, abilities:_ab, ability:_abl, tbbCoins:_tbb, ...profileToCache} = PROFILE; // coins/abilities/ability/tbbCoins はlocalStorageに保存しない
       try{ localStorage.setItem('mjProfile',JSON.stringify(profileToCache)); }catch(e){}
+      // localStorage の cpuUnlocks.unlocked をDBにマージ（旧データ移行）
+      try{
+        const lsCpu = localStorage.getItem('cpuUnlocks');
+        if(lsCpu){
+          const lsCpuData = JSON.parse(lsCpu);
+          if(Array.isArray(lsCpuData.unlocked) && lsCpuData.unlocked.length > 0){
+            const merged = Array.from(new Set([...PROFILE.cpuUnlocks, ...lsCpuData.unlocked]));
+            if(merged.length > PROFILE.cpuUnlocks.length){
+              PROFILE.cpuUnlocks = merged;
+              saveProfileSilent();
+            }
+          }
+        }
+      }catch(_){}
       _applyProfile();
     })
     .catch(()=>{ /* サーバー未接続時はlocalStorageのデータをそのまま使う */ });
@@ -13082,6 +13128,11 @@ function saveProfileSilent(){
       ability:         PROFILE.ability||'',
       name:            PROFILE.name||'',
       ownedEmoteSets:  PROFILE.ownedEmoteSets||['01'],
+      yakumanTitles:   PROFILE.yakumanTitles ||[],
+      equippedTitle:   PROFILE.equippedTitle ||'',
+      cpuUnlocks:      PROFILE.cpuUnlocks    ||[],
+      bombBestStage:   PROFILE.bombBestStage ||0,
+      bombBestScore:   PROFILE.bombBestScore ??0,
     }),
   }).catch(()=>{});
 }

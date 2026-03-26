@@ -124,6 +124,18 @@ async function initDB() {
     await pool.query(`
       ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS bomb_best_score INTEGER NOT NULL DEFAULT 0
     `);
+    // 称号解放リスト（役満上がりで解放）
+    await pool.query(`
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS yakuman_titles TEXT NOT NULL DEFAULT '[]'
+    `);
+    // 装備中称号
+    await pool.query(`
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS equipped_title TEXT NOT NULL DEFAULT ''
+    `);
+    // 解放済みCPUリスト
+    await pool.query(`
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS cpu_unlocks TEXT NOT NULL DEFAULT '[]'
+    `);
     console.log("✓ DBテーブル準備完了");
   } catch (err) {
     console.error("✗ DBテーブル作成失敗:", err.message);
@@ -225,6 +237,9 @@ app.get("/api/profile", requireAuth, async (req, res) => {
         winsVsTenbi2p: 0,
         bombBestStage: 0,
         bombBestScore: 0,
+        yakumanTitles: [],
+        equippedTitle: "",
+        cpuUnlocks: [],
       });
     }
     await pool.query(
@@ -269,6 +284,9 @@ app.get("/api/profile", requireAuth, async (req, res) => {
       winsVsTenbi2p:        row.wins_vs_tenbi_2p ?? 0,
       bombBestStage:        row.bomb_best_stage ?? 0,
       bombBestScore:        row.bomb_best_score ?? 0,
+      yakumanTitles:        JSON.parse(row.yakuman_titles || '[]'),
+      equippedTitle:        row.equipped_title || '',
+      cpuUnlocks:           JSON.parse(row.cpu_unlocks || '[]'),
     });
   } catch (err) {
     console.error("プロフィール取得エラー:", err.message);
@@ -551,9 +569,21 @@ app.get("/api/bomb/ranking", async (req, res) => {
 // ★ coins / totalPulls はクライアントからの書き換えを一切受け付けない
 const VALID_EMOTE_SET_RE = /^\d{2}$/;
 
+// 称号バリデーション（既知のキーのみ許可）
+const VALID_YAKUMAN_TITLES = [
+  // 役満称号（日本語キー）
+  '字一色','清老頭','緑一色','国士無双','一槓子','一暗刻','地和','人和','天和','一暗刻単騎',
+  // 特殊称号
+  'crack','kita4','bakuhatu',
+  // 動物称号（持ち点ぴったりキー）
+  '111','222','333','444','555','666','777','888','999',
+];
+
 app.post("/api/profile", requireAuth, async (req, res) => {
   const uid = req.user.id;
-  const { abilities, gachaIcons, iconId, ability, name, ownedEmoteSets } = req.body;
+  const { abilities, gachaIcons, iconId, ability, name, ownedEmoteSets,
+          yakumanTitles, equippedTitle, cpuUnlocks,
+          bombBestStage, bombBestScore, bombBestScoreOnly, bombBestScoreOnlyStage } = req.body;
 
   const safeAbilities = Array.isArray(abilities)
     ? abilities.filter(a => VALID_ABILITIES.includes(a))
@@ -572,19 +602,59 @@ app.post("/api/profile", requireAuth, async (req, res) => {
   const safeName = typeof name === "string" ? name.slice(0, 12) : req.user.name;
   const safeIconId = typeof iconId === "string" && VALID_ICON_RE.test(iconId) ? iconId : "";
 
+  // 称号バリデーション
+  const safeYakumanTitles = Array.isArray(yakumanTitles)
+    ? yakumanTitles.filter(t => typeof t === "string" && VALID_YAKUMAN_TITLES.includes(t))
+    : [];
+  const safeEquippedTitle = (typeof equippedTitle === "string" &&
+    (VALID_YAKUMAN_TITLES.includes(equippedTitle) || equippedTitle === ""))
+    ? equippedTitle : "";
+
+  // 解放CPUバリデーション（能力キーのみ許可）
+  const VALID_CPU_KEYS = [...VALID_ABILITIES, "tenbi"];
+  const safeCpuUnlocks = Array.isArray(cpuUnlocks)
+    ? cpuUnlocks.filter(k => typeof k === "string" && VALID_CPU_KEYS.includes(k))
+    : [];
+
+  // ボムベストスコアバリデーション
+  const safeBombBestStage = Number.isInteger(bombBestStage) && bombBestStage >= 0 ? bombBestStage : null;
+  const safeBombBestScore = Number.isInteger(bombBestScore) ? bombBestScore : null;
+  const safeBombBestScoreOnly = Number.isInteger(bombBestScoreOnly) ? bombBestScoreOnly : null;
+  const safeBombBestScoreOnlyStage = Number.isInteger(bombBestScoreOnlyStage) && bombBestScoreOnlyStage >= 0 ? bombBestScoreOnlyStage : null;
+
   try {
     const cur = await pool.query(
-      "SELECT gacha_icons, owned_emote_sets FROM user_profiles WHERE google_id = $1", [uid]
+      `SELECT gacha_icons, owned_emote_sets, yakuman_titles, cpu_unlocks,
+              bomb_best_stage, bomb_best_score
+       FROM user_profiles WHERE google_id = $1`, [uid]
     );
     const existingIcons = cur.rows[0] ? JSON.parse(cur.rows[0].gacha_icons || "[]") : [];
     const mergedIcons = Array.from(new Set([...existingIcons, ...safeIcons]));
     const existingEmoteSets = cur.rows[0] ? JSON.parse(cur.rows[0].owned_emote_sets || '["01"]') : ["01"];
     const mergedEmoteSets = Array.from(new Set(["01", ...existingEmoteSets, ...safeEmoteSets]));
 
+    // 称号・CPU解放は既存に追記（削除は許可しない）
+    const existingYakumanTitles = cur.rows[0] ? JSON.parse(cur.rows[0].yakuman_titles || '[]') : [];
+    const mergedYakumanTitles = Array.from(new Set([...existingYakumanTitles, ...safeYakumanTitles]));
+    const existingCpuUnlocks = cur.rows[0] ? JSON.parse(cur.rows[0].cpu_unlocks || '[]') : [];
+    const mergedCpuUnlocks = Array.from(new Set([...existingCpuUnlocks, ...safeCpuUnlocks]));
+
+    // ボムベストはサーバー上の値より大きい場合のみ更新（クライアントが減らせないよう保護）
+    const dbBombBestStage = cur.rows[0]?.bomb_best_stage ?? 0;
+    const dbBombBestScore = cur.rows[0]?.bomb_best_score ?? 0;
+    const finalBombBestStage = (safeBombBestStage != null && safeBombBestStage > dbBombBestStage)
+      ? safeBombBestStage : dbBombBestStage;
+    const finalBombBestScore = (safeBombBestScore != null &&
+      (safeBombBestStage > dbBombBestStage ||
+       (safeBombBestStage === dbBombBestStage && safeBombBestScore > dbBombBestScore)))
+      ? safeBombBestScore : dbBombBestScore;
+
     await pool.query(
       `INSERT INTO user_profiles
-         (google_id, name, email, abilities, gacha_icons, icon_id, ability, owned_emote_sets, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+         (google_id, name, email, abilities, gacha_icons, icon_id, ability, owned_emote_sets,
+          yakuman_titles, equipped_title, cpu_unlocks,
+          bomb_best_stage, bomb_best_score, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
        ON CONFLICT (google_id) DO UPDATE SET
          name             = EXCLUDED.name,
          abilities        = EXCLUDED.abilities,
@@ -592,10 +662,17 @@ app.post("/api/profile", requireAuth, async (req, res) => {
          icon_id          = EXCLUDED.icon_id,
          ability          = EXCLUDED.ability,
          owned_emote_sets = EXCLUDED.owned_emote_sets,
+         yakuman_titles   = EXCLUDED.yakuman_titles,
+         equipped_title   = EXCLUDED.equipped_title,
+         cpu_unlocks      = EXCLUDED.cpu_unlocks,
+         bomb_best_stage  = EXCLUDED.bomb_best_stage,
+         bomb_best_score  = EXCLUDED.bomb_best_score,
          updated_at       = NOW()`,
       [uid, safeName, req.user.email,
        JSON.stringify(safeAbilities), JSON.stringify(mergedIcons),
-       safeIconId, safeAbility, JSON.stringify(mergedEmoteSets)]
+       safeIconId, safeAbility, JSON.stringify(mergedEmoteSets),
+       JSON.stringify(mergedYakumanTitles), safeEquippedTitle, JSON.stringify(mergedCpuUnlocks),
+       finalBombBestStage, finalBombBestScore]
     );
     res.json({ ok: true });
   } catch (err) {
