@@ -8506,6 +8506,21 @@ function cpuPullKita(pidx){
   const kt=p.hand.splice(ki,1)[0];p.kitaTiles.push(kt);p.kitaCount++;
   SFX.kita();
   addLog(`${p.name} が北を抜いた！（ドラ+1）`,'log-dora');
+  // 北抜き槍槓チェック: 他プレイヤーが北でロンできるか
+  for(let i=0;i<numPlayers;i++){
+    if(i===pidx)continue;
+    const op=G.players[i];
+    if((op.hand.length===4||op.hand.length===1)&&op.tenpai&&op.waits.some(w=>teq(w,kt))&&!isFuriten(op)){
+      op.isChankan=true;
+      const isMe=(i===NET.myIdx);
+      if(isMe||isOnlineGuestIdx(i)){
+        pendingAction={type:'ron',tile:kt,from:pidx,target:i};
+        G.phase='pending_ron';renderAll();broadcastState();
+        if(isMe){ timerOnMyTurn(); setTimeout(()=>{ if(G.phase==='pending_ron'&&autoWinEnabled) humanRon(); },250); }
+        return;
+      }else if(cpuDecideRon(i,kt)){handleRon(i,kt,pidx);return;}
+    }
+  }
   const rep=drawRinshanTile(pidx);if(!rep){handleExhausted();return;}
   // 💣 嶺上地雷チェック（北抜き後）
   if(G._mineHit){
