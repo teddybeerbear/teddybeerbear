@@ -3743,6 +3743,7 @@ let autoSortEnabled=false;    // 自動理牌ON/OFF
 let oneClickDiscard=true;     // 1クリック捨てON/OFF
 let _discardAnimPidx = null;  // 捨てアニメ: 次のrenderTableで再生するプレイヤーidx
 let _broadcastDiscardAnimPidx = null; // ゲスト向けbroadcast用（renderTableでクリアされる前に保持）
+let _discardAnimActivePidx = null; // lock期間中ずっと保持（複数回renderAll対応）
 let _discardAnimLocked = false;   // 捨てアニメ再生中フラグ（妨害防止）
 let _discardAnimLockTimer = null; // ロック解除タイマー
 const _HAND_ANIM_SRC = 'https://raw.githubusercontent.com/teddybeerbear/teddybeerbear/main/tete.webm';
@@ -5825,6 +5826,11 @@ function applyHostState(msg){
     // ★ _normalizeState はホスト昇格後の _resumeCurrentPhase 内でのみ呼ぶ。
     // ここで呼ぶと「局開始直後(phase=discard, drawnTile=null)」を誤って
     // draw に巻き戻してしまい、手牌が1枚多くなるバグの原因となる。
+    // ゲスト: 捨てアニメをホストから受け取って設定（必ず全renderAllより前に行う）
+    if(s.discardAnimPidx != null){
+      _discardAnimPidx = s.discardAnimPidx;
+      _startDiscardAnimLock(s.discardAnimPidx);
+    }
     // ゲスト: 自分のターンでdrawフェーズなら、draw_waitに遷移してツモ選択可能にする
     if(G.phase==='draw' && G.current===NET.myIdx){
       if(G.deck.length===0){handleExhausted();return;}
@@ -5850,11 +5856,6 @@ function applyHostState(msg){
       if(_gp&&!_gp.riichi&&selIdx<0) selIdx=_gp.hand.length-1;
       // 自動発火
       _triggerAutoAction(NET.myIdx, 350);
-    }
-    // ゲスト: 捨てアニメをホストから受け取って再生
-    if(s.discardAnimPidx != null){
-      _discardAnimPidx = s.discardAnimPidx;
-      _startDiscardAnimLock();
     }
     renderAll();
     if(s.winModal){
@@ -6715,8 +6716,11 @@ function revealKanDora(){
 // ── 捨てアニメ妨害防止ロック ──────────────────────────────────
 // アニメ全体(delay0.6s + duration0.08s = 680ms)が終わるまで
 // ヒューマン操作・CPU自動行動を遮断する。
-function _startDiscardAnimLock(){
+// _discardAnimActivePidx をlock期間中保持することで、複数回renderAllが走っても
+// アニメクラスが消えない（二重broadcastState対策）。
+function _startDiscardAnimLock(pidx){
   _discardAnimLocked = true;
+  _discardAnimActivePidx = pidx;
   if(_discardAnimLockTimer) clearTimeout(_discardAnimLockTimer);
   // 透明オーバーレイでタップ/クリックを全遮断（winOverlay z-index:200 より下に置く）
   let ov = document.getElementById('_discardAnimOverlay');
@@ -6728,6 +6732,7 @@ function _startDiscardAnimLock(){
   }
   _discardAnimLockTimer = setTimeout(()=>{
     _discardAnimLocked = false;
+    _discardAnimActivePidx = null;
     const el = document.getElementById('_discardAnimOverlay');
     if(el) el.remove();
     _discardAnimLockTimer = null;
@@ -6748,7 +6753,7 @@ function discardAction(pidx,tidx,isYami=false){ if(pidx===NET.myIdx){ _timerSave
   p.discards.push(tile);
   _discardAnimPidx = pidx; // 捨てアニメ: 次のrenderTableで再生
   _broadcastDiscardAnimPidx = pidx; // ゲスト向けstate送信用（renderTableでクリアされる前に保持）
-  _startDiscardAnimLock(); // 捨てアニメ妨害防止ロック開始
+  _startDiscardAnimLock(pidx); // 捨てアニメ妨害防止ロック開始
   // 闇指定牌を捨てた場合はyamiTileIdxをリセット、そうでなければソート後に再計算
   if(isYami || tile===yamiTileObj){
     p.yamiTileIdx=-1;
@@ -11673,7 +11678,7 @@ function renderTable(){
     const dg=document.createElement('div');dg.className='discard-grid';
     dg.innerHTML=p.discards.map((t,di)=>{
       const isLast=di===p.discards.length-1;
-      const isLastAnim=isLast && _discardAnimPidx===pidx; // HTML生成時点でアニメクラスを決定
+      const isLastAnim=isLast && (_discardAnimPidx===pidx || _discardAnimActivePidx===pidx); // HTML生成時点でアニメクラスを決定
       const isRiichiTile=p.riichi&&di===p.riichiDiscardIdx;
       const isYamiDiscard=!!t._yami;
       // 闇捨て: 他プレイヤーには🌑、自分には本物を薄暗く
